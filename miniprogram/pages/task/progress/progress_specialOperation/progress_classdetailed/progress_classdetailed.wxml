@@ -1,0 +1,62 @@
+<view class="container">
+  <view class="card">
+    <view class="header">
+      <text class="title">第 {{displayIndex}} 课</text>
+      <!-- 旧状态标签逻辑保留注释，不删除；当前详情页不再依赖上课/下课状态驱动展示 -->
+      <!--
+      <view class="status-tag {{lesson.status}}">
+        {{lesson.statusText || lesson.status || '待处理'}}
+      </view>
+      -->
+    </view>
+
+    <view class="content">
+      <!-- 旧状态行逻辑保留注释，不删除；这里只保留课节时间和总结查看 -->
+      <!--
+      <view class="info-row">
+        <text class="label">当前状态</text>
+        <text class="value">{{lesson.statusText || lesson.status}}</text>
+      </view>
+      -->
+      <view class="info-row" wx:if="{{lesson.startedAtText}}">
+        <text class="label">上课时间</text>
+        <text class="value">{{lesson.startedAtText}}</text>
+      </view>
+      <view class="info-row" wx:if="{{lesson.completedAtText}}">
+        <text class="label">下课时间</text>
+        <text class="value">{{lesson.completedAtText}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="card action-card">
+    <view class="section-title">课程状态</view>
+    <!-- 新增展示页职责说明：上下课和总结填写统一迁移到 publish 教练操作台 -->
+    <view class="hint-text">本页只展示课节信息，教练操作请前往课程操作台</view>
+    <view class="action-buttons">
+      <!-- 旧状态提示逻辑保留注释，不删除；当前页面不再根据课程状态切换提示 -->
+      <!--
+      <view wx:if="{{(!lesson.status || lesson.status === 'PENDING')}}" class="hint-text">等待教练开始上课</view>
+      <view wx:if="{{lesson.status === 'COACH_READY' || lesson.status === 'PARENT_CONFIRMED'}}" class="hint-text running">正在上课中...</view>
+      <view wx:if="{{lesson.status === 'DONE'}}" class="hint-text done">本节课已完成</view>
+      -->
+      <view class="hint-text done">当前详情页不再受课程状态限制，课节总结可直接查看。</view>
+    </view>
+  </view>
+
+  <!-- 旧总结显示条件保留注释，不删除；之前因 lesson.status === 'PENDING' 被拦住，现在改成始终显示 -->
+  <!-- <view class="card summary-card" wx:if="{{lesson.status !== 'PENDING'}}"> -->
+  <view class="card summary-card">
+    <view class="card-header-row">
+      <view class="section-title">教练总结</view>
+    </view>
+    <view class="info-row" wx:if="{{lesson.summaryUpdatedAtText}}">
+      <text class="label">记录时间</text>
+      <text class="value">{{lesson.summaryUpdatedAtText}}</text>
+    </view>
+    <view class="summary-content">
+      <text wx:if="{{lesson.summary}}">{{lesson.summary}}</text>
+      <text wx:else class="empty-hint">暂未填写教练总结</text>
+    </view>
+  </view>
+</view>

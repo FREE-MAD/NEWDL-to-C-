@@ -1,0 +1,158 @@
+/* 页面基础 */
+.page {
+  min-height: 100vh;
+  background: #f5f6f7;
+  font-family: "PingFang SC", sans-serif;
+}
+
+/* ================= hero ================= */
+.hero {
+  background: linear-gradient(120deg, #4e9aff, #3670ff);
+  padding: 48rpx 32rpx 36rpx;
+  border-bottom-left-radius: 32rpx;
+  border-bottom-right-radius: 32rpx;
+  color: #fff;
+}
+
+.hero-inner {
+  display: flex;
+  align-items: center;
+}
+
+/* 头像 */
+.avatar-container {
+  position: relative;
+  width: 120rpx;
+  height: 120rpx;
+  flex-shrink: 0;
+}
+
+.avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 3rpx solid rgba(255, 255, 255, 0.4);
+}
+
+.avatar-edit {
+  position: absolute;
+  right: -4rpx;
+  bottom: -4rpx;
+  width: 36rpx;
+  height: 36rpx;
+  background: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.2);
+}
+
+.edit-icon {
+  width: 20rpx;
+  height: 20rpx;
+}
+
+/* 右侧信息 */
+.hero-right {
+  margin-left: 24rpx;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.user-info {
+  margin-bottom: 12rpx;
+}
+.hero-right {
+  margin-left: 24rpx;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+
+  /* 👇 加这一行 */
+  padding-top: 56rpx;
+}
+
+
+.sub {
+  font-size: 22rpx;
+  opacity: 0.85;
+  margin-top: 6rpx;
+}
+
+/* 编辑按钮 */
+.edit-btn {
+  align-self: flex-start;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 22rpx;
+  padding: 8rpx 20rpx;
+  border-radius: 999rpx;
+}
+
+/* ================= stats ================= */
+.stats {
+  display: flex;
+  justify-content: space-around;
+  background: #fff;
+  margin: 24rpx;
+  padding: 28rpx 0;
+  border-radius: 16rpx;
+}
+
+.stat-card {
+  text-align: center;
+}
+
+.stat-num {
+  display: block;
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #3670ff;
+}
+
+.stat-label {
+  font-size: 22rpx;
+  color: #666;
+  margin-top: 6rpx;
+}
+
+/* ================= menu ================= */
+.menu {
+  margin: 0 24rpx;
+}
+
+.menu-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 26rpx 24rpx;
+  background: #fff;
+  border-radius: 16rpx;
+  margin-bottom: 16rpx;
+  font-size: 26rpx;
+  color: #333;
+}
+
+.chev {
+  font-size: 28rpx;
+  color: #bbb;
+}
+
+/* ================= footer ================= */
+.footer {
+  margin: 32rpx 24rpx;
+}
+
+.logout-btn {
+  width: 100%;
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 22rpx 0;
+  font-size: 26rpx;
+  color: #ff4d4f;
+  border: 1rpx solid #ffecec;
+}

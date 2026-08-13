@@ -1,0 +1,123 @@
+<!-- pages/circle/circle.wxml -->
+<view class="container">
+  <!-- 分类导航 -->
+  <view class="category-nav">
+    <scroll-view scroll-x class="category-scroll">
+      <view 
+        wx:for="{{categories}}" 
+        wx:key="*this"
+        class="category-item {{currentCategory === index ? 'active' : ''}}"
+        data-index="{{index}}"
+        bindtap="onCategoryChange"
+      >
+        {{item}}
+      </view>
+    </scroll-view>
+  </view>
+
+  <!-- 动态列表 -->
+  <view class="post-list">
+    <view 
+      wx:for="{{posts}}" 
+      wx:key="id"
+      class="post-item"
+    >
+      <!-- 用户信息 -->
+      <view class="user-info" bindtap="onUserAvatar" data-user-id="{{item.userId}}">
+        <image class="user-avatar" src="{{item.userAvatar}}" mode="aspectFill"/>
+        <view class="user-details">
+          <text class="user-name">{{item.userName}}</text>
+          <text class="post-time">{{item.createTime}}</text>
+        </view>
+        <button wx:if="{{item.userId === wx.getStorageSync('userId')}}" class="follow-btn following">自己</button>
+        <button wx:else class="follow-btn {{item.isFollowing ? 'following' : ''}}">
+          {{item.isFollowing ? '已关注' : '关注'}}
+        </button>
+      </view>
+
+      <!-- 内容 -->
+      <view class="post-content">
+        <text class="post-text">{{item.content}}</text>
+        
+        <!-- 图片 -->
+        <view wx:if="{{item.images && item.images.length > 0}}" class="post-images">
+          <view 
+            wx:for="{{item.images}}" 
+            wx:key="*this"
+            wx:for-item="img"
+            class="image-item {{item.images.length === 1 ? 'single' : item.images.length === 2 ? 'double' : 'multiple'}}"
+          >
+            <image src="{{img}}" mode="aspectFill" bindtap="onPreviewImage" data-urls="{{item.images}}" data-current="{{img}}"/>
+          </view>
+        </view>
+
+        <!-- 话题标签 -->
+        <view wx:if="{{item.tags}}" class="post-tags">
+          <text 
+            wx:for="{{item.tags}}" 
+            wx:key="*this"
+            wx:for-item="tag"
+            class="tag-item"
+          >
+            #{{tag}}
+          </text>
+        </view>
+      </view>
+
+      <!-- 位置信息 -->
+      <view wx:if="{{item.location}}" class="post-location">
+        <text class="location-icon">📍</text>
+        <text class="location-text">{{item.location}}</text>
+      </view>
+
+      <!-- 互动栏 -->
+      <view class="post-actions">
+        <view 
+          class="action-item {{item.isLiked ? 'liked' : ''}}"
+          bindtap="onLikePost"
+          data-id="{{item.id}}"
+          data-index="{{index}}"
+        >
+          <text class="action-icon">{{item.isLiked ? '❤️' : '🤍'}}</text>
+          <text class="action-text">{{item.likes || '点赞'}}</text>
+        </view>
+        
+        <view 
+          class="action-item"
+          bindtap="onCommentPost"
+          data-id="{{item.id}}"
+        >
+          <text class="action-icon">💬</text>
+          <text class="action-text">{{item.comments || '评论'}}</text>
+        </view>
+        
+        <view 
+          class="action-item"
+          bindtap="onSharePost"
+          data-id="{{item.id}}"
+        >
+          <text class="action-icon">🔄</text>
+          <text class="action-text">分享</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 加载状态 -->
+    <view wx:if="{{loading}}" class="loading-more">
+      <text>加载中...</text>
+    </view>
+    
+    <view wx:if="{{!hasMore && posts.length > 0}}" class="no-more">
+      <text>没有更多了</text>
+    </view>
+    
+    <view wx:if="{{posts.length === 0 && !loading}}" class="empty-state">
+      <text>暂无动态</text>
+    </view>
+  </view>
+
+  <!-- 发布按钮 -->
+  <view class="publish-btn" bindtap="onPublishPost">
+    <text class="publish-icon">✏️</text>
+  </view>
+</view>

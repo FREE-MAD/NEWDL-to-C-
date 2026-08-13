@@ -1,0 +1,4 @@
+<!--pages/index/about/about.wxml-->
+<view class="container">
+  <text>关于我们页面开发中...</text>
+</view>

@@ -1,0 +1,457 @@
+<view class="page-container">
+  <!-- 顶部安全占位 (配合自定义导航或状态栏) -->
+  <view class="status-bar-placeholder" style="height: {{topSafe}}px"></view>
+
+  <!-- 顶部 Tab 导航 -->
+  <view class="tabs-header">
+    <view class="tab-item {{selectedTab === 'create' ? 'active' : ''}}" data-tab="create" bindtap="switchTab">
+      <text>创建班课程</text>
+      <view class="tab-indicator"></view>
+    </view>
+    <view class="tab-item {{selectedTab === 'manage' ? 'active' : ''}}" data-tab="manage" bindtap="switchTab">
+      <text>课节管理</text>
+      <view class="tab-indicator"></view>
+    </view>
+    <view class="tab-item {{selectedTab === 'summary' ? 'active' : ''}}" data-tab="summary" bindtap="switchTab">
+      <text>每日总结</text>
+      <view class="tab-indicator"></view>
+    </view>
+    <view class="tab-item {{selectedTab === 'close' ? 'active' : ''}}" bindtap="handleCloseCourseTab">
+      <text>节课</text>
+      <view class="tab-indicator"></view>
+    </view>
+  </view>
+
+  <!-- 主要内容滚动区 -->
+  <scroll-view class="main-scroll" scroll-y="true" enable-back-to-top="true">
+
+    <!-- 顶部提示 Banner -->
+    <view class="banner-box">
+      <view class="banner-content">
+        <text wx:if="{{orderId}}">当前是已创建班级的管理页：课节管理、每日总结都基于这个班级继续操作。</text>
+        <text wx:else>当前是新建班级页。这里只负责创建新班级；已有班级请到“需求管理 / progress”里区分后再进入对应管理页。</text>
+      </view>
+      <button class="banner-action-btn" wx:if="{{orderId}}" bindtap="handleToProgressDisplay">查看展示页</button>
+    </view>
+
+    <view class="content-section fade-in">
+      <view wx:if="{{selectedTab === 'create'}}">
+        <view class="section-header">
+          <text class="section-title">创建班课程</text>
+          <text class="section-subtitle">把课程信息分成三类填写，教练看起来会更清楚。</text>
+        </view>
+
+        <view class="form-container">
+          <!-- 新增课程目标分组：课程类型选择和课程定位相关字段统一收口 -->
+          <view class="section-card create-group-card">
+            <view class="section-card-title">第一类：课程目标</view>
+            <view class="group-subtitle">先选课程方向，再填写标题、介绍和价格。</view>
+
+            <scroll-view class="class-scroll-view" scroll-x="true" enable-flex="true">
+              <block wx:for="{{classTypes}}" wx:key="id">
+                <view class="class-card {{currentClassId === item.id ? 'active' : ''}}"
+                      bindtap="onSelectClass"
+                      data-id="{{item.id}}">
+
+                  <!-- 卡片主体内容 -->
+                  <view class="class-card-main">
+                    <view class="class-icon">{{item.name[0]}}</view>
+                    <view class="class-info">
+                      <text class="class-title">{{item.name}}</text>
+                      <text class="class-desc">{{item.brief}}</text>
+                    </view>
+                    <view class="class-check" wx:if="{{currentClassId === item.id}}">
+                      <icon type="success_no_circle" size="20" color="#1976d2"/>
+                    </view>
+                  </view>
+
+                  <!-- 展开的子项区域 (默认显示) -->
+                  <view class="class-sub-area">
+                    <view class="sub-tags-wrapper">
+                      <block wx:if="{{item.subItems && item.subItems.length}}">
+                        <view class="sub-tag {{selectedSubName === sub && currentClassId === item.id ? 'selected' : ''}}"
+                              wx:for="{{item.subItems}}"
+                              wx:for-item="sub"
+                              wx:key="*this"
+                              catchtap="onSelectSubItem"
+                              data-parent-id="{{item.id}}"
+                              data-name="{{sub}}">
+                          {{sub}}
+                        </view>
+                      </block>
+                      <block wx:else>
+                        <view class="sub-tag selected">默认项目</view>
+                      </block>
+                    </view>
+                  </view>
+                </view>
+              </block>
+              <!-- 尾部占位，确保最后一个卡片能完全划出并有间距 -->
+              <view class="scroll-spacer"></view>
+            </scroll-view>
+
+            <!-- 选中课程的详细介绍卡片 -->
+            <view class="course-detail-card group-inner-card" wx:if="{{currentClass}}">
+              <view class="detail-header">
+                <text class="detail-title">课程计划</text>
+                <text class="detail-tag">{{currentClass.name}}</text>
+              </view>
+              <view class="detail-content">
+                <text>{{currentClass.planText}}</text>
+              </view>
+              <scroll-view class="detail-imgs" scroll-x="true">
+                <image class="detail-img" wx:for="{{currentClass.images}}" wx:key="*this" src="{{item}}" mode="aspectFill"></image>
+              </scroll-view>
+            </view>
+
+            <view class="form-group">
+              <view class="form-label">课程标题</view>
+              <input class="form-input" placeholder="例如 少儿体能启蒙班" placeholder-class="input-placeholder" value="{{form.title}}" data-field="title" bindinput="onInput"/>
+            </view>
+
+            <view class="form-group">
+              <view class="form-label">课程介绍</view>
+              <textarea class="form-textarea" placeholder="填写班级介绍、适合人群、训练目标..." placeholder-class="input-placeholder" value="{{form.description}}" data-field="description" bindinput="onInput" auto-height></textarea>
+            </view>
+
+          </view>
+
+          <!-- 新增课程基本信息分组：电话、地址、时间归到一个外边框里 -->
+          <view class="section-card create-group-card">
+            <view class="section-card-title">第二类：课程基本信息</view>
+            <view class="group-subtitle">这里填写电话、地址、时间这些基础信息。</view>
+
+            <!-- 新增课程人数：用于区分 1对1 和 1对多 -->
+            <view class="form-group">
+              <view class="form-label">课程人数</view>
+              <radio-group class="choice-row" bindchange="onCourseSizeModeChange">
+                <label class="choice-chip {{form.course_size_mode === '1对1' ? 'active' : ''}}">
+                  <radio value="1对1" checked="{{form.course_size_mode === '1对1'}}" color="#1976d2" />
+                  <text>1对1</text>
+                </label>
+                <label class="choice-chip {{form.course_size_mode === '1对多' ? 'active' : ''}}">
+                  <radio value="1对多" checked="{{form.course_size_mode === '1对多'}}" color="#1976d2" />
+                  <text>1对多</text>
+                </label>
+              </radio-group>
+            </view>
+
+            <view class="form-group">
+              <view class="form-label">上课时间</view>
+              <input class="form-input" placeholder="例如 每周二、四 19:00-20:00" placeholder-class="input-placeholder" value="{{form.frequency}}" data-field="frequency" bindinput="onInput"/>
+            </view>
+
+            <view class="form-group">
+              <view class="form-label required">任务位置</view>
+              <view class="form-input-box" bindtap="chooseLocation">
+                 <text class="{{form.location ? 'input-val' : 'input-placeholder'}}">{{form.location || '点击选择上课地点'}}</text>
+                 <text class="input-icon">�</text>
+              </view>
+            </view>
+            <view class="form-group no-margin">
+              <view class="form-label required">联系方式</view>
+              <input class="form-input" placeholder="手机号或微信号" placeholder-class="input-placeholder" value="{{form.contact}}" data-field="contact" bindinput="onInput"/>
+            </view>
+
+            <!-- 新增安全与规范确认：发布前必须强制勾选 -->
+            <view class="agreement-card">
+              <view class="form-label required">安全与规范</view>
+              <view class="agreement-row">
+                <view class="agreement-text">
+                  <text class="agreement-title">我已确认课程安排、安全要求与沟通规范</text>
+                  <text class="agreement-desc">未勾选时不能发布或保存课程。</text>
+                </view>
+                <checkbox-group bindchange="onSafetyConfirmedChange">
+                  <checkbox value="agreed" checked="{{form.safety_confirmed}}" color="#1976d2" />
+                </checkbox-group>
+              </view>
+            </view>
+          </view>
+
+          <!-- 新增孩子信息块：记录孩子基础画像，便于教练内部判断 -->
+          <view class="section-card create-group-card">
+            <view class="section-card-title">第三类：孩子信息</view>
+            <view class="group-subtitle">这里记录孩子的基础信息，方便教练判断课程安排。</view>
+
+            <view class="form-group">
+              <view class="form-label">年龄</view>
+              <input class="form-input" type="number" placeholder="请输入孩子年龄" placeholder-class="input-placeholder" value="{{form.child_age}}" data-field="child_age" bindinput="onInput"/>
+            </view>
+
+            <view class="form-group">
+              <view class="form-label">性别</view>
+              <radio-group class="choice-row" bindchange="onChildGenderChange">
+                <label class="choice-chip {{form.child_gender === '男' ? 'active' : ''}}">
+                  <radio value="男" checked="{{form.child_gender === '男'}}" color="#1976d2" />
+                  <text>男</text>
+                </label>
+                <label class="choice-chip {{form.child_gender === '女' ? 'active' : ''}}">
+                  <radio value="女" checked="{{form.child_gender === '女'}}" color="#1976d2" />
+                  <text>女</text>
+                </label>
+              </radio-group>
+            </view>
+
+            <view class="form-group">
+              <view class="form-label">身高</view>
+              <input class="form-input" type="digit" placeholder="请输入身高，例如 135" placeholder-class="input-placeholder" value="{{form.child_height}}" data-field="child_height" bindinput="onInput"/>
+            </view>
+
+            <view class="form-group no-margin">
+              <view class="form-label">体重</view>
+              <input class="form-input" type="digit" placeholder="请输入体重，例如 32.5" placeholder-class="input-placeholder" value="{{form.child_weight}}" data-field="child_weight" bindinput="onInput"/>
+            </view>
+          </view>
+
+          <!-- 新增教练私有信息块：只做内部表单收集，不在展示层显示 -->
+          <view class="section-card private-form-card create-group-card">
+            <view class="section-card-title">第四类：教练内部信息</view>
+            <view class="group-subtitle">只用于内部记录，不在展示层显示。</view>
+            <view class="form-group">
+              <view class="form-label">价格区间</view>
+              <picker range="{{priceOptions}}" bindchange="onPriceChange">
+                <view class="form-input-box">
+                  <text class="{{form.price_interval ? 'input-val' : 'input-placeholder'}}">{{form.price_interval || '请选择课程价格'}}</text>
+                  <text class="input-icon">💰</text>
+                </view>
+              </picker>
+            </view>
+            <view class="form-group">
+              <view class="form-label">课程备注</view>
+              <textarea
+                class="form-textarea"
+                placeholder="填写特殊要求、内部提醒、家长沟通注意事项"
+                placeholder-class="input-placeholder"
+                value="{{form.coach_private_note}}"
+                data-field="coach_private_note"
+                bindinput="onInput"
+                auto-height
+              ></textarea>
+            </view>
+            <view class="private-switch-row no-margin">
+              <view class="private-switch-text">
+                <text class="form-label no-margin">是否会流转给其他教练</text>
+                <text class="private-switch-desc">仅供内部判断是否允许后续教练接手</text>
+              </view>
+              <switch color="#1976d2" checked="{{form.allow_transfer_to_other_coach}}" bindchange="onPrivateTransferChange" />
+            </view>
+          </view>
+
+          <view class="create-actions">
+            <button class="btn-secondary" bindtap="handleDeleteCourse">删除课程</button>
+            <button class="btn-submit create-submit" bindtap="onSubmit">{{isEditMode ? '修改课程并保存' : '发布课程'}}</button>
+          </view>
+        </view>
+      </view>
+
+      <view wx:if="{{selectedTab === 'manage'}}">
+        <view class="section-header">
+          <text class="section-title">课节管理</text>
+          <text class="section-subtitle">先设置总课时或半途接入，下面的课节框数量会跟着自动生成</text>
+        </view>
+
+        <view class="empty-state" wx:if="{{!orderId}}">
+          <text>请先在“创建班课程”里发布课程，再来管理课节。已有班级请从 progress 列表进入。</text>
+        </view>
+
+        <view wx:if="{{orderId}}">
+          <view class="manage-actions">
+            <button class="manage-btn" bindtap="openSetTotalModal">设置总课时</button>
+            <button class="manage-btn" bindtap="openSyncModal">半途接入</button>
+          </view>
+
+          <view class="section-card">
+            <view class="section-card-title">课程进度表 ({{order.progress_done || 0}}/{{order.progress_total || 0}})</view>
+            <view class="sync-tip" wx:if="{{order.progress_done > 0}}">已补录前 {{order.progress_done}} 节历史课，下面会先显示一个历史汇总框，再显示剩余课节框</view>
+            <view class="section-card-title minor">选择操作课节</view>
+            <view class="lesson-picker-row">
+              <scroll-view class="lesson-picker-scroll" scroll-x="true">
+                <view
+                  class="lesson-picker-chip {{selectedLessonIndex === index ? 'active' : ''}}"
+                  wx:for="{{schedule}}"
+                  wx:key="index"
+                  data-index="{{index}}"
+                  bindtap="selectManageLesson"
+                >
+                  第 {{item.lesson || (index + 1)}} 课
+                </view>
+              </scroll-view>
+            </view>
+
+            <view class="selected-lesson-panel" wx:if="{{schedule[selectedLessonIndex]}}">
+              <view class="manage-lesson-main">
+                <text class="manage-lesson-title">当前操作：第 {{schedule[selectedLessonIndex].lesson || (selectedLessonIndex + 1)}} 课</text>
+                <text class="manage-lesson-status {{schedule[selectedLessonIndex].status}}">{{schedule[selectedLessonIndex].statusText}}</text>
+              </view>
+              <view class="manage-lesson-meta">
+                <text wx:if="{{schedule[selectedLessonIndex].startedAtText}}">上课：{{schedule[selectedLessonIndex].startedAtText}}</text>
+                <text wx:if="{{schedule[selectedLessonIndex].completedAtText}}">下课：{{schedule[selectedLessonIndex].completedAtText}}</text>
+              </view>
+              <view class="manage-lesson-actions">
+                <!-- 新增逻辑裁剪：这里不再提供开始上课/下课入口，只保留写总结，不改数据库已有状态 -->
+                <button class="mini-btn ghost" data-index="{{selectedLessonIndex}}" bindtap="selectSummaryLesson">写总结</button>
+              </view>
+            </view>
+
+            <view class="section-card-title minor">全部课节</view>
+            <block wx:for="{{displaySchedule}}" wx:key="index">
+              <view
+                class="manage-lesson-item {{item.isHistorySummary ? 'history-summary-item' : ''}} {{selectedLessonIndex === item.actualIndex && !item.isHistorySummary ? 'selected' : ''}}"
+                data-index="{{item.actualIndex}}"
+                data-history="{{item.isHistorySummary ? 1 : 0}}"
+                bindtap="selectManageLesson"
+              >
+                <view class="manage-lesson-main">
+                  <text class="manage-lesson-title">{{item.isHistorySummary ? ('第 ' + item.title + ' 课') : ('第 ' + (item.lesson || (index + 1)) + ' 课')}}</text>
+                  <text class="manage-lesson-status {{item.isHistorySummary ? 'DONE' : item.status}}">{{item.statusText}}</text>
+                </view>
+                <view class="manage-lesson-meta" wx:if="{{!item.isHistorySummary}}">
+                  <text wx:if="{{item.startedAtText}}">上课：{{item.startedAtText}}</text>
+                  <text wx:if="{{item.completedAtText}}">下课：{{item.completedAtText}}</text>
+                </view>
+                <view class="manage-lesson-meta" wx:if="{{item.isHistorySummary}}">
+                  <text>这是半途接入前的历史课节汇总框，不参与直接操作。</text>
+                </view>
+              </view>
+            </block>
+          </view>
+        </view>
+      </view>
+
+      <view wx:if="{{selectedTab === 'summary'}}">
+        <view class="section-header">
+          <text class="section-title">每日总结</text>
+          <text class="section-subtitle">选择课节后填写当天课程总结，进度展示页只负责查看</text>
+        </view>
+
+        <view class="empty-state" wx:if="{{!orderId}}">
+          <text>请先在“创建班课程”里发布课程，再填写每日总结。已有班级请从 progress 列表进入。</text>
+        </view>
+
+        <view wx:if="{{orderId}}">
+          <view class="section-card">
+            <view class="section-card-title">选择课节</view>
+            <scroll-view class="summary-lessons" scroll-x="true">
+              <view class="summary-lesson-chip {{summaryLessonIndex === index ? 'active' : ''}}" wx:for="{{schedule}}" wx:key="index" data-index="{{index}}" bindtap="selectSummaryLesson">
+                第 {{item.lesson || (index + 1)}} 课
+              </view>
+            </scroll-view>
+
+            <view class="summary-meta" wx:if="{{schedule[summaryLessonIndex]}}">
+              <text>当前课节：第 {{schedule[summaryLessonIndex].lesson || (summaryLessonIndex + 1)}} 课</text>
+            </view>
+
+            <view class="summary-time-grid">
+              <view class="form-group">
+                <view class="form-label">上课日期</view>
+                <picker mode="date" value="{{summaryDate}}" bindchange="handleSummaryDateChange">
+                  <view class="form-input-box">
+                    <text class="{{summaryDate ? 'input-val' : 'input-placeholder'}}">{{summaryDate || '请选择日期'}}</text>
+                  </view>
+                </picker>
+              </view>
+
+              <view class="form-group">
+                <view class="form-label">上课时间</view>
+                <picker mode="time" value="{{summaryStartTime}}" bindchange="handleSummaryStartTimeChange">
+                  <view class="form-input-box">
+                    <text class="{{summaryStartTime ? 'input-val' : 'input-placeholder'}}">{{summaryStartTime || '请选择上课时间'}}</text>
+                  </view>
+                </picker>
+              </view>
+
+              <view class="form-group">
+                <view class="form-label">下课时间</view>
+                <picker mode="time" value="{{summaryEndTime}}" bindchange="handleSummaryEndTimeChange">
+                  <view class="form-input-box">
+                    <text class="{{summaryEndTime ? 'input-val' : 'input-placeholder'}}">{{summaryEndTime || '请选择下课时间'}}</text>
+                  </view>
+                </picker>
+              </view>
+            </view>
+
+            <view class="summary-time-tip">
+              任意填写上课或下课时间，系统默认按 1 小时自动补全另一项。
+            </view>
+
+            <textarea
+              class="summary-textarea"
+              placeholder="请输入当天上课内容、表现、教练建议..."
+              value="{{summaryInput}}"
+              bindinput="handleSummaryInput"
+            ></textarea>
+            <button class="btn-submit" bindtap="saveSummary">保存每日总结</button>
+          </view>
+        </view>
+      </view>
+
+      <!-- 底部垫高，防止内容被遮挡 -->
+      <view class="footer-spacer"></view>
+    </view>
+  </scroll-view>
+
+  <view class="modal-mask" wx:if="{{showSetTotalModal}}">
+    <view class="modal-container small-modal-container">
+      <view class="modal-header">设置总课时</view>
+      <view class="modal-content">
+        <!-- 新增总课时设置：决定下面应该生成多少个课节框 -->
+        <view class="form-item">
+          <text class="form-label">总课时</text>
+          <input
+            class="form-input"
+            type="number"
+            value="{{setTotalLessonsInput}}"
+            placeholder="例如 10 / 12"
+            bindinput="handleSetTotalLessonsInput"
+          />
+        </view>
+        <view class="sync-note no-margin">保存后会从第 1 课开始生成对应数量的课节框，例如 10 节就生成 10 个框。</view>
+      </view>
+      <view class="modal-footer">
+        <button class="btn-cancel" bindtap="closeSetTotalModal">取消</button>
+        <button class="btn-submit modal-submit" bindtap="submitSetTotalLessons">保存</button>
+      </view>
+    </view>
+  </view>
+
+  <view class="modal-mask" wx:if="{{showSyncModal}}">
+    <view class="modal-container">
+      <view class="modal-header">半途接入课程</view>
+      <view class="modal-content">
+        <!-- 新增半途接入表单：设置总课时和前面已经完成的课次 -->
+        <view class="form-item">
+          <text class="form-label">总课时</text>
+          <input
+            class="form-input"
+            type="number"
+            value="{{syncTotalLessonsInput}}"
+            placeholder="请输入总课时"
+            bindinput="handleSyncTotalLessonsInput"
+          />
+        </view>
+        <view class="form-item">
+          <text class="form-label">前面已上了几节课</text>
+          <input
+            class="form-input"
+            type="number"
+            value="{{syncHistoryCountInput}}"
+            placeholder="例如 6"
+            bindinput="handleSyncHistoryCountInput"
+          />
+        </view>
+        <view class="sync-note">保存后会先生成一个历史汇总框，例如填 6，则先显示一个 0-6 的框，后面再显示剩余课节框。</view>
+      </view>
+      <view class="modal-footer">
+        <button class="btn-cancel" bindtap="closeSyncModal">取消</button>
+        <button class="btn-submit modal-submit" bindtap="submitSyncLessonProgress">保存</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 全屏加载遮罩 -->
+  <view class="loading-mask" wx:if="{{showCover}}">
+    <view class="spinner"></view>
+    <text>加载中...</text>
+  </view>
+
+</view>

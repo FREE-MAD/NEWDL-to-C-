@@ -1,0 +1,161 @@
+<view class="page">
+  <!-- 顶部区域 -->
+  <view class="hero">
+    <view class="hero-title">体育大事件</view>
+    <view class="hero-sub">发现身边的精彩赛事</view>
+  </view>
+
+  <!-- 分类标签 -->
+  <scroll-view class="category-tabs" scroll-x scroll-with-animation>
+    <view class="tabs">
+      <view class="tab {{activeCategory === 'all' ? 'active' : ''}}" 
+            bindtap="switchCategory" 
+            data-category="all">
+        全部
+      </view>
+      <view class="tab {{activeCategory === 'competition' ? 'active' : ''}}" 
+            bindtap="switchCategory" 
+            data-category="competition">
+        比赛
+      </view>
+      <view class="tab {{activeCategory === 'training' ? 'active' : ''}}" 
+            bindtap="switchCategory" 
+            data-category="training">
+        训练
+      </view>
+      <view class="tab {{activeCategory === 'activity' ? 'active' : ''}}" 
+            bindtap="switchCategory" 
+            data-category="activity">
+        活动
+      </view>
+      <view class="tab {{activeCategory === 'news' ? 'active' : ''}}" 
+            bindtap="switchCategory" 
+            data-category="news">
+        新闻
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 搜索栏 -->
+  <view class="search-section">
+    <view class="search-box">
+      <image class="search-icon" src="/images/search.png"></image>
+      <input class="search-input" 
+             placeholder="搜索赛事、活动..." 
+             value="{{searchText}}"
+             bindinput="onSearchInput" />
+    </view>
+  </view>
+
+  <!-- 事件列表 -->
+  <view class="events-list">
+    <block wx:if="{{filteredEvents.length === 0}}">
+      <view class="empty-state">
+        <image class="empty-icon" src="/images/empty-events.png"></image>
+        <text class="empty-text">暂无相关赛事</text>
+      </view>
+    </block>
+
+    <block wx:for="{{filteredEvents}}" wx:key="id">
+      <view class="event-card" bindtap="viewEventDetail" data-id="{{item.id}}">
+        <!-- 事件封面图 -->
+        <image class="event-image" src="{{item.image}}" mode="aspectFill"></image>
+        
+        <!-- 事件信息 -->
+        <view class="event-info">
+          <!-- 分类标签 -->
+          <view class="event-category {{item.category}}">
+            {{categoryMap[item.category]}}
+          </view>
+          
+          <!-- 标题 -->
+          <view class="event-title">{{item.title}}</view>
+          
+          <!-- 时间地点 -->
+          <view class="event-meta">
+            <view class="meta-item">
+              <image class="meta-icon" src="/images/time.png"></image>
+              <text>{{item.date}}</text>
+            </view>
+            <view class="meta-item">
+              <image class="meta-icon" src="/images/location.png"></image>
+              <text>{{item.location}}</text>
+            </view>
+          </view>
+          
+          <!-- 参与人数 -->
+          <view class="event-stats">
+            <view class="stat-item">
+              <image class="stat-icon" src="/images/people.png"></image>
+              <text>{{item.participants}}人参与</text>
+            </view>
+            <view class="stat-item" wx:if="{{item.isHot}}">
+              <image class="stat-icon hot" src="/images/fire.png"></image>
+              <text>热门</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </block>
+  </view>
+
+  <!-- 加载更多 -->
+  <view class="load-more" wx:if="{{hasMore}}" bindtap="loadMore">
+    <text>加载更多</text>
+  </view>
+
+  <!-- 没有更多 -->
+  <view class="no-more" wx:if="{{!hasMore && filteredEvents.length > 0}}">
+    <text>没有更多了</text>
+  </view>
+</view>
+
+<!-- 事件详情模态框 -->
+<view class="modal-mask" wx:if="{{showDetailModal}}" bindtap="hideDetailModal">
+  <view class="modal-content" catchtap="">
+    <view class="modal-header">
+      <text class="modal-title">赛事详情</text>
+      <view class="modal-close" bindtap="hideDetailModal">×</view>
+    </view>
+    
+    <view class="modal-body" wx:if="{{selectedEvent}}">
+      <image class="detail-image" src="{{selectedEvent.image}}" mode="aspectFill"></image>
+      
+      <view class="detail-info">
+        <text class="detail-title">{{selectedEvent.title}}</text>
+        
+        <view class="detail-meta">
+          <view class="detail-meta-item">
+            <image class="detail-meta-icon" src="/images/time.png"></image>
+            <text>{{selectedEvent.date}}</text>
+          </view>
+          <view class="detail-meta-item">
+            <image class="detail-meta-icon" src="/images/location.png"></image>
+            <text>{{selectedEvent.location}}</text>
+          </view>
+        </view>
+        
+        <view class="detail-description">
+          {{selectedEvent.description}}
+        </view>
+        
+        <view class="detail-actions">
+          <button class="btn-favorite {{selectedEvent.isFavorited ? 'favorited' : ''}}" 
+                  bindtap="toggleFavorite">
+            <image class="btn-icon" 
+                   src="{{selectedEvent.isFavorited ? '/images/heart-filled.png' : '/images/heart.png'}}"></image>
+            {{selectedEvent.isFavorited ? '已收藏' : '收藏'}}
+          </button>
+          <button class="btn-share" bindtap="shareEvent">
+            <image class="btn-icon" src="/images/share.png"></image>
+            分享
+          </button>
+          <button class="btn-join" bindtap="joinEvent">
+            <image class="btn-icon" src="/images/join.png"></image>
+            立即参加
+          </button>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

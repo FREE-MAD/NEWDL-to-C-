@@ -1,0 +1,4 @@
+<!--pages/login/Register/initial_choose.wxml-->
+<view class="container">
+  <text>注册选择页面开发中...</text>
+</view>

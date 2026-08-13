@@ -1,0 +1,287 @@
+/* pages/exercise/record/record.wxss */
+.container {
+  padding: 20rpx;
+  background: #f5f5f5;
+  min-height: 100vh;
+  padding-bottom: 120rpx;
+}
+
+.stats-section {
+  margin-bottom: 20rpx;
+}
+
+.stats-card {
+  background: white;
+  padding: 30rpx;
+  border-radius: 12rpx;
+  display: flex;
+  justify-content: space-between;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.1);
+}
+
+.stats-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+
+.stats-number {
+  font-size: 40rpx;
+  font-weight: bold;
+  color: #007AFF;
+  margin-bottom: 8rpx;
+}
+
+.stats-label {
+  font-size: 24rpx;
+  color: #666;
+  text-align: center;
+}
+
+.date-section {
+  background: white;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+  border-radius: 12rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.05);
+}
+
+.date-picker {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.date-text {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.date-arrow {
+  font-size: 32rpx;
+}
+
+.record-list {
+  padding: 0 10rpx;
+}
+
+.record-item {
+  background: white;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+  border-radius: 12rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.1);
+}
+
+.record-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.sport-info {
+  display: flex;
+  align-items: center;
+}
+
+.sport-icon {
+  font-size: 36rpx;
+  margin-right: 12rpx;
+}
+
+.sport-name {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.record-time {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.record-content {
+  margin-bottom: 20rpx;
+}
+
+.record-stats {
+  display: flex;
+  margin-bottom: 16rpx;
+}
+
+.stat-item {
+  flex: 1;
+  text-align: center;
+  padding: 12rpx;
+  background: #f8f9fa;
+  border-radius: 8rpx;
+  margin-right: 12rpx;
+}
+
+.stat-item:last-child {
+  margin-right: 0;
+}
+
+.stat-label {
+  display: block;
+  font-size: 24rpx;
+  color: #666;
+  margin-bottom: 4rpx;
+}
+
+.stat-value {
+  display: block;
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.record-notes {
+  background: #f8f9fa;
+  padding: 16rpx;
+  border-radius: 8rpx;
+  margin-bottom: 16rpx;
+}
+
+.notes-text {
+  font-size: 26rpx;
+  color: #666;
+  line-height: 1.5;
+}
+
+.record-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+}
+
+.record-image {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 8rpx;
+  object-fit: cover;
+}
+
+.record-actions {
+  display: flex;
+  gap: 12rpx;
+  padding-top: 16rpx;
+  border-top: 1px solid #f0f0f0;
+}
+
+.action-btn {
+  flex: 1;
+  height: 64rpx;
+  border: 1px solid #007AFF;
+  background: white;
+  color: #007AFF;
+  border-radius: 8rpx;
+  font-size: 26rpx;
+  line-height: 62rpx;
+}
+
+.action-btn.delete-btn {
+  border-color: #ff4757;
+  color: #ff4757;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 100rpx 0;
+}
+
+.empty-icon {
+  font-size: 120rpx;
+  margin-bottom: 20rpx;
+  display: block;
+}
+
+.empty-text {
+  font-size: 32rpx;
+  color: #666;
+  margin-bottom: 12rpx;
+  display: block;
+}
+
+.empty-tip {
+  font-size: 26rpx;
+  color: #999;
+  display: block;
+}
+
+.fab-button {
+  position: fixed;
+  bottom: 120rpx;
+  right: 30rpx;
+  width: 120rpx;
+  height: 120rpx;
+  background: #007AFF;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4rpx 16rpx rgba(0,122,255,0.3);
+  z-index: 1000;
+}
+
+.fab-icon {
+  font-size: 48rpx;
+  color: white;
+  font-weight: bold;
+}
+
+.calendar-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.calendar-content {
+  background: white;
+  width: 600rpx;
+  border-radius: 12rpx;
+  overflow: hidden;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 30rpx;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.calendar-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.calendar-close {
+  font-size: 40rpx;
+  color: #999;
+  padding: 10rpx;
+}
+
+.calendar-picker {
+  padding: 30rpx;
+}
+
+.picker-display {
+  text-align: center;
+  font-size: 32rpx;
+  color: #333;
+  padding: 20rpx;
+  background: #f8f9fa;
+  border-radius: 8rpx;
+}

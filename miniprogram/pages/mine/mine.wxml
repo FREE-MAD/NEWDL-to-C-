@@ -1,0 +1,95 @@
+<view class="page">
+
+<!-- 顶部 hero -->
+<view class="hero">
+  <view class="hero-inner">
+
+    <!-- 头像 -->
+    <view class="avatar-container" bindtap="changeAvatar">
+      <image
+        class="avatar"
+        src="{{user.avatar || '/images/icons/avatar.png'}}"
+        mode="aspectFill"
+      />
+      <view class="avatar-edit">
+        <image class="edit-icon" src="/images/camera.png" />
+      </view>
+    </view>
+
+    <!-- 右侧信息 -->
+    <view class="hero-right">
+      <view class="user-info">
+        <text class="nickname">
+          {{user.nickname || '未登录用户'}}
+        </text>
+        <text class="sub">
+          ID: {{user.id || '—'}} ·
+          {{user.role ? roleMap[user.role] : '未设置身份'}}
+        </text>
+      </view>
+
+      <button class="edit-btn" bindtap="onEditProfile">
+        编辑资料
+      </button>
+    </view>
+
+  </view>
+</view>
+
+<!-- 统计 -->
+<view class="stats">
+  <view class="stat-card">
+    <text class="stat-num">{{stats.posts}}</text>
+    <text class="stat-label">发布</text>
+  </view>
+  <view class="stat-card">
+    <text class="stat-num">{{stats.parttime}}</text>
+    <text class="stat-label">兼职</text>
+  </view>
+  <view class="stat-card">
+    <text class="stat-num">{{stats.followers}}</text>
+    <text class="stat-label">关注</text>
+  </view>
+</view>
+
+<!-- 功能菜单 -->
+<view class="menu">
+  <view class="menu-item" bindtap="openOrders">
+    <text>我的订单</text>
+    <text class="chev">›</text>
+  </view>
+
+  <view class="menu-item" bindtap="openFavorites">
+    <text>我的收藏</text>
+    <text class="chev">›</text>
+  </view>
+
+  <view class="menu-item" bindtap="openHistory">
+    <text>浏览历史</text>
+    <text class="chev">›</text>
+  </view>
+
+  <view class="menu-item" bindtap="openCertificate">
+    <text>证书认证</text>
+    <text class="chev">›</text>
+  </view>
+
+  <view class="menu-item" bindtap="openSettings">
+    <text>设置</text>
+    <text class="chev">›</text>
+  </view>
+
+  <view class="menu-item" bindtap="openHelp">
+    <text>帮助与反馈</text>
+    <text class="chev">›</text>
+  </view>
+</view>
+
+<!-- 退出 -->
+<view class="footer">
+  <button class="logout-btn" bindtap="logout">
+    退出登录
+  </button>
+</view>
+
+</view>

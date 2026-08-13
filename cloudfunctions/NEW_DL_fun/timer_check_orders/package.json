@@ -1,0 +1,11 @@
+﻿{
+  "name": "timer_check_orders",
+  "version": "1.0.0",
+  "description": "Scheduled task for order reminders and auto-lock",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}
+
+

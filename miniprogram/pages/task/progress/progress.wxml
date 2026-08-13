@@ -1,0 +1,97 @@
+<view class="page">
+  <view class="header">
+  <view class="header-info">
+    <view class="city">保持微笑</view>
+
+    <view class="stats">
+      
+    </view>
+
+    <view class="edit-btn">
+      记录心情
+      <text class="edit-icon">✎</text>
+    </view>
+  </view>
+</view>
+
+<!-- Tabs -->
+<view class="tab-card">
+  <view class="tab-bar">
+    <view
+      wx:for="{{tabs}}"
+      wx:for-item="item"
+      wx:for-index="index"
+      wx:key="status"
+      class="tab-item {{currentTab === index ? 'active' : ''}}"
+      data-index="{{index}}"
+      bindtap="onTabChange"
+    >
+      {{item.label}}
+    </view>
+  </view>
+</view>
+
+<!-- 新增操作说明：progress 页现在只承担“找到班级并继续管理”的入口作用 -->
+<view class="flow-tip-card">
+  <text class="flow-tip-title">操作说明</text>
+  <text class="flow-tip-desc">这里只显示你创建的班级。未关闭的班级放在“可管理班级”，关闭后的班级放在“已关闭”。</text>
+</view>
+
+<!-- Task List -->
+<view class="list">
+
+  <view
+    wx:for="{{tasks}}"
+    wx:for-item="item"
+    wx:key="id"
+    class="card"
+  >
+
+    <!-- Header -->
+    <view class="card-header">
+      <text class="title">{{item.title}}</text>
+      <view class="status status-{{item.status}}">
+        {{item.statusText}}
+      </view>
+    </view>
+
+    <!-- Meta -->
+    <view class="meta">
+      <text>{{item.category}}</text>
+      <text>📍 {{item.location}}</text>
+      <text>进度 {{item.progressText}}</text>
+    </view>
+
+    <!-- Desc -->
+    <view class="desc">{{item.description}}</view>
+
+    <!-- Action -->
+    <view class="action-row">
+      <button
+        class="{{item.canManageClass ? 'secondary' : 'primary'}}"
+        bindtap="onViewDetail"
+        data-id="{{item.id}}"
+      >
+        进入查看页
+      </button>
+      <button
+        wx:if="{{item.canManageClass}}"
+        class="primary"
+        bindtap="onManageClass"
+        data-id="{{item.id}}"
+      >
+        继续管理班级
+      </button>
+    </view>
+
+  </view>
+
+  <!-- Empty -->
+  <view wx:if="{{tasks.length === 0}}" class="empty">
+    <text class="icon">📋</text>
+    <text>暂无{{tabs[currentTab].label}}的任务</text>
+  </view>
+
+</view>
+
+</view>

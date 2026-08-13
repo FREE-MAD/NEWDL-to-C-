@@ -1,0 +1,175 @@
+<!-- pages/index/hot/hot.wxml -->
+<view class="container">
+  <!-- 头部 -->
+  <view class="header">
+    <text class="header-title">🔥 热门</text>
+    <view class="header-actions">
+      <text class="search-btn" bindtap="onSearch">🔍</text>
+    </view>
+  </view>
+
+  <!-- 分类切换 -->
+  <view class="category-nav">
+    <view 
+      wx:for="{{categories}}" 
+      wx:key="*this"
+      class="category-item {{currentCategory === index ? 'active' : ''}}"
+      data-index="{{index}}"
+      bindtap="onCategoryChange"
+    >
+      {{item}}
+    </view>
+  </view>
+
+  <!-- 热门内容列表 -->
+  <view class="hot-list">
+    <!-- 热门话题 -->
+    <block wx:if="{{currentCategory === 0}}">
+      <view 
+        wx:for="{{hotItems}}" 
+        wx:key="id"
+        class="hot-topic-item"
+        bindtap="onTopicClick"
+        data-topic="{{item.name}}"
+      >
+        <view class="topic-rank">{{item.rankIcon}}</view>
+        <view class="topic-content">
+          <text class="topic-name">#{{item.name}}</text>
+          <text class="topic-desc">{{item.description}}</text>
+          <view class="topic-stats">
+            <text class="stat-item">讨论 {{item.discussions}}</text>
+            <text class="stat-item">参与 {{item.participants}}</text>
+            <text class="stat-item">热度 {{item.heat}}</text>
+          </view>
+        </view>
+        <view class="topic-trend {{item.trend > 0 ? 'up' : item.trend < 0 ? 'down' : 'stable'}}">
+          {{item.trendArrow}} {{item.trendAbs}}%
+        </view>
+      </view>
+    </block>
+
+    <!-- 热门用户 -->
+    <block wx:if="{{currentCategory === 1}}">
+      <view 
+        wx:for="{{hotItems}}" 
+        wx:key="id"
+        class="hot-user-item"
+      >
+        <view class="user-rank">{{getRankIcon(item.rank)}}</view>
+        <image 
+          class="user-avatar" 
+          src="{{item.avatar}}"
+          mode="aspectFill"
+          bindtap="onUserClick"
+          data-user-id="{{item.id}}"
+        />
+        <view class="user-info">
+          <text class="user-name">{{item.nickname}}</text>
+          <text class="user-bio">{{item.bio}}</text>
+          <view class="user-stats">
+            <text class="stat-item">粉丝 {{item.followers}}</text>
+            <text class="stat-item">动态 {{item.posts}}</text>
+            <text class="stat-item">获赞 {{item.likes}}</text>
+          </view>
+        </view>
+        <button 
+          class="follow-btn {{item.isFollowing ? 'following' : ''}}"
+          bindtap="onFollowUser"
+          data-user-id="{{item.id}}"
+          data-index="{{index}}"
+          data-following="{{item.isFollowing}}"
+          catchtap="stopPropagation"
+        >
+          {{item.isFollowing ? '已关注' : '关注'}}
+        </button>
+      </view>
+    </block>
+
+    <!-- 热门动态 -->
+    <block wx:if="{{currentCategory === 2}}">
+      <view 
+        wx:for="{{hotItems}}" 
+        wx:key="id"
+        class="hot-post-item"
+      >
+        <view class="post-rank">{{item.rankIcon}}</view>
+        <view class="post-content" bindtap="onPostClick" data-post-id="{{item.id}}">
+          <view class="post-header">
+            <image class="post-avatar" src="{{item.userAvatar}}" mode="aspectFill"/>
+            <text class="post-username">{{item.userName}}</text>
+          </view>
+          <text class="post-text">{{item.content}}</text>
+          <view wx:if="{{item.image}}" class="post-image">
+            <image src="{{item.image}}" mode="aspectFill"/>
+          </view>
+          <view class="post-stats">
+            <view 
+              class="stat-btn {{item.isLiked ? 'liked' : ''}}"
+              bindtap="onLike"
+              data-type="posts"
+              data-id="{{item.id}}"
+              data-index="{{index}}"
+              catchtap="stopPropagation"
+            >
+              <text class="stat-icon">{{item.isLiked ? '❤️' : '🤍'}}</text>
+              <text class="stat-text">{{item.likes}}</text>
+            </view>
+            <view class="stat-btn">
+              <text class="stat-icon">💬</text>
+              <text class="stat-text">{{item.comments}}</text>
+            </view>
+            <view 
+              class="stat-btn"
+              bindtap="onShare"
+              data-type="posts"
+              data-id="{{item.id}}"
+              catchtap="stopPropagation"
+            >
+              <text class="stat-icon">🔄</text>
+              <text class="stat-text">分享</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </block>
+
+    <!-- 热门赛事 -->
+    <block wx:if="{{currentCategory === 3}}">
+      <view 
+        wx:for="{{hotItems}}" 
+        wx:key="id"
+        class="hot-event-item"
+        bindtap="onEventClick"
+        data-event-id="{{item.id}}"
+      >
+        <view class="event-rank">{{item.rankIcon}}</view>
+        <image class="event-image" src="{{item.coverImage}}" mode="aspectFill"/>
+        <view class="event-info">
+          <text class="event-title">{{item.title}}</text>
+          <view class="event-meta">
+            <text class="meta-item">📅 {{item.date}}</text>
+            <text class="meta-item">📍 {{item.location}}</text>
+          </view>
+          <view class="event-stats">
+            <text class="stat-item">报名 {{item.participants}}</text>
+            <text class="stat-item">热度 {{item.heat}}</text>
+            <text class="stat-item">浏览 {{item.views}}</text>
+          </view>
+        </view>
+        <view class="event-status {{item.status}}">
+          {{item.status === 'upcoming' ? '即将开始' : item.status === 'ongoing' ? '进行中' : '已结束'}}
+        </view>
+      </view>
+    </block>
+
+    <!-- 加载状态 -->
+    <view wx:if="{{refreshing}}" class="loading">
+      <text>刷新中...</text>
+    </view>
+    
+    <view wx:if="{{hotItems.length === 0 && !refreshing}}" class="empty-state">
+      <text class="empty-icon">📈</text>
+      <text class="empty-text">暂无热门内容</text>
+    </view>
+  </view>
+</view>

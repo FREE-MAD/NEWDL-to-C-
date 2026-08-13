@@ -1,0 +1,74 @@
+<view class="page">
+<!-- 常驻状态====== -->
+  <!-- 提示信息 -->
+  <view wx:if="{{formSuccess}}" class="form-tip"> {{formSuccess}}</view>
+
+  <!-- 常驻状态（仅在登录后显示） -->
+  <view class="header {{headerState}}">
+    <view class="header-left">
+      <view class="hello"> {{welcome}} 👋</view>
+      <view class="location">
+        📍 北京市朝阳区
+      </view>
+    </view>
+  </view>
+
+ <!-- Header: 选择身份 -->
+ <!-- <view class="header {{headerCollapsed ? 'collapsed' : ''}}">
+    <view class="header-left">
+      <view class="hello">Hi Navin! 👋</view>
+      <view class="location" wx:if="{{headerCollapsed}}">📍 Chinnabasinagar-Ward-11</view>
+    </view>
+     身份选择区
+    <view class="role-selection" wx:if="{{!headerCollapsed}}">
+      <button bindtap="chooseRole" data-role="R">我是R</button>
+      <button bindtap="chooseRole" data-role="P">我是P</button>
+    </view>
+  </view> -->
+
+<!-- 四功能区块---a版 -->
+<!-- 四功能区块---b版 -->
+<!-- 四功能区块---c版 -->
+<!-- 用 wx:for 渲染动态区块 -->
+<view wx:if="{{panelItems.length > 0}}" class="grid-box">
+  <view 
+    wx:for="{{panelItems}}" 
+    wx:key="title"
+    bindtap="onPanelTap"
+  data-action="{{item.action}}"
+    class="grid-item visible"
+    animation="{{animations[index]}}"
+  >
+    <view class="icon {{item.color}}"></view>
+    <view class="grid-title">{{item.title}}</view>
+    <view class="grid-sub">{{item.sub}}</view>
+  </view>
+</view>
+
+<!-- 外层循环：三块 -->
+<view wx:if="{{questionnaireSection}}" class="big_view">
+  <view class="section-title" bindtap="onQuestionnaireTap">
+    <text>{{questionnaireSection.title}}</text>
+    <text class="view-all">查看全部 ></text>
+  </view>
+
+  <view
+    wx:for="{{questionnaireSection.posts}}"
+    wx:for-item="post"
+    wx:key="id"
+    class="post-card"
+    bindtap="onQuestionnaireTap"
+  >
+    <view class="post-header">
+      <text class="post-author">{{post.author || '系统'}}</text>
+      <text class="post-time">{{post.displayTime || post.time || ''}}</text>
+    </view>
+    <view class="post-tag">{{post.tag || '问卷'}}</view>
+    <view class="post-text">{{post.text || post.title || '点击查看健康问卷详情'}}</view>
+    <image wx:if="{{post.img}}" class="post-img" src="{{post.img}}" mode="aspectFill"></image>
+    <view class="post-footer">
+      <view class="details">查看详情</view>
+    </view>
+  </view>
+</view>
+</view>

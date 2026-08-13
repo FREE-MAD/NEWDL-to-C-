@@ -1,0 +1,141 @@
+<!-- pages/train/plan/plan.wxml -->
+<view class="container">
+  <!-- 标签切换 -->
+  <view class="tab-section">
+    <view class="tab-bar">
+      <view 
+        wx:for="{{tabs}}" 
+        wx:key="*this"
+        class="tab-item {{currentTab === index ? 'active' : ''}}"
+        data-index="{{index}}"
+        bindtap="onTabChange"
+      >
+        {{item}}
+      </view>
+    </view>
+  </view>
+
+  <!-- 分类筛选 (推荐计划和模板页) -->
+  <view wx:if="{{currentTab > 0}}" class="category-section">
+    <scroll-view scroll-x class="category-scroll">
+      <view 
+        wx:for="{{categories}}" 
+        wx:key="*this"
+        class="category-item {{currentCategory === index ? 'active' : ''}}"
+        data-index="{{index}}"
+        bindtap="onCategoryChange"
+      >
+        {{item}}
+      </view>
+    </scroll-view>
+  </view>
+
+  <!-- 计划列表 -->
+  <view class="plan-list">
+    <view 
+      wx:for="{{plans}}" 
+      wx:key="id"
+      class="plan-item"
+    >
+      <view class="plan-header">
+        <text class="plan-title">{{item.title}}</text>
+        <view class="plan-difficulty" style="color: {{getDifficultyColor(item.difficulty)}}">
+          {{getDifficultyText(item.difficulty)}}
+        </view>
+      </view>
+
+      <view class="plan-info">
+        <text class="plan-duration">⏱️ {{item.duration}}分钟</text>
+        <text class="plan-frequency">📅 {{item.frequency}}</text>
+        <text class="plan-calories">🔥 {{item.calories}}卡</text>
+      </view>
+
+      <view class="plan-desc">{{item.description}}</view>
+
+      <view wx:if="{{item.exercises}}" class="exercises-preview">
+        <text class="exercises-title">包含动作：</text>
+        <view class="exercises-list">
+          <text 
+            wx:for="{{item.exercises}}" 
+            wx:key="id"
+            wx:for-item="exercise"
+            class="exercise-tag"
+          >
+            {{exercise.name}}
+          </text>
+        </view>
+      </view>
+
+      <view class="plan-footer">
+        <view class="plan-stats">
+          <text class="stat-item">👁️ {{item.views || 0}}</text>
+          <text class="stat-item">❤️ {{item.likes || 0}}</text>
+          <text class="stat-item">💬 {{item.comments || 0}}</text>
+        </view>
+        
+        <view class="plan-author" wx:if="{{item.author}}">
+          <image class="author-avatar" src="{{item.author.avatar}}" mode="aspectFill"/>
+          <text class="author-name">{{item.author.name}}</text>
+        </view>
+      </view>
+
+      <!-- 操作按钮 -->
+      <view class="action-buttons">
+        <button 
+          class="action-btn detail-btn"
+          bindtap="onPlanDetail"
+          data-id="{{item.id}}"
+        >
+          详情
+        </button>
+
+        <button 
+          wx:if="{{currentTab === 0}}"
+          class="action-btn start-btn"
+          bindtap="onStartTraining"
+          data-id="{{item.id}}"
+        >
+          开始
+        </button>
+
+        <button 
+          wx:if="{{currentTab === 0}}"
+          class="action-btn edit-btn"
+          bindtap="onEditPlan"
+          data-id="{{item.id}}"
+        >
+          编辑
+        </button>
+
+        <button 
+          wx:if="{{currentTab > 0}}"
+          class="action-btn adopt-btn"
+          bindtap="onAdoptPlan"
+          data-id="{{item.id}}"
+        >
+          采纳
+        </button>
+
+        <button 
+          wx:if="{{currentTab === 0}}"
+          class="action-btn delete-btn"
+          bindtap="onDeletePlan"
+          data-id="{{item.id}}"
+        >
+          删除
+        </button>
+      </view>
+    </view>
+
+    <view wx:if="{{plans.length === 0}}" class="empty-state">
+      <text class="empty-icon">📋</text>
+      <text class="empty-text">暂无训练计划</text>
+      <text class="empty-tip">创建你的第一个训练计划吧！</text>
+    </view>
+  </view>
+
+  <!-- 创建按钮 (仅在我的计划页显示) -->
+  <view wx:if="{{currentTab === 0}}" class="fab-button" bindtap="onCreatePlan">
+    <text class="fab-icon">+</text>
+  </view>
+</view>

@@ -1,0 +1,9 @@
+/* 兼容旧页面路径：仅用于消除历史编译入口残留 */
+.compat-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666666;
+  font-size: 28rpx;
+}

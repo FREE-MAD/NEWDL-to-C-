@@ -1,0 +1,4 @@
+<!-- 兼容旧页面路径：页面初始化后会立即跳转到当前发布页 -->
+<view class="compat-page">
+  <text>正在跳转...</text>
+</view>

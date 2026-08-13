@@ -1,0 +1,146 @@
+<!-- pages/exercise/record/record.wxml -->
+<view class="container">
+  <!-- 统计卡片 -->
+  <view class="stats-section">
+    <view class="stats-card">
+      <view class="stats-item">
+        <text class="stats-number">{{stats.totalDuration}}</text>
+        <text class="stats-label">总时长(分)</text>
+      </view>
+      <view class="stats-item">
+        <text class="stats-number">{{stats.totalCalories}}</text>
+        <text class="stats-label">总消耗(卡)</text>
+      </view>
+      <view class="stats-item">
+        <text class="stats-number">{{stats.totalDistance}}</text>
+        <text class="stats-label">总距离(km)</text>
+      </view>
+      <view class="stats-item">
+        <text class="stats-number">{{stats.weekCount}}</text>
+        <text class="stats-label">本周次数</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 日期选择 -->
+  <view class="date-section">
+    <view class="date-picker" bindtap="onShowCalendar">
+      <text class="date-text">{{currentDate}}</text>
+      <text class="date-arrow">📅</text>
+    </view>
+  </view>
+
+  <!-- 运动记录列表 -->
+  <view class="record-list">
+    <view 
+      wx:for="{{records}}" 
+      wx:key="id"
+      class="record-item"
+    >
+      <view class="record-header">
+        <view class="sport-info">
+          <text class="sport-icon">{{item.sportIcon}}</text>
+          <text class="sport-name">{{item.sportName}}</text>
+        </view>
+        <view class="record-time">{{item.createTime}}</view>
+      </view>
+
+      <view class="record-content">
+        <view class="record-stats">
+          <view class="stat-item">
+            <text class="stat-label">时长</text>
+            <text class="stat-value">{{item.duration}}分钟</text>
+          </view>
+          <view class="stat-item">
+            <text class="stat-label">消耗</text>
+            <text class="stat-value">{{item.calories}}卡</text>
+          </view>
+          <view wx:if="{{item.distance}}" class="stat-item">
+            <text class="stat-label">距离</text>
+            <text class="stat-value">{{item.distance}}km</text>
+          </view>
+        </view>
+
+        <view wx:if="{{item.notes}}" class="record-notes">
+          <text class="notes-text">{{item.notes}}</text>
+        </view>
+
+        <view wx:if="{{item.images && item.images.length > 0}}" class="record-images">
+          <image 
+            wx:for="{{item.images}}" 
+            wx:key="*this"
+            wx:for-item="img"
+            class="record-image"
+            src="{{img}}"
+            mode="aspectFill"
+            bindtap="onPreviewImage"
+            data-urls="{{item.images}}"
+            data-current="{{img}}"
+          />
+        </view>
+      </view>
+
+      <view class="record-actions">
+        <button 
+          class="action-btn"
+          bindtap="onRecordDetail"
+          data-id="{{item.id}}"
+        >
+          详情
+        </button>
+        <button 
+          class="action-btn"
+          bindtap="onEditRecord"
+          data-id="{{item.id}}"
+        >
+          编辑
+        </button>
+        <button 
+          class="action-btn"
+          bindtap="onShareRecord"
+          data-id="{{item.id}}"
+        >
+          分享
+        </button>
+        <button 
+          class="action-btn delete-btn"
+          bindtap="onDeleteRecord"
+          data-id="{{item.id}}"
+        >
+          删除
+        </button>
+      </view>
+    </view>
+
+    <view wx:if="{{records.length === 0}}" class="empty-state">
+      <text class="empty-icon">🏃</text>
+      <text class="empty-text">暂无运动记录</text>
+      <text class="empty-tip">开始记录你的第一次运动吧！</text>
+    </view>
+  </view>
+
+  <!-- 添加按钮 -->
+  <view class="fab-button" bindtap="onAddRecord">
+    <text class="fab-icon">+</text>
+  </view>
+
+  <!-- 日历弹窗 -->
+  <view wx:if="{{showCalendar}}" class="calendar-mask" bindtap="onHideCalendar">
+    <view class="calendar-content" catchtap="stopPropagation">
+      <view class="calendar-header">
+        <text class="calendar-title">选择日期</text>
+        <text class="calendar-close" bindtap="onHideCalendar">×</text>
+      </view>
+      <picker 
+        mode="date" 
+        value="{{selectedDate}}"
+        bindchange="onDateChange"
+        class="calendar-picker"
+      >
+        <view class="picker-display">
+          {{selectedDate}}
+        </view>
+      </picker>
+    </view>
+  </view>
+</view>

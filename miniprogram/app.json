@@ -1,0 +1,63 @@
+{
+  "pages": [
+    "pages/login/login",
+    "pages/index/index",
+    "pages/mine/mine",
+    "pages/login/Register/initial_choose",
+    "pages/index/about/about",
+    "pages/index/publish/publish",
+    "pages/index/profile/profile",
+    "pages/index/sport_events/sport_events",
+    "pages/task/progress/progress",
+    "pages/profile/edit/edit",
+    "pages/task/publish/publish",
+    "pages/circle/circle",
+    "pages/exercise/record/record",
+    "pages/train/plan/plan",
+    "pages/index/events/list/list",
+    "pages/index/hot/hot",
+    "pages/task/progress/progress_specialOperation/progress_specialOperation",
+    "pages/task/progress/progress_specialOperation/progress_classdetailed/progress_classdetailed"
+  ],
+  "window": {
+    "navigationBarTextStyle": "black",
+    "navigationStyle": "custom"
+  },
+  "requiredPrivateInfos": [
+    "chooseLocation",
+    "getLocation"
+  ],
+  "permission": {
+    "scope.userLocation": {
+      "desc": "您的位置信息将用于展示附近的拼单课程"
+    }
+  },
+  "tabBar": {
+    "color": "#000000",
+    "selectedColor": "#07c160",
+    "backgroundColor": "#ffffff",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "主页",
+        "iconPath": "images/icons/home.png",
+        "selectedIconPath": "images/icons/home-active.png"
+      },
+      {
+        "pagePath": "pages/task/progress/progress",
+        "text": "任务进程",
+        "iconPath": "images/icons/home.png",
+        "selectedIconPath": "images/icons/home-active.png"
+      },
+      {
+        "pagePath": "pages/mine/mine",
+        "text": "我的",
+        "iconPath": "images/icons/usercenter.png",
+        "selectedIconPath": "images/icons/usercenter-active.png"
+      }
+    ]
+  },
+  "sitemapLocation": "sitemap.json",
+  "style": "v2",
+  "lazyCodeLoading": "requiredComponents"
+}

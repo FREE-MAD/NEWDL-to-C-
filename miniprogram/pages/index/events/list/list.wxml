@@ -1,0 +1,163 @@
+<!-- pages/index/events/list/list.wxml -->
+<view class="container">
+  <!-- 分类和筛选 -->
+  <view class="filter-section">
+    <view class="category-scroll">
+      <scroll-view scroll-x>
+        <view 
+          wx:for="{{categories}}" 
+          wx:key="*this"
+          class="category-item {{currentCategory === index ? 'active' : ''}}"
+          data-index="{{index}}"
+          bindtap="onCategoryChange"
+        >
+          {{item}}
+        </view>
+      </scroll-view>
+    </view>
+    
+    <view class="filter-bar">
+      <view class="sort-btn" bindtap="onSortChange">
+        <text class="sort-text">排序</text>
+        <text class="sort-arrow">▼</text>
+      </view>
+      <view class="filter-btn" bindtap="onShowFilter">
+        <text class="filter-text">筛选</text>
+        <text class="filter-icon">⚙️</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 赛事列表 -->
+  <view class="event-list">
+    <view 
+      wx:for="{{events}}" 
+      wx:key="id"
+      class="event-item"
+    >
+      <!-- 赛事图片 -->
+      <image 
+        class="event-image" 
+        src="{{item.coverImage || '/images/default-event.png'}}"
+        mode="aspectFill"
+        bindtap="onEventDetail"
+        data-id="{{item.id}}"
+      />
+      
+      <!-- 赛事信息 -->
+      <view class="event-content">
+        <view class="event-header">
+          <text class="event-title">{{item.title}}</text>
+          <view 
+            class="event-status" 
+            style="color: {{getStatusColor(item.status)}}; border-color: {{getStatusColor(item.status)}}"
+          >
+            {{getStatusText(item.status)}}
+          </view>
+        </view>
+
+        <view class="event-info">
+          <view class="info-item">
+            <text class="info-icon">📅</text>
+            <text class="info-text">{{item.eventDate}}</text>
+          </view>
+          <view class="info-item">
+            <text class="info-icon">📍</text>
+            <text class="info-text">{{item.location.name}}</text>
+          </view>
+          <view class="info-item">
+            <text class="info-icon">💰</text>
+            <text class="info-text">{{item.fee > 0 ? '¥' + item.fee : '免费'}}</text>
+          </view>
+        </view>
+
+        <view class="event-stats">
+          <view class="stat-item">
+            <text class="stat-number">{{item.participants}}</text>
+            <text class="stat-label">人已报名</text>
+          </view>
+          <view class="stat-item">
+            <text class="stat-number">{{item.maxParticipants - item.participants}}</text>
+            <text class="stat-label">剩余名额</text>
+          </view>
+          <view class="stat-item">
+            <text class="stat-number">{{item.views}}</text>
+            <text class="stat-label">浏览量</text>
+          </view>
+        </view>
+
+        <view wx:if="{{item.tags}}" class="event-tags">
+          <text 
+            wx:for="{{item.tags}}" 
+            wx:key="*this"
+            wx:for-item="tag"
+            class="tag-item"
+          >
+            #{{tag}}
+          </text>
+        </view>
+      </view>
+
+      <!-- 操作按钮 -->
+      <view class="event-actions">
+        <button 
+          class="action-btn detail-btn"
+          bindtap="onEventDetail"
+          data-id="{{item.id}}"
+        >
+          详情
+        </button>
+        
+        <button 
+          wx:if="{{!item.isRegistered && item.status === 'upcoming'}}"
+          class="action-btn register-btn"
+          bindtap="onRegisterEvent"
+          data-id="{{item.id}}"
+        >
+          报名
+        </button>
+        
+        <button 
+          wx:if="{{item.isRegistered && item.status === 'upcoming'}}"
+          class="action-btn cancel-btn"
+          bindtap="onCancelRegistration"
+          data-id="{{item.id}}"
+        >
+          取消报名
+        </button>
+        
+        <button 
+          wx:if="{{item.status === 'ongoing'}}"
+          class="action-btn live-btn"
+          bindtap="onEventDetail"
+          data-id="{{item.id}}"
+        >
+          观看直播
+        </button>
+        
+        <button 
+          class="action-btn share-btn"
+          bindtap="onShareEvent"
+          data-id="{{item.id}}"
+        >
+          分享
+        </button>
+      </view>
+    </view>
+
+    <!-- 加载状态 -->
+    <view wx:if="{{loading}}" class="loading-more">
+      <text>加载中...</text>
+    </view>
+    
+    <view wx:if="{{!hasMore && events.length > 0}}" class="no-more">
+      <text>没有更多了</text>
+    </view>
+    
+    <view wx:if="{{events.length === 0 && !loading}}" class="empty-state">
+      <text class="empty-icon">🏆</text>
+      <text class="empty-text">暂无赛事</text>
+      <text class="empty-tip">敬请期待精彩赛事</text>
+    </view>
+  </view>
+</view>

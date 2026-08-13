@@ -1,0 +1,332 @@
+
+page {
+  background: #f6f7fb;
+}
+
+.container {
+    padding: 20rpx;
+}
+
+/* ===== 顶部身份选择卡片 id_select ===== */
+.id_select {
+  margin: 40rpx auto;
+  width: 90%;
+  background: #ffffff;
+  padding: 40rpx 30rpx;
+  border-radius: 24rpx;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 30rpx;
+  font-size: 32rpx;
+  color: #333;
+}
+
+/* 标题 */
+.id_select > view:first-child {
+  font-size: 36rpx;
+  font-weight: 600;
+  margin-bottom: 10rpx;
+}
+
+/* 身份项 */
+.id_select > view:not(:first-child) {
+  padding: 24rpx 20rpx;
+  background: #f7f7f7;
+  border-radius: 20rpx;
+  text-align: center;
+  transition: all 0.2s;
+}
+/* 默认身份项样式 */
+.id_select > view:not(:first-child) {
+  padding: 24rpx 20rpx;
+  background: #f7f7f7;
+  border-radius: 20rpx;
+  text-align: center;
+  transition: all 0.25s;
+  color: #333;
+}
+
+/* 选中后的高亮态 */
+.id_select .active {
+  background: #4a90e2 !important;
+  color: #fff !important;
+  transform: scale(1.02);
+  box-shadow: 0 6rpx 18rpx rgba(74,144,226,0.4);
+}
+
+
+/* ========================================================= */
+/* 统一 getxx（完善信息部分） 与 id_select 样式一致 */
+/* ========================================================= */
+
+.getxx {
+  margin: 40rpx auto;
+  width: 90%;
+  background: #ffffff;
+  padding: 40rpx 30rpx;
+  border-radius: 24rpx;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 30rpx;
+}
+
+.getxx_head {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+/* 头像选择区域 */
+.avatar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20rpx 0;
+}
+
+.avatar-wrapper {
+  padding: 0;
+  width: 120rpx !important;
+  height: 120rpx !important;
+  border-radius: 50%;
+  margin: 0;
+  background-color: transparent;
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.1);
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+.avatar-tip {
+  font-size: 24rpx;
+  color: #888;
+  margin-top: 14rpx;
+}
+
+/* 微信登录按钮样式 */
+.wx-login-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20rpx;
+  width: 100%;
+  height: 88rpx;
+  background: #07c160;
+  color: #fff;
+  border-radius: 44rpx;
+  font-size: 32rpx;
+  margin-top: 20rpx;
+  border: none;
+}
+
+.wx-icon {
+  width: 40rpx;
+  height: 40rpx;
+}
+
+/* 自动采集区域 */
+.Automatic {
+  padding: 20rpx;
+  background: #f7f7f7;
+  border-radius: 20rpx;
+  font-size: 28rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+/* 手动输入框区域 */
+.Artificial {
+  padding: 20rpx;
+  background: #f7f7f7;
+  border-radius: 20rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.Artificial .manual-label {
+  font-size: 28rpx;
+  color: #333;
+  text-align: left;
+  width: 100%;
+}
+
+/* 输入框统一样式 */
+.Artificial input {
+  padding: 20rpx;
+  border-radius: 12rpx;
+  border: 1px solid #ddd;
+  background: #fff;
+  font-size: 28rpx;
+}
+
+
+/* 协议区域 */
+.Agreement {
+  margin: 20rpx auto 0;
+  width: 90%;
+  padding: 20rpx;
+  background: #ffffff;
+  border-radius: 20rpx;
+  box-shadow: 0 8rpx 24rpx rgba(0,0,0,0.08);
+  font-size: 28rpx;
+}
+
+/* 提交 / 取消 */
+.addorout {
+  margin: 20rpx auto 40rpx;
+  width: 90%;
+  display: flex;
+  justify-content: space-between;
+  gap: 30rpx;
+}
+
+.addorout button {
+    flex: 1;
+}
+
+.addorout view {
+  flex: 1;
+  text-align: center;
+  padding: 20rpx 0;
+  background: #4a90e2;
+  color: #fff;
+  border-radius: 16rpx;
+  font-size: 30rpx;
+  transition: all 0.2s;
+}
+
+.addorout view:last-child {
+  background: #ccc;
+  color: #333;
+}
+
+.addorout view:active {
+  transform: scale(0.97);
+}
+
+
+/* 四大模块统一卡片样式 */
+.select-identity .Automatic,
+.select-identity .Artificial,
+.select-identity .Agreement,
+.select-identity .addorout {
+  background: #ffffff;
+  padding: 36rpx 42rpx;
+  margin-bottom: 34rpx;
+  border-radius: 28rpx;
+  box-shadow: 0 8rpx 30rpx rgba(0, 0, 0, 0.06);
+  transition: 0.3s;
+}
+
+/* 1 自动采集 */
+.select-identity .Automatic {
+  font-size: 32rpx;
+  color: #333;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+}
+
+/* 勾选框缩放 */
+.select-identity .Automatic checkbox {
+  transform: scale(0.85);
+}
+
+/* 2 手动输入区域 */
+.select-identity .Artificial input {
+  width: 90%;
+  background: #f7f8fc;
+  margin-top: 26rpx;
+  padding: 26rpx;
+  border-radius: 20rpx;
+  font-size: 30rpx;
+  color: #333;
+  border: 2rpx solid transparent;
+  transition: 0.2s;
+}
+
+/* 聚焦时 — 更高级 */
+.select-identity .Artificial input:focus {
+  background: #fff;
+  border-color: #635bff;
+  box-shadow: 0 0 0 4rpx rgba(99, 91, 255, 0.2);
+}
+
+/* 3 协议勾选 */
+.select-identity .Agreement {
+  display: flex;
+  align-items: center;
+  font-size: 28rpx;
+  color: #666;
+}
+
+/* 勾选框统一更美观 */
+.select-identity checkbox {
+  transform: scale(0.85);
+  margin-right: 14rpx;
+  border-radius: 18rpx;
+}
+
+/* 4 底部按钮区 */
+.select-identity .addorout {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 10rpx;
+}
+
+/* 提交按钮 */
+.select-identity .addorout button {
+  flex: 1;
+  background: linear-gradient(135deg, #7c73ff, #5a52ff);
+  color: #fff;
+  padding: 28rpx 0;
+  border-radius: 18rpx;
+  text-align: center;
+  font-size: 32rpx;
+  font-weight: 700;
+  margin-right: 24rpx;
+  box-shadow: 0 8rpx 20rpx rgba(99, 91, 255, 0.3);
+  transition: 0.15s;
+}
+
+/* 点击时轻微缩放 */
+.select-identity .addorout button:active {
+  transform: scale(0.96);
+}
+
+/* 取消按钮 */
+.select-identity .addorout view:nth-child(2) {
+  width: 180rpx;
+  background: #f1f2f6;
+  color: #999;
+  padding: 28rpx 0;
+  border-radius: 18rpx;
+  text-align: center;
+  font-size: 30rpx;
+  transition: 0.15s;
+}
+
+/* 点击缩放 */
+.select-identity .addorout view:nth-child(2):active {
+  transform: scale(0.96);
+}
+
+.Artificial view:first-child {
+  font-size: 25rpx;
+  font-weight: 60;
+  color: #333;
+  margin-bottom: 20rpx;
+}

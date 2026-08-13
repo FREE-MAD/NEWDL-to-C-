@@ -1,0 +1,204 @@
+/* pages/demand/manage/manage.wxss */
+.container {
+  padding: 20rpx;
+  background: #f7f8fa;
+  min-height: 100vh;
+}
+
+/* Category Switcher */
+.category-switch {
+  display: flex;
+  background: white;
+  padding: 10rpx;
+  border-radius: 16rpx;
+  margin-bottom: 30rpx;
+  box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.05);
+}
+
+.category-btn {
+  flex: 1;
+  text-align: center;
+  padding: 20rpx 0;
+  font-size: 28rpx;
+  color: #666;
+  border-radius: 12rpx;
+  transition: all 0.3s;
+}
+
+.category-btn.active {
+  background: #e3f2fd; /* Light Blue */
+  color: #1976d2;     /* Dark Blue */
+  font-weight: bold;
+}
+
+/* Section Title */
+.section-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 20rpx;
+  padding-left: 10rpx;
+  border-left: 8rpx solid #1976d2;
+}
+
+/* Exercise List (Public) */
+.exercise-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.exercise-card {
+  background: white;
+  border-radius: 16rpx;
+  padding: 20rpx;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.05);
+}
+
+.card-image-placeholder {
+  width: 120rpx;
+  height: 120rpx;
+  background: #eee;
+  border-radius: 12rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48rpx;
+  margin-right: 20rpx;
+}
+
+.card-info {
+  flex: 1;
+}
+
+.card-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 8rpx;
+}
+
+.card-desc {
+  font-size: 24rpx;
+  color: #999;
+  margin-bottom: 16rpx;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.card-meta {
+  display: flex;
+  gap: 16rpx;
+}
+
+.tag {
+  font-size: 20rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+}
+
+.tag.difficulty {
+  background: #e0f2f1;
+  color: #00695c;
+}
+
+.tag.duration {
+  background: #fff3e0;
+  color: #ef6c00;
+}
+
+/* Coach List */
+.coach-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.coach-card {
+  background: white;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.05);
+}
+
+.coach-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+  padding-bottom: 16rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.coach-name {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.assign-date {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.coach-body {
+  margin-bottom: 20rpx;
+}
+
+.coach-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 8rpx;
+}
+
+.coach-desc {
+  font-size: 26rpx;
+  color: #666;
+  line-height: 1.4;
+}
+
+.coach-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.status-tag {
+  font-size: 22rpx;
+  padding: 6rpx 16rpx;
+  border-radius: 20rpx;
+}
+
+.status-tag.pending {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.status-tag.completed {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.action-arrow {
+  font-size: 24rpx;
+  color: #1976d2;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60rpx 0;
+  color: #999;
+}
+
+.sub-text {
+  font-size: 24rpx;
+  margin-top: 10rpx;
+  color: #ccc;
+}

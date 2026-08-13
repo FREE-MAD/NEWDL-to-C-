@@ -1,0 +1,22 @@
+<!--pages/index/publish/publish.wxml-->
+<view class="publish-page">
+  <!-- 顶部标题 -->
+  <view class="header">
+    <text class="header-title">工具</text>
+  </view>
+
+  <!-- 工具列表 -->
+  <view class="tool-list">
+    <view
+      wx:for="{{toolItems}}"
+      wx:key="title"
+      class="tool-card"
+      bindtap="onToolTap"
+      data-action="{{item.action}}"
+    >
+      <view class="tool-title">{{item.title}}</view>
+      <view class="tool-sub">{{item.sub}}</view>
+      <view class="tool-arrow">进入</view>
+    </view>
+  </view>
+</view>

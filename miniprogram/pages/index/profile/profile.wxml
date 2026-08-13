@@ -1,0 +1,85 @@
+<view class="page">
+
+<!-- 顶部背景 + 用户信息 -->
+<view class="header">
+  <view class="header-info">
+    <view class="city">{{profileForm.city || '请填写当前城市'}}</view>
+
+    <view class="stats">
+      <view class="profile-name">{{profileForm.nickname || '未设置昵称'}}</view>
+    </view>
+
+    <view class="edit-btn" bindtap="saveProfile">
+      {{isSaving ? '保存中' : '保存资料'}}
+      <text class="edit-icon">✎</text>
+    </view>
+  </view>
+</view>
+
+
+<!-- 主体模块列表 -->
+<view class="section">
+  <view class="item-wrapper">
+    <view class="card">
+      <view class="left">
+        <text class="title">基础信息</text>
+      </view>
+    </view>
+
+    <view class="expand-box base-box">
+      <view class="expand-inner">
+        <!-- 新增基础信息编辑：用于提交自己的基础资料 -->
+        <view class="field-block">
+          <view class="label">昵称</view>
+          <input class="input" placeholder="请输入昵称" value="{{profileForm.nickname}}" data-field="nickname" bindinput="onFieldInput" />
+        </view>
+        <view class="field-block">
+          <view class="label">电话</view>
+          <input class="input" type="number" placeholder="请输入联系电话" value="{{profileForm.phone}}" data-field="phone" bindinput="onFieldInput" />
+        </view>
+        <view class="field-block">
+          <view class="label">当前城市</view>
+          <input class="input" placeholder="请输入当前城市" value="{{profileForm.city}}" data-field="city" bindinput="onFieldInput" />
+        </view>
+        <view class="field-block">
+          <view class="label">详细地址</view>
+          <textarea placeholder="请输入详细地址" class="textarea" value="{{profileForm.address}}" data-field="address" bindinput="onFieldInput"></textarea>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <block wx:for="{{cards}}" wx:key="title">
+  <view class="item-wrapper">
+    <view class="card" bindtap="toggleCard" data-index="{{index}}">
+      <view class="left">
+        <text class="icon">{{item.icon}}</text>
+        <text class="title">{{item.title}}</text>
+      </view>
+
+      <view class="{{currentIndex === index ? 'arrow rotate' : 'arrow'}}">⌄</view>
+    </view>
+
+    <!-- 展开内容 -->
+    <view class="expand-box" wx:if="{{currentIndex === index}}">
+      <view class="expand-inner">
+        <!-- 新增资料编辑：每张卡片对应一个字段，输入后可直接提交入库 -->
+        <view class="label">{{item.title}}</view>
+        <textarea placeholder="{{item.placeholder}}" class="textarea" value="{{item.value}}" data-field="{{item.field}}" bindinput="onFieldInput"></textarea>
+        <!-- 材料上传 -->
+      </view>
+    </view>
+  </view>
+  </block>
+
+</view>
+<!-- 进度区 -->
+<view class="">
+  
+</view>
+
+<view class="bottom-bar">
+  <button class="save-btn" loading="{{isSaving}}" bindtap="saveProfile">保存我的资料</button>
+</view>
+
+</view>
