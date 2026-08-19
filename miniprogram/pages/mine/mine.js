@@ -100,7 +100,8 @@ Page({
   /* ========= 编辑资料 ========= */
   onEditProfile() {
     wx.navigateTo({
-      url: '/pages/mine/edit/edit'
+      // 新增我的页资料入口修正：直接跳转到 pages/profile/edit/edit
+      url: '/pages/profile/edit/edit'
     })
   },
 

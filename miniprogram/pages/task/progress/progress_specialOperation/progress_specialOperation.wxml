@@ -6,10 +6,14 @@
     当前为分享查看模式，可继续查看课节详情，不提供教练操作入口。
   </view>
 
-  <view class="course-card">
-    <view class="card-header">
-      <text class="course-title">任务进度</text>
-    </view>
+        <view class="course-card">
+         <view class="card-header display-guide-header" bindtap="toggleDisplayGuide">
+           <view class="display-guide-header-main">
+             <text class="course-title">班级展示说明</text>
+             <text class="display-guide-header-sub">默认展示 5 秒后自动收起</text>
+           </view>
+           <text class="display-guide-toggle">{{isDisplayGuideExpanded ? '收起' : '展开'}}</text>
+         </view>
 
     <!-- 旧“发布-上课-完成”步骤条保留注释，不删除；当前页面不再按课程状态推进展示 -->
     <!--
@@ -33,10 +37,63 @@
     </view>
     -->
 
-    <view class="progress-comment">
-      <text class="comment-text">
-        {{statusText || '当前页面只展示课程与课节信息。'}}
-      </text>
+                <view class="progress-comment" wx:if="{{isDisplayGuideExpanded}}">
+            <!-- 班级展示页说明：明确告诉用户这个页面的用途、同步关系和家长权限边界 -->
+            <view class="display-guide-title">班级展示页面</view>
+            <view class="display-guide-row">
+              <text class="display-guide-value">班级展示页面是教练完成班级及课程相关设置后的对外展示页面。</text>
+            </view>
+            <view class="display-guide-row">
+              <text class="display-guide-value">教练在管理班级中完成课程、课节、每日总结等内容后，展示页面会同步更新对应信息。</text>
+            </view>
+            <view class="display-guide-row">
+              <text class="display-guide-value">该页面主要用于分享给家长查看，家长可以了解孩子所在班级的课程安排、上课情况及相关信息。</text>
+            </view>
+            <view class="display-guide-row">
+              <text class="display-guide-value">家长仅拥有查看权限，无法修改、发布或管理班级内容。所有班级信息及内容的调整，均由教练在“管理班级”中完成。</text>
+            </view>
+          </view>
+                <view class="display-guide-collapsed" wx:else bindtap="toggleDisplayGuide">
+                  班级展示页面说明已收起，点此展开
+                </view>
+  </view>
+
+  <!-- 新增孩子信息卡片：按你的 selector 要求，放到根节点第 3 个 view 下面的同级位置 -->
+  <view class="course-card child-info-card">
+    <view class="card-header">
+      <view class="header-row">
+        <text class="tag-intention">孩子信息</text>
+      </view>
+      <view class="course-title">当前孩子基础资料</view>
+    </view>
+
+    <view class="card-body child-info-body">
+      <!-- 新增多孩子展示：一个课程里可以连续展示多个孩子的基础资料 -->
+      <block wx:for="{{order.child_profiles}}" wx:key="index">
+        <view class="child-info-item">
+          <view class="child-info-title">孩子{{index + 1}}</view>
+          <view class="info-row">
+            <text class="label">昵称：</text>
+            <text class="value">{{item.nickname || '未填写'}}</text>
+          </view>
+          <view class="info-row">
+            <text class="label">年龄：</text>
+            <text class="value">{{item.age || '未填写'}}{{item.age ? '岁' : ''}}</text>
+          </view>
+          <view class="info-row">
+            <text class="label">性别：</text>
+            <text class="value">{{item.gender || '未填写'}}</text>
+          </view>
+          <view class="info-row">
+            <text class="label">身高：</text>
+            <text class="value">{{item.height || '未填写'}}{{item.height ? 'cm' : ''}}</text>
+          </view>
+          <view class="info-row">
+            <text class="label">体重：</text>
+            <text class="value">{{item.weight || '未填写'}}{{item.weight ? 'kg' : ''}}</text>
+          </view>
+        </view>
+      </block>
     </view>
   </view>
 
@@ -60,6 +117,11 @@
         <text class="label">课程人数：</text>
         <text class="value">{{order.course_size_mode}}</text>
       </view>
+      <!-- 新增锻炼时间展示：这里补回发布页填写的上课频率/时间安排 -->
+      <view class="info-row" wx:if="{{order.frequency}}">
+        <text class="label">锻炼时间：</text>
+        <text class="value">{{order.frequency}}</text>
+      </view>
       <view class="info-row">
         <text class="label">地点：</text>
         <text class="value">{{order.location || '未填写'}}</text>
@@ -67,14 +129,6 @@
       <view class="info-row">
         <text class="label">创建：</text>
         <text class="value">{{createdTimeDisplay || '未记录'}}</text>
-      </view>
-      <view class="info-row" wx:if="{{pageMode !== 'share_viewer' && (order.child_age || order.child_gender || order.child_height || order.child_weight)}}">
-        <text class="label">孩子信息：</text>
-        <text class="value">{{order.child_age || '-'}}岁 / {{order.child_gender || '未填'}} / {{order.child_height || '-'}}cm / {{order.child_weight || '-'}}kg</text>
-      </view>
-      <view class="info-row" wx:if="{{order.description}}">
-        <text class="label">说明：</text>
-        <text class="value">{{order.description}}</text>
       </view>
     </view>
     <!-- 旧当前流程状态展示保留注释，不删除；当前不再用它表达课程是否上课/下课 -->
@@ -94,18 +148,41 @@
         </view> -->
       </view>
     </view>
+    <!-- 新增 subPlans 折叠区：按需求移动到课程信息卡片最底部，默认折叠减少首屏占位 -->
+    <view class="sub-plan-panel" wx:if="{{order.sub_plan_name || order.course_plan}}">
+      <view class="sub-plan-header" bindtap="toggleSubPlanSection">
+        <text class="sub-plan-title">训练重点</text>
+        <text class="sub-plan-toggle">{{isSubPlanExpanded ? '收起' : '展开'}}</text>
+      </view>
+      <view class="sub-plan-body" wx:if="{{isSubPlanExpanded}}">
+        <view class="sub-plan-row" wx:if="{{order.sub_plan_name}}">
+          <text class="label">subPlans:</text>
+          <text class="value">{{order.sub_plan_name}}</text>
+        </view>
+        <view class="sub-plan-row" wx:if="{{order.course_plan}}">
+          <text class="label">内容：</text>
+          <text class="value">{{order.course_plan}}</text>
+        </view>
+      </view>
+    </view>
   </view>
 
   <view class="course-card" wx:if="{{displaySchedule && displaySchedule.length > 0}}">
     <view class="card-header">
-      <text class="course-title">课程进度表 ({{order.progress_done}}/{{order.progress_total}})</text>
+      <text class="course-title">课程进度表</text>
+      <!-- 新增表头计算展示：这里按列表中的“已完成 / 待记录 / 历史已完成”统一统计 -->
+      <view class="progress-count-row">
+        <text class="progress-count-chip done">已完成 {{progressCompletedCount}} 节</text>
+        <text class="progress-count-chip pending">待记录 {{progressPendingCount}} 节</text>
+        <text class="progress-count-chip total">共 {{progressTotalCount}} 节</text>
+      </view>
       <!-- 新增半途接入说明：展示页和教练操作台保持一致，先显示历史汇总框 -->
-      <view class="sync-hint" wx:if="{{order.progress_done > 0}}">已完成前 {{order.progress_done}} 节历史课，下面会先显示历史汇总框，再显示剩余课节。</view>
+      <view class="sync-hint" wx:if="{{historySyncedCount > 0}}">已完成前 {{historySyncedCount}} 节历史课，下面会先显示历史汇总框，再显示剩余课节。</view>
     </view>
     <view class="schedule-list">
       <block wx:for="{{displaySchedule}}" wx:key="index">
         <view
-          class="single-schedule-item {{item.status === 'DONE' ? 'done' : ''}} {{item.isHistorySummary ? 'history-summary-item' : ''}}"
+          class="single-schedule-item {{item.displayStatusClass === 'done' ? 'done' : ''}} {{item.isHistorySummary ? 'history-summary-item' : ''}}"
           bindtap="handleToClassDetail"
           data-index="{{item.actualIndex}}"
           data-history="{{item.isHistorySummary ? 1 : 0}}"
@@ -114,11 +191,11 @@
             <text class="lesson-index">{{item.isHistorySummary ? ('第 ' + item.title + ' 课') : ('第 ' + (item.lesson || (index + 1)) + ' 课')}}</text>
             <!-- 旧课节状态标签类保留注释，不删除；当前统一展示为课节记录 -->
             <!-- <view class="lesson-status-tag {{item.isHistorySummary ? 'DONE' : item.status}}">{{item.statusText}}</view> -->
-            <view class="lesson-status-tag">{{item.isHistorySummary ? '历史汇总' : '课节记录'}}</view>
+            <view class="lesson-status-tag {{item.displayStatusClass}} {{item.isHistorySummary ? 'history' : ''}}">{{item.statusText}}</view>
           </view>
 
           <view class="schedule-action">
-            <text class="action-text">{{item.isHistorySummary ? '历史汇总' : '查看详情'}}</text>
+            <text class="action-text {{item.displayStatusClass === 'done' ? 'done' : 'pending'}}">{{item.isHistorySummary ? '历史汇总' : (item.isCompleted ? '已完成' : '待记录')}}</text>
             <text class="iconfont icon-right" wx:if="{{!item.isHistorySummary}}"></text>
           </view>
         </view>

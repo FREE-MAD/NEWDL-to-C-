@@ -2,6 +2,8 @@
 const app = getApp()
 
 Page({
+  flowTipAutoHideTimer: null,
+
   data: {
     orders: [],
     tasks: [],
@@ -10,9 +12,25 @@ Page({
       { label: '可管理班级', status: 'manageable' },
       { label: '已关闭', status: 'closed' },
     ],
+    showFlowTipCard: true,
     loading: false,
     currentUserRole: '',
     currentUserToken: ''
+  },
+
+  // 新增列表进度计算：和课节详情页保持同一口径，按“总结+日期”判断是否已完成
+  buildProgressText(order = {}) {
+    const schedule = Array.isArray(order.schedule) ? order.schedule : []
+    const historyCount = Number((((order || {}).history_sync || {}).syncedCount) || 0)
+    const completedScheduleCount = schedule.filter(item => {
+      const hasSummary = !!((item.summary || '').trim())
+      const hasSummaryDate = !!(item.summaryDate || item.startedAt || item.completedAt)
+      return hasSummary && hasSummaryDate
+    }).length
+    const totalCount = Number(order.progress_total || (historyCount + schedule.length) || 0)
+    const completedCount = Math.min(historyCount + completedScheduleCount, totalCount)
+
+    return `${completedCount}/${totalCount}`
   },
 
   onLoad() {
@@ -37,6 +55,12 @@ Page({
 
   // 页面显示时拉取
   onShow() {
+    // 新增提示卡自动收起：每次进入课程管理页先展示说明，5 秒后自动隐藏
+    this.setData({
+      showFlowTipCard: true
+    })
+    this.startFlowTipAutoHide()
+
     // 每次显示页面都尝试刷新数据
     if (this.data.currentUserRole && this.data.currentUserToken) {
       this.loadOrders()
@@ -49,6 +73,49 @@ Page({
             this.loadOrders();
         });
     }
+  },
+
+  onHide() {
+    this.clearFlowTipAutoHideTimer()
+  },
+
+  onUnload() {
+    this.clearFlowTipAutoHideTimer()
+  },
+
+  // 新增提示卡计时器清理：避免页面切走后定时器继续运行
+  clearFlowTipAutoHideTimer() {
+    if (this.flowTipAutoHideTimer) {
+      clearTimeout(this.flowTipAutoHideTimer)
+      this.flowTipAutoHideTimer = null
+    }
+  },
+
+  // 新增提示卡自动收起：固定 5 秒后隐藏课程管理页说明卡
+  startFlowTipAutoHide() {
+    this.clearFlowTipAutoHideTimer()
+    this.flowTipAutoHideTimer = setTimeout(() => {
+      this.setData({
+        showFlowTipCard: false
+      })
+      this.flowTipAutoHideTimer = null
+    }, 5000)
+  },
+
+  // 新增标题栏切换：收起后可点击标题重新展开，展开后继续按 5 秒规则自动收起
+  toggleFlowTipCard() {
+    const nextVisible = !this.data.showFlowTipCard
+
+    this.setData({
+      showFlowTipCard: nextVisible
+    })
+
+    if (nextVisible) {
+      this.startFlowTipAutoHide()
+      return
+    }
+
+    this.clearFlowTipAutoHideTimer()
   },
 
   onPullDownRefresh() {
@@ -124,49 +191,15 @@ Page({
           const tasks = filteredOrders.map(item => {
             // 优先使用 fulfill_state，兼容旧 status
             const state = item.fulfill_state || item.status || 'pending';
-            let statusText = '';
-            let statusClass = '';
-
-            switch(state) {
-              case 'pending':
-                statusText = '可管理';
-                statusClass = 'pending';
-                break;
-              case 'accepted':
-                statusText = '可管理';
-                statusClass = 'ongoing';
-                break;
-              case 'in_progress':
-                statusText = '可管理';
-                statusClass = 'ongoing';
-                break;
-              case 'p_completed':
-                statusText = '可管理';
-                statusClass = 'ongoing'; 
-                break;
-              case 'completed':
-                statusText = '可管理';
-                statusClass = 'completed';
-                break;
-              case 'cancelled':
-                statusText = '已取消';
-                statusClass = 'cancelled';
-                break;
-              case 'closed':
-                statusText = '已关闭';
-                statusClass = 'cancelled';
-                break;
-              default:
-                statusText = state;
-                statusClass = 'processing';
-            }
-
+            const isClosedClass = state === 'cancelled' || state === 'closed';
+            const statusText = isClosedClass ? '已关闭' : '可管理';
+            const statusClass = isClosedClass ? 'cancelled' : 'pending';
             const normalizedTitle = ((item.course_target || {}).title) || item.title || '未命名课程';
             const normalizedDescription = ((item.course_target || {}).description) || item.description || '暂无课程介绍';
             const normalizedLocation = ((item.course_basic || {}).location) || item.location || '未填写地点';
             const normalizedCategory = ((item.course_target || {}).category) || item.category || '未分类';
-            const progressText = `${item.progress_done || 0}/${item.progress_total || 0}`;
-            const isClosedClass = state === 'cancelled' || state === 'closed';
+            // 新增列表进度文案：这里不再直接吃旧 progress_done，改成按真实课节记录重新计算
+            const progressText = this.buildProgressText(item);
             const canManageClass = !isClosedClass;
 
             return {

@@ -1,23 +1,193 @@
 page {
-  background: #f6f7fb;
+  background: #f5f4fb;
 }
 
 .page {
   padding-bottom: 60rpx;
+  min-height: 100vh;
 }
 
 /* 顶部渐变背景 */
 /* 初始展开状态 header */
 .header {
-  background: linear-gradient(135deg, #635bff, #7644ff);
-  padding: 180rpx 40rpx 300rpx; /* 初始展开高度，可以自己调 */
-  border-bottom-left-radius: 70rpx;
-  border-bottom-right-radius: 70rpx;
-  color: #fff;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, #ece6ff 0%, #e8e3fb 58%, #f5f4fb 100%);
+  padding: 86rpx 34rpx 168rpx;
+  border-bottom-left-radius: 40rpx;
+  border-bottom-right-radius: 40rpx;
+  color: #2e246d;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  justify-content: flex-start;
   transition: all 0.5s ease;
+}
+
+.header::before {
+  content: '';
+  position: absolute;
+  top: 40rpx;
+  right: -40rpx;
+  width: 320rpx;
+  height: 320rpx;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(140, 112, 255, 0.18) 0%, rgba(140, 112, 255, 0) 72%);
+}
+
+.header::after {
+  content: '';
+  position: absolute;
+  right: 80rpx;
+  bottom: 46rpx;
+  width: 180rpx;
+  height: 180rpx;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 72%);
+}
+
+.header-topbar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.header-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.header-tools {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 132rpx;
+  height: 60rpx;
+  margin-top: 6rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 10rpx 24rpx rgba(123, 103, 212, 0.08);
+}
+
+.header-tools-dots {
+  font-size: 26rpx;
+  line-height: 1;
+  color: #1f1f1f;
+  letter-spacing: 2rpx;
+}
+
+.header-tools-divider {
+  width: 2rpx;
+  height: 24rpx;
+  margin: 0 14rpx;
+  background: rgba(31, 31, 31, 0.12);
+}
+
+.header-tools-circle {
+  width: 22rpx;
+  height: 22rpx;
+  border: 4rpx solid #1f1f1f;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.header-desc {
+  margin-top: 16rpx;
+  font-size: 30rpx;
+  color: #706b8f;
+  line-height: 1.4;
+}
+
+.header-illustration {
+  position: absolute;
+  right: 24rpx;
+  bottom: 66rpx;
+  width: 240rpx;
+  height: 180rpx;
+  z-index: 1;
+}
+
+.header-spark {
+  position: absolute;
+  color: #f9c73f;
+  text-shadow: 0 8rpx 18rpx rgba(249, 199, 63, 0.28);
+}
+
+.header-spark-left {
+  top: 18rpx;
+  left: 0;
+  font-size: 44rpx;
+}
+
+.header-spark-right {
+  top: 22rpx;
+  right: 10rpx;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.header-note-card {
+  position: absolute;
+  right: 14rpx;
+  bottom: 0;
+  width: 144rpx;
+  height: 160rpx;
+  border-radius: 28rpx;
+  background: linear-gradient(180deg, rgba(132, 103, 255, 0.96) 0%, rgba(94, 70, 242, 0.94) 100%);
+  box-shadow: 0 18rpx 30rpx rgba(109, 90, 228, 0.22);
+  transform: rotate(10deg);
+}
+
+.header-note-page {
+  position: absolute;
+  left: 24rpx;
+  top: 34rpx;
+  width: 96rpx;
+  height: 104rpx;
+  border-radius: 18rpx;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.header-note-line {
+  width: 54rpx;
+  height: 8rpx;
+  margin: 18rpx auto 0;
+  border-radius: 999rpx;
+  background: rgba(104, 88, 214, 0.22);
+}
+
+.header-note-line.short {
+  width: 40rpx;
+}
+
+.header-note-rings {
+  position: absolute;
+  top: 8rpx;
+  left: 28rpx;
+  display: flex;
+  gap: 10rpx;
+}
+
+.header-note-ring {
+  width: 12rpx;
+  height: 18rpx;
+  border: 4rpx solid #8f71ff;
+  border-bottom: 0;
+  border-radius: 12rpx 12rpx 0 0;
+  background: #d7ccff;
+}
+
+.header-note-pencil {
+  position: absolute;
+  right: -10rpx;
+  bottom: 18rpx;
+  width: 18rpx;
+  height: 78rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(180deg, #ffd24b 0%, #f8b61e 100%);
+  box-shadow: 0 4rpx 10rpx rgba(248, 182, 30, 0.2);
 }
 
 
@@ -415,31 +585,33 @@ page {
 /* e===================================== */
 /* 缩小后的 header（即你提供的尺寸） */
 .header.collapsed {
-  padding: 80rpx 40rpx 180rpx; 
-  border-bottom-left-radius: 70rpx;
-  border-bottom-right-radius: 70rpx;
-  justify-content: flex-end;
+  padding: 86rpx 34rpx 168rpx;
+  border-bottom-left-radius: 40rpx;
+  border-bottom-right-radius: 40rpx;
+  justify-content: flex-start;
 }
 
 .hello {
-  font-size: 42rpx;
+  font-size: 56rpx;
   font-weight: 700;
+  line-height: 1.18;
   transition: font-size 0.5s ease;
 }
 
 .header.collapsed .hello {
-  font-size: 32rpx;
+  font-size: 56rpx;
 }
 
 .location {
-  margin-top: 10rpx;
-  opacity: 0.9;
+  margin-top: 6rpx;
+  opacity: 0;
+  height: 0;
   font-size: 26rpx;
   transition: opacity 0.5s ease;
 }
 
 .header.collapsed .location {
-  opacity: 1;
+  opacity: 0;
 }
 
 /* 身份选择区 */
@@ -490,11 +662,13 @@ page {
 
 /* 四宫格卡片 */
 .grid-box {
-  margin-top: -120rpx;
-  padding: 0 40rpx;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 30rpx;
+  position: relative;
+  z-index: 3;
+  margin-top: -84rpx;
+  padding: 0 32rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 28rpx;
 }
 
 .grid-item {
@@ -513,27 +687,292 @@ page {
 }
 
 .icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 70rpx;
   height: 70rpx;
   border-radius: 20rpx;
   margin-bottom: 20rpx;
 }
 
-.purple { background: #655cff; }
-.green { background: #0bbf80; }
-.orange { background: #f59e0b; }
+.purple { background: linear-gradient(135deg, #82a7ff 0%, #5b78f6 100%); }
+.green { background: linear-gradient(135deg, #47de84 0%, #67dce6 100%); }
+.orange { background: linear-gradient(135deg, #ffbe3d 0%, #f29d15 100%); }
 .red { background: #ef4444; }
 
 .grid-title {
   font-size: 30rpx;
   font-weight: 700;
-  color: #333;
+  color: #2f3142;
 }
 
 .grid-sub {
   margin-top: 8rpx;
   font-size: 24rpx;
-  color: #777;
+  color: #767b92;
+}
+
+/* 首页三入口新布局：突出课程安排主入口，并将简历相关入口合并为一组 */
+.primary-panel {
+  position: relative;
+  overflow: hidden;
+  padding: 30rpx 28rpx 22rpx;
+  border-radius: 36rpx;
+  background: linear-gradient(135deg, #5d53ff 0%, #6f5bff 46%, #9174ff 100%);
+  box-shadow: 0 20rpx 40rpx rgba(99, 91, 255, 0.2);
+  color: #fff;
+}
+
+.primary-panel::before {
+  content: '';
+  position: absolute;
+  right: -10rpx;
+  bottom: -24rpx;
+  width: 240rpx;
+  height: 240rpx;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0) 70%);
+}
+
+.panel-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10rpx 22rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.16);
+  border: 2rpx solid rgba(255, 255, 255, 0.16);
+  font-size: 24rpx;
+  color: rgba(255, 243, 191, 0.96);
+  margin-bottom: 28rpx;
+}
+
+.panel-chip::before {
+  content: '★';
+  margin-right: 10rpx;
+  font-size: 22rpx;
+}
+
+.panel-main {
+  display: flex;
+  align-items: center;
+}
+
+.primary-icon {
+  width: 94rpx;
+  height: 94rpx;
+  margin-right: 24rpx;
+  margin-bottom: 0;
+  border-radius: 24rpx;
+  box-shadow: 0 10rpx 20rpx rgba(49, 194, 167, 0.24);
+}
+
+.primary-icon-symbol {
+  font-size: 64rpx;
+  line-height: 1;
+  font-weight: 300;
+  color: #ffffff;
+}
+
+.primary-copy {
+  flex: 1;
+}
+
+.primary-title {
+  font-size: 34rpx;
+  color: #fff;
+}
+
+.primary-sub {
+  margin-top: 14rpx;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 30rpx;
+  line-height: 1.45;
+}
+
+.panel-arrow {
+  margin-top: 28rpx;
+  height: 72rpx;
+  padding: 0 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999rpx;
+  background: #ffffff;
+  color: #6458ff;
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.panel-arrow-icon {
+  margin-left: 14rpx;
+  font-size: 38rpx;
+  line-height: 1;
+}
+
+/* 首页主入口补充说明：直接展示入口适用场景和进入后的操作内容 */
+.primary-detail-list {
+  margin-top: 24rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  border-radius: 28rpx;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.primary-detail-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 24rpx 22rpx;
+  color: #2f3142;
+}
+
+.primary-detail-item + .primary-detail-item {
+  border-top: 2rpx solid rgba(105, 102, 139, 0.1);
+}
+
+.primary-detail-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48rpx;
+  height: 48rpx;
+  margin-right: 18rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #e8e0ff 0%, #d8d3ff 100%);
+  color: #6a57eb;
+  font-size: 28rpx;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.primary-detail-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.primary-detail-label {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #35344a;
+}
+
+.primary-detail-value {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #737789;
+}
+
+/* 首页主卡片补充小箭头入口：让“去课程管理”成为独立可点击操作 */
+.primary-manage-shortcut {
+  margin-top: 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8rpx 8rpx 4rpx;
+}
+
+.primary-manage-shortcut-text {
+  font-size: 30rpx;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.primary-manage-shortcut-arrow {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.primary-panel:active {
+  transform: scale(0.985);
+}
+
+.resume-group {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(249, 249, 252, 0.98) 100%);
+  border-radius: 32rpx;
+  padding: 28rpx;
+  box-shadow: 0 12rpx 30rpx rgba(97, 98, 122, 0.08);
+}
+
+.resume-group-head {
+  margin-bottom: 22rpx;
+}
+
+.resume-group-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #2d3142;
+}
+
+.resume-group-sub {
+  margin-top: 10rpx;
+  font-size: 26rpx;
+  color: #8e92a5;
+}
+
+.resume-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24rpx 22rpx;
+  border-radius: 24rpx;
+  background: linear-gradient(180deg, #f7f5ff 0%, #f4f2fb 100%);
+}
+
+.resume-item:active {
+  transform: scale(0.985);
+}
+
+.resume-item + .resume-item {
+  margin-top: 18rpx;
+}
+
+.resume-item-left {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.resume-icon {
+  width: 72rpx;
+  height: 72rpx;
+  margin-right: 20rpx;
+  margin-bottom: 0;
+  border-radius: 18rpx;
+}
+
+.resume-icon-symbol {
+  font-size: 28rpx;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.resume-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.resume-copy .grid-title {
+  color: #2b2f3a;
+}
+
+.resume-copy .grid-sub {
+  color: #858ba0;
+}
+
+.resume-suffix {
+  flex-shrink: 0;
+  margin-left: 20rpx;
+  padding: 10rpx 22rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.9);
+  color: #635bff;
+  font-size: 24rpx;
+  font-weight: 600;
 }
 
 .big_view {

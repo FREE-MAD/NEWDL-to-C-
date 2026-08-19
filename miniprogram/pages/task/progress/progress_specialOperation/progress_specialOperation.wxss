@@ -51,13 +51,8 @@
 }
 
 /* 状态颜色 */
-.lesson-status-tag.PENDING { background-color: #fff7e6; color: #fa8c16; }
-.lesson-status-tag.WAIT_PAYMENT { background-color: #fff1f0; color: #f5222d; }
-.lesson-status-tag.PAID { background-color: #f6ffed; color: #52c41a; }
-.lesson-status-tag.COACH_READY { background-color: #e6f7ff; color: #1890ff; }
-.lesson-status-tag.PARENT_CONFIRMED { background-color: #fffbe6; color: #faad14; }
-.lesson-status-tag.COMPLETED_BY_COACH { background-color: #f9f0ff; color: #722ed1; }
-.lesson-status-tag.DONE { background-color: #f6ffed; color: #52c41a; }
+.lesson-status-tag.pending { background-color: #fff7e6; color: #fa8c16; }
+.lesson-status-tag.done { background-color: #f6ffed; color: #52c41a; }
 
 .schedule-action {
   display: flex;
@@ -125,6 +120,37 @@
   font-size: 24rpx;
   color: #666;
   line-height: 1.5;
+}
+
+.progress-count-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+
+.progress-count-chip {
+  font-size: 22rpx;
+  line-height: 1;
+  padding: 10rpx 16rpx;
+  border-radius: 999rpx;
+  background-color: #f5f5f5;
+  color: #666;
+}
+
+.progress-count-chip.done {
+  background-color: #f6ffed;
+  color: #52c41a;
+}
+
+.progress-count-chip.pending {
+  background-color: #fff7e6;
+  color: #d48806;
+}
+
+.progress-count-chip.total {
+  background-color: #e6f7ff;
+  color: #1890ff;
 }
 
 .sync-note {
@@ -215,8 +241,63 @@
   margin: 0 30rpx 30rpx;
   font-size: 26rpx;
   color: #1890ff;
-  text-align: center;
   line-height: 1.5;
+}
+
+/* 班级展示说明头部：支持提示当前会自动收起，并提供手动展开/收起入口 */
+.display-guide-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.display-guide-header-main {
+  display: flex;
+  flex-direction: column;
+}
+
+.display-guide-header-sub {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #999;
+}
+
+.display-guide-toggle {
+  font-size: 24rpx;
+  color: #1890ff;
+  font-weight: 600;
+}
+
+/* 班级展示页说明：改成标题+分段说明，方便家长和教练快速理解页面职责 */
+.display-guide-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1257b3;
+}
+
+.display-guide-row {
+  margin-top: 14rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 14rpx;
+  background-color: rgba(255, 255, 255, 0.72);
+}
+
+.display-guide-value {
+  display: block;
+  font-size: 24rpx;
+  color: #1565c0;
+  line-height: 1.7;
+}
+
+.display-guide-collapsed {
+  margin: 0 30rpx 30rpx;
+  padding: 22rpx 24rpx;
+  border-radius: 16rpx;
+  background-color: #f5f9ff;
+  font-size: 24rpx;
+  color: #1565c0;
+  line-height: 1.6;
+  text-align: center;
 }
 
 /* 通用卡片样式 */
@@ -269,6 +350,34 @@
   padding: 40rpx;
 }
 
+/* 新增孩子信息卡片样式：单独成块展示，方便家长快速查看孩子基础资料 */
+.child-info-card .card-header {
+  background: linear-gradient(180deg, #f7fbff 0%, #ffffff 100%);
+}
+
+.child-info-body {
+  padding-top: 28rpx;
+}
+
+.child-info-item {
+  padding: 24rpx;
+  border-radius: 18rpx;
+  background: #fafcff;
+  border: 1rpx solid #e8f0ff;
+  margin-bottom: 20rpx;
+}
+
+.child-info-item:last-child {
+  margin-bottom: 0;
+}
+
+.child-info-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 18rpx;
+}
+
 .info-row {
   display: flex;
   margin-bottom: 20rpx;
@@ -300,6 +409,45 @@
 /* 操作栏 */
 .action-bar-wrapper {
   border-top: 1rpx solid #f8f8f8;
+}
+
+/* 新增课程重点折叠区：放在课程信息卡片底部，默认收起减少信息堆叠 */
+.sub-plan-panel {
+  border-top: 1rpx solid #f2f4f7;
+  background-color: #fafcff;
+}
+
+.sub-plan-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 26rpx 40rpx;
+}
+
+.sub-plan-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.sub-plan-toggle {
+  font-size: 24rpx;
+  color: #1890ff;
+}
+
+.sub-plan-body {
+  padding: 0 40rpx 32rpx;
+}
+
+.sub-plan-row {
+  display: flex;
+  margin-bottom: 20rpx;
+  font-size: 28rpx;
+  line-height: 1.6;
+}
+
+.sub-plan-row:last-child {
+  margin-bottom: 0;
 }
 
 .action-bar {
@@ -706,19 +854,32 @@
   font-weight: 500;
 }
 
-.lesson-status-tag.COACH_READY {
-  background-color: #e6f7ff;
-  color: #1890ff;
+.lesson-status-tag.pending {
+  background-color: #fff7e6;
+  color: #d48806;
 }
 
-.lesson-status-tag.DONE {
+.lesson-status-tag.done {
   background-color: #f6ffed;
   color: #52c41a;
+}
+
+.lesson-status-tag.history {
+  background-color: #f0f5ff;
+  color: #2f54eb;
 }
 
 .schedule-action {
   display: flex;
   align-items: center;
+}
+
+.action-text.done {
+  color: #52c41a;
+}
+
+.action-text.pending {
+  color: #d48806;
 }
 
 .btn-mini {

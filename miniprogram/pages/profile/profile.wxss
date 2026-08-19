@@ -1,0 +1,113 @@
+/* pages/profile/profile.wxss */
+.page {
+  min-height: 100vh;
+  background: #f5f6fa;
+  padding-bottom: 180rpx;
+}
+
+.header {
+  padding: 120rpx 32rpx 80rpx;
+  background: linear-gradient(150deg, #6f4aff, #140043);
+  border-bottom-left-radius: 40rpx;
+  border-bottom-right-radius: 40rpx;
+  color: #fff;
+}
+
+.header-title {
+  font-size: 28rpx;
+  opacity: 0.9;
+}
+
+.header-name {
+  margin-top: 24rpx;
+  font-size: 46rpx;
+  font-weight: 600;
+}
+
+.header-sub {
+  margin-top: 16rpx;
+  font-size: 28rpx;
+  opacity: 0.85;
+}
+
+.content {
+  padding: 24rpx 24rpx 0;
+}
+
+.summary-card,
+.section-card,
+.loading-box {
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 28rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 10rpx 24rpx rgba(0, 0, 0, 0.05);
+}
+
+.summary-row,
+.info-row {
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid #f0f1f6;
+}
+
+.summary-row:first-child,
+.info-row:first-child {
+  padding-top: 0;
+}
+
+.summary-row:last-child,
+.info-row:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.section-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #1a1446;
+  margin-bottom: 12rpx;
+}
+
+.summary-label,
+.info-label {
+  display: block;
+  font-size: 26rpx;
+  color: #8b90a7;
+  margin-bottom: 12rpx;
+}
+
+.summary-value,
+.info-value {
+  display: block;
+  font-size: 30rpx;
+  color: #2f3142;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.loading-box {
+  text-align: center;
+  color: #8b90a7;
+  font-size: 28rpx;
+}
+
+.bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 24rpx 24rpx 36rpx;
+  background: rgba(245, 246, 250, 0.98);
+  box-sizing: border-box;
+}
+
+.edit-btn {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  border-radius: 44rpx;
+  background: linear-gradient(150deg, #6f4aff, #140043);
+  color: #fff;
+  font-size: 30rpx;
+  border: none;
+}

@@ -77,6 +77,23 @@
   border-radius: 20rpx;
   background: #f7fbff;
   border: 1rpx solid #d9ecff;
+  box-sizing: border-box;
+  overflow: hidden;
+  transition: padding 0.28s ease, margin-bottom 0.28s ease, background-color 0.28s ease;
+}
+
+.flow-tip-card.collapsed {
+  padding-top: 18rpx;
+  padding-bottom: 18rpx;
+  background: #edf6ff;
+}
+
+.flow-tip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 4rpx 0;
 }
 
 .flow-tip-title {
@@ -84,7 +101,25 @@
   font-size: 26rpx;
   font-weight: 600;
   color: #1976d2;
-  margin-bottom: 8rpx;
+}
+
+.flow-tip-status {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  color: #6b8fb6;
+}
+
+.flow-tip-body {
+  max-height: 1000rpx;
+  opacity: 1;
+  overflow: hidden;
+  transition: max-height 0.32s ease, opacity 0.2s ease, margin-top 0.28s ease;
+}
+
+.flow-tip-card.collapsed .flow-tip-body {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
 }
 
 .flow-tip-desc {
@@ -92,6 +127,28 @@
   font-size: 24rpx;
   color: #5f6b7a;
   line-height: 1.6;
+}
+
+/* 课程管理页详细说明：分条写清进入时机、进入结果和下一步操作 */
+.flow-guide-row {
+  margin-top: 14rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 16rpx;
+  background: #ffffff;
+}
+
+.flow-guide-label {
+  display: block;
+  font-size: 22rpx;
+  color: #3f78b5;
+}
+
+.flow-guide-value {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #5f6b7a;
+  line-height: 1.7;
 }
 
 .tab-bar {

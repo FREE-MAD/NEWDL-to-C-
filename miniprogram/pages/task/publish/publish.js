@@ -1,5 +1,6 @@
 // pages/task/publish/publish_pdd/publish_pdd.js
 const app = getApp();
+const DEFAULT_CLASS_LESSON_COUNT = 10;
 
 // 旧课节状态文案映射保留注释，不删除；当前链路已不再依赖“开始上课/下课”状态推进
 // const LESSON_STATUS_TEXT_MAP = {
@@ -12,6 +13,8 @@ const app = getApp();
 // };
 
 Page({
+  bannerBoxTimer: null,
+
   data: {
     statusBarHeight: 0,
     topSafe: 0,
@@ -32,6 +35,8 @@ Page({
     // Form Data
     form: {
       title: '',
+      sub_plan_name: '',
+      course_plan: '',
       frequency: '',
       category: '',
       description: '',
@@ -41,10 +46,10 @@ Page({
       contact: '',
       course_size_mode: '1对1',
       safety_confirmed: false,
-      child_age: '',
-      child_gender: '',
-      child_height: '',
-      child_weight: '',
+      // 新增多孩子表单：一个课程下允许连续录入多个孩子信息
+      child_profiles: [
+        { nickname: '', age: '', gender: '', height: '', weight: '' }
+      ],
       coach_private_note: '',
       allow_transfer_to_other_coach: false,
     },
@@ -53,12 +58,14 @@ Page({
     publishType: '发布看看', // MVP 固定只保留“发布看看”
 
     // Class Selection Data
+    // 课程类型预设说明：当前所有课程类型统一默认 10 节课，不再按不同课程方向拆分默认课时
+    // 如果后面点“半途接入”，则表示这门课前面已经上过几节，现在从中间开始接进系统继续管理
     classTypes: [ 
         { 
           id: 'posture', 
           name: '体态矫正', 
           brief: '专门针对青少年中常见的圆肩、驼背、X/O型腿等问题设计的专项训练。通过一系列定制化的训练计划，帮助孩子改善不良体态，促进健康成长', 
-          defaultLessons: 12, 
+          defaultLessons: DEFAULT_CLASS_LESSON_COUNT,
           images: [], 
           planText: '一期 12 节：前 3 节进行体态评估与基础动作学习，中间 6 节重点训练肩颈、脊柱、下肢的稳定与拉伸，最后 3 节形成家庭可执行的体态改善方案并跟踪效果。', 
           subItems: ['圆肩驼背改善', '脊柱侧弯预防', 'X/O 型腿调整'], 
@@ -76,7 +83,7 @@ Page({
           id: 'elite', 
           name: '专业追高', 
           brief: '提高专项成绩，适合有一定基础、想要突破的孩子', 
-          defaultLessons: 16, 
+          defaultLessons: DEFAULT_CLASS_LESSON_COUNT,
           images: [], 
           planText: '一期 16 节：前 4 节基础体能与动作技术复盘，中间 8 节进行专项速度、力量、灵敏等强化训练，最后 4 节侧重专项测试与比赛模拟，帮助冲击更高水平。', 
           subItems: ['基础能力巩固', '专项成绩突破', '考级与比赛冲刺'], 
@@ -90,7 +97,7 @@ Page({
           id: 'track', 
           name: '田径专项', 
           brief: '100/200 等中长跑、跑跳投综合训练', 
-          defaultLessons: 16, 
+          defaultLessons: DEFAULT_CLASS_LESSON_COUNT,
           images: [], 
           planText: '一期 16 节：前 4 节学习跑姿、起跑与节奏控制，中间 8 节分模块训练短跑速度、中长跑耐力和跑跳投基础技术，最后 4 节进行全项目综合练习与测试。', 
           subItems: ['短跑爆发力', '中长跑耐力', '跑跳投综合训练'], 
@@ -104,7 +111,7 @@ Page({
           id: 'exam', 
           name: '中考体育', 
           brief: '围绕中考项目进行系统训练与模拟测试', 
-          defaultLessons: 20, 
+          defaultLessons: DEFAULT_CLASS_LESSON_COUNT,
           images: [], 
           planText: '一期 20 节：针对中考各项（如长跑、跳绳、实心球等）进行专项拆解练习，前 5 节打基础，中间 10 节逐项提升成绩，最后 5 节按照中考流程进行全真模拟与应试策略指导。', 
           subItems: ['长跑专项', '跳绳专项', '实心球专项'], 
@@ -118,7 +125,7 @@ Page({
          id: 'kids_fitness', 
          name: '少儿体能班', 
          brief: '提升整体体能与协调性，增强自信心', 
-         defaultLessons: 12, 
+         defaultLessons: DEFAULT_CLASS_LESSON_COUNT,
          images: [], 
          planText: '一期 12 节：以游戏化形式提升孩子的跑、跳、爬、钻、平衡等基础体能，培养良好运动习惯和专注力，让孩子在快乐中爱上运动。', 
          subItems: ['基础体能', '协调性训练', '平衡能力'], 
@@ -132,7 +139,7 @@ Page({
          id: 'rope', 
          name: '跳绳班', 
          brief: '跳绳基础与花样技巧训练，兼顾兴趣与考试', 
-         defaultLessons: 12, 
+         defaultLessons: DEFAULT_CLASS_LESSON_COUNT,
          images: [], 
          planText: '一期 12 节：从单摇、双摇等基础节奏入手，逐步加入交叉跳、花样跳等技巧训练，同时结合学校考试要求，提升速度与耐力。', 
          subItems: ['基础跳绳', '速度跳绳', '花样跳绳'], 
@@ -146,7 +153,7 @@ Page({
          id: 'ball', 
          name: '球类专项班', 
          brief: '乒乓球、羽毛球、篮球、足球等专项兴趣培养', 
-         defaultLessons: 16, 
+         defaultLessons: DEFAULT_CLASS_LESSON_COUNT,
          images: [], 
          planText: '一期 16 节：根据孩子选择的球类项目，从基本握拍、运球、传接球等动作教起，配合分组对抗、小比赛，提高技术的同时培养团队意识与规则意识。', 
          subItems: ['乒乓球', '羽毛球', '篮球', '足球'], 
@@ -164,15 +171,35 @@ Page({
     isSubmitting: false, // Prevent duplicate submission
     showSyncModal: false,
     showSetTotalModal: false,
+    showBannerBoxExpanded: true,
     setTotalLessonsInput: '1',
     syncTotalLessonsInput: '1',
     syncHistoryCountInput: '0',
+    lessonPlanLocked: false,
+    lessonPlanLockText: '',
+    closeSummaryInput: '',
+    closeCoachNoteInput: '',
     selectedLessonIndex: 0,
     summaryLessonIndex: 0,
+    manageLessonScrollIntoView: 'manage-lesson-0',
+    summaryLessonScrollIntoView: 'summary-lesson-0',
     summaryInput: '',
     summaryDate: '',
     summaryStartTime: '',
-    summaryEndTime: ''
+    summaryEndTime: '',
+    // 新增多维评分维度：每个维度单独打分，最终自动汇总综合评分
+    summaryDimensionOptions: ['专注', '动作完成', '课堂配合', '训练状态'],
+    summaryDimensionRatings: {},
+    // 新增输入态缓存：手动输入时先保留原始文本，避免输入小数过程中被立刻改写
+    summaryDimensionInputMap: {},
+    summaryDimensionCardList: [
+      { label: '专注', value: 0, displayValue: '未选择', hasValue: false, inputValue: '' },
+      { label: '动作完成', value: 0, displayValue: '未选择', hasValue: false, inputValue: '' },
+      { label: '课堂配合', value: 0, displayValue: '未选择', hasValue: false, inputValue: '' },
+      { label: '训练状态', value: 0, displayValue: '未选择', hasValue: false, inputValue: '' }
+    ],
+    summarySelectedDimensionCount: 0,
+    summaryAverageRatingText: '未生成'
   },
 
   onLoad(options) {
@@ -204,6 +231,18 @@ Page({
     }
   },
 
+  onShow() {
+    this.refreshBannerBoxCollapse();
+  },
+
+  onHide() {
+    this.clearBannerBoxTimer();
+  },
+
+  onUnload() {
+    this.clearBannerBoxTimer();
+  },
+
   // 新增顶部三 tab：创建班课程、课节管理、每日总结
   switchTab(e) {
     const tab = e.currentTarget.dataset.tab;
@@ -221,7 +260,7 @@ Page({
     this.setData({ selectedTab: tab });
   },
 
-  // 新增结课入口：第四个 tab 不切内容页，而是直接把当前课程状态改成 closed
+  // 新增结课入口：第四个 tab 切到结课页，先填写结语和教练备注再提交
   handleCloseCourseTab() {
     if (!this.data.orderId) {
       wx.showToast({
@@ -230,44 +269,57 @@ Page({
       });
       return;
     }
+    this.setData({ selectedTab: 'close' });
+  },
 
-    wx.showModal({
-      title: '节课',
-      content: '确认将当前课程状态改为 closed 吗？',
-      success: async (res) => {
-        if (!res.confirm) {
-          return;
-        }
-
-        wx.showLoading({ title: '处理中' });
-        try {
-          const token = wx.getStorageSync('token');
-          const result = await wx.cloud.callFunction({
-            name: 'NEWDL_execution_order',
-            data: {
-              action: 'close',
-              orderId: this.data.orderId,
-              userId: token,
-              envVersion: app.globalData.miniEnvVersion || 'develop'
-            }
-          });
-
-          wx.hideLoading();
-          if (result.result.code === 0) {
-            wx.showToast({ title: '已设为closed', icon: 'success' });
-            this.setData({ selectedTab: 'manage' });
-            this.fetchOrderDetails(this.data.orderId);
-            return;
-          }
-
-          wx.showToast({ title: result.result.msg || '结课失败', icon: 'none' });
-        } catch (error) {
-          wx.hideLoading();
-          console.error('[publish] [handleCloseCourseTab] 失败:', error);
-          wx.showToast({ title: '网络错误', icon: 'none' });
-        }
-      }
+  // 新增顶部 Banner 自动折叠：页面打开后先完整展示 5 秒，再折叠成一行标题栏
+  refreshBannerBoxCollapse() {
+    this.clearBannerBoxTimer();
+    this.setData({
+      showBannerBoxExpanded: true
     });
+
+    this.bannerBoxTimer = setTimeout(() => {
+      this.setData({
+        showBannerBoxExpanded: false
+      });
+      this.bannerBoxTimer = null;
+    }, 5000);
+  },
+
+  // 新增 Banner 标题栏切换：收起后可点击标题重新展开，展开后继续按 5 秒规则自动收起
+  toggleBannerBox() {
+    const nextExpanded = !this.data.showBannerBoxExpanded;
+
+    this.setData({
+      showBannerBoxExpanded: nextExpanded
+    });
+
+    if (nextExpanded) {
+      this.refreshBannerBoxCollapse();
+      return;
+    }
+
+    this.clearBannerBoxTimer();
+  },
+
+  // 新增 Banner 定时器清理：页面离开时及时停止，避免旧定时器串到下次进入
+  clearBannerBoxTimer() {
+    if (this.bannerBoxTimer) {
+      clearTimeout(this.bannerBoxTimer);
+      this.bannerBoxTimer = null;
+    }
+  },
+
+  // 新增横向课节条定位：管理区和总结区都按同一课节索引自动滚到对应位置
+  buildLessonScrollViewState(index = 0) {
+    const safeIndex = Math.max(0, Number(index) || 0);
+    return {
+      selectedLessonIndex: safeIndex,
+      summaryLessonIndex: safeIndex,
+      manageLessonScrollIntoView: `manage-lesson-${safeIndex}`,
+      summaryLessonScrollIntoView: `summary-lesson-${safeIndex}`
+    };
   },
 
   formatTime(dateStr) {
@@ -316,11 +368,11 @@ Page({
     return `${hour}:${minute}`;
   },
 
-  // 新增总结时间回填：切换课节时把已有上下课时间回填到当前编辑器里
+  // 新增总结时间回填：切换课节时把已有上下课时间回填到当前编辑器里；无历史日期时默认带出今天
   buildSummaryTimeEditorData(lesson = {}) {
     const startedAt = lesson.startedAt || '';
     const completedAt = lesson.completedAt || '';
-    const fallbackDate = this.formatPickerDate(startedAt || completedAt || new Date());
+    const fallbackDate = this.formatPickerDate(lesson.summaryDate || startedAt || completedAt || new Date())
 
     return {
       summaryDate: fallbackDate,
@@ -361,15 +413,266 @@ Page({
     return date.toISOString();
   },
 
+  // 新增多维评分收口：每个维度保留 0-5 分，支持手动输入小数，0 代表未选择
+  normalizeSummaryDimensionRatings(rawRatings = {}) {
+    const nextRatings = {};
+
+    (this.data.summaryDimensionOptions || []).forEach(label => {
+      const rawValue = rawRatings[label];
+      if (rawValue === '' || rawValue === null || typeof rawValue === 'undefined') {
+        return;
+      }
+
+      const score = Number(rawValue);
+      if (Number.isNaN(score)) {
+        return;
+      }
+
+      const safeScore = Math.max(0, Math.min(5, Number(score.toFixed(2))));
+      if (safeScore > 0) {
+        nextRatings[label] = safeScore;
+      }
+    });
+
+    return nextRatings;
+  },
+
+  // 新增多维评分输入缓存：录入中保留原样文本，失焦后再回写标准分值
+  buildSummaryDimensionInputMap(ratings = {}, rawInputMap = null) {
+    const safeRatings = this.normalizeSummaryDimensionRatings(ratings);
+    const nextInputMap = {};
+
+    (this.data.summaryDimensionOptions || []).forEach(label => {
+      if (rawInputMap && Object.prototype.hasOwnProperty.call(rawInputMap, label)) {
+        nextInputMap[label] = String(rawInputMap[label] || '');
+        return;
+      }
+
+      nextInputMap[label] = safeRatings[label] > 0 ? String(safeRatings[label]) : '';
+    });
+
+    return nextInputMap;
+  },
+
+  // 新增多维评分展示卡片：模板层直接读卡片结构，避免 WXML 里做复杂判断
+  buildSummaryDimensionCardList(ratings = {}, inputMap = {}) {
+    const safeRatings = this.normalizeSummaryDimensionRatings(ratings);
+    const cardList = (this.data.summaryDimensionOptions || []).map(label => {
+      const value = Number(safeRatings[label] || 0);
+      return {
+        label,
+        value,
+        displayValue: value > 0 ? `${value}分` : '未选择',
+        hasValue: value > 0,
+        inputValue: String(inputMap[label] || '')
+      };
+    });
+
+    const selectedValues = cardList.filter(item => item.value > 0).map(item => item.value);
+    const averageRating = selectedValues.length
+      ? (selectedValues.reduce((sum, value) => sum + value, 0) / selectedValues.length)
+      : 0;
+
+    return {
+      cardList,
+      selectedCount: selectedValues.length,
+      averageRating,
+      averageRatingText: selectedValues.length ? averageRating.toFixed(1) : '未生成'
+    };
+  },
+
+  // 新增多维评分同步：切换课节和手动录分时统一走这里
+  applySummaryDimensionRatings(ratings = {}, rawInputMap = null) {
+    const safeRatings = this.normalizeSummaryDimensionRatings(ratings);
+    const safeInputMap = this.buildSummaryDimensionInputMap(safeRatings, rawInputMap);
+    const ratingMeta = this.buildSummaryDimensionCardList(safeRatings, safeInputMap);
+
+    this.setData({
+      summaryDimensionRatings: safeRatings,
+      summaryDimensionInputMap: safeInputMap,
+      summaryDimensionCardList: ratingMeta.cardList,
+      summarySelectedDimensionCount: ratingMeta.selectedCount,
+      summaryAverageRatingText: ratingMeta.averageRatingText
+    });
+  },
+
+  // 新增训练标签整理：详情页沿用标签展示时，直接取已选择的维度名称
+  buildSummaryRatingTagsFromDimensions(ratings = {}) {
+    const safeRatings = this.normalizeSummaryDimensionRatings(ratings);
+    return Object.keys(safeRatings);
+  },
+
+  // 新增综合评分计算：多维评分自动求平均作为总分入库
+  buildAverageSummaryRating(ratings = {}) {
+    const safeRatings = this.normalizeSummaryDimensionRatings(ratings);
+    const values = Object.values(safeRatings);
+    if (!values.length) {
+      return 0;
+    }
+
+    const average = values.reduce((sum, value) => sum + Number(value || 0), 0) / values.length;
+    return Number(average.toFixed(1));
+  },
+
+  // 旧的左右加减分逻辑保留注释，不删除；当前改为固定分值直选，避免分数微调难控制
+  // changeSummaryDimensionScore(e) {
+  //   const label = String(e.currentTarget.dataset.label || '').trim();
+  //   const delta = Number(e.currentTarget.dataset.delta || 0);
+  //   if (!label || !delta) {
+  //     return;
+  //   }
+  //
+  //   const currentRatings = this.normalizeSummaryDimensionRatings(this.data.summaryDimensionRatings);
+  //   const currentValue = Number(currentRatings[label] || 0);
+  //   const nextValue = Math.max(0, Math.min(5, currentValue + delta));
+  //
+  //   if (nextValue > 0) {
+  //     currentRatings[label] = nextValue;
+  //   } else {
+  //     delete currentRatings[label];
+  //   }
+  //
+  //   this.applySummaryDimensionRatings(currentRatings);
+  // },
+
+  // 旧的固定分值点击逻辑保留注释，不删除；当前改为每个维度手动输入具体分数
+  // selectSummaryDimensionScore(e) {
+  //   const label = String(e.currentTarget.dataset.label || '').trim();
+  //   const value = Number(e.currentTarget.dataset.value || 0);
+  //   if (!label || !value) {
+  //     return;
+  //   }
+  //
+  //   const currentRatings = this.normalizeSummaryDimensionRatings(this.data.summaryDimensionRatings);
+  //   currentRatings[label] = Math.max(1, Math.min(5, Math.round(value)));
+  //
+  //   this.applySummaryDimensionRatings(currentRatings);
+  // },
+
+  // 新增手动输入分值：支持小数，输入过程中保留原始文本，便于精确录分
+  handleSummaryDimensionInput(e) {
+    const label = String(e.currentTarget.dataset.label || '').trim();
+    if (!label) {
+      return;
+    }
+
+    const rawValue = String((e.detail || {}).value || '');
+    let nextInputValue = rawValue.replace(/[^\d.]/g, '');
+
+    if (nextInputValue.indexOf('.') !== -1) {
+      const parts = nextInputValue.split('.');
+      nextInputValue = `${parts[0]}.${parts.slice(1).join('').slice(0, 2)}`;
+    }
+
+    if (nextInputValue.startsWith('.')) {
+      nextInputValue = '';
+    }
+
+    if (nextInputValue !== '') {
+      const numericValue = Number(nextInputValue);
+      if (!Number.isNaN(numericValue) && numericValue > 5) {
+        nextInputValue = '5';
+      }
+    }
+
+    const nextInputMap = {
+      ...(this.data.summaryDimensionInputMap || {}),
+      [label]: nextInputValue
+    };
+
+    const currentRatings = this.normalizeSummaryDimensionRatings(this.data.summaryDimensionRatings);
+    const numericValue = Number(nextInputValue);
+    if (nextInputValue === '' || Number.isNaN(numericValue) || numericValue <= 0) {
+      delete currentRatings[label];
+    } else {
+      currentRatings[label] = Math.max(0, Math.min(5, Number(numericValue.toFixed(2))));
+    }
+
+    this.applySummaryDimensionRatings(currentRatings, nextInputMap);
+  },
+
+  // 新增分值失焦整理：把输入框内容回写成标准格式，避免保留无效字符
+  handleSummaryDimensionBlur() {
+    this.applySummaryDimensionRatings(this.data.summaryDimensionInputMap);
+  },
+
+  // 新增清空当前维度分值：保留“未选择”状态，方便重新点选
+  clearSummaryDimensionScore(e) {
+    const label = String(e.currentTarget.dataset.label || '').trim();
+    if (!label) {
+      return;
+    }
+
+    const currentRatings = this.normalizeSummaryDimensionRatings(this.data.summaryDimensionRatings);
+    delete currentRatings[label];
+    this.applySummaryDimensionRatings(currentRatings);
+  },
+
+  // 新增维度评分初始化：兼容老数据没有 dimensionRatings 的情况
+  buildSummaryDimensionRatingsFromLesson(lesson = {}) {
+    if (lesson && typeof lesson.dimensionRatings === 'object' && lesson.dimensionRatings) {
+      return this.normalizeSummaryDimensionRatings(lesson.dimensionRatings);
+    }
+
+    return {};
+  },
+
+  // 新增课节展示状态：只有总结内容和上课日期同时存在，才视为已完成
+  buildLessonDisplayMeta(lesson = {}) {
+    const hasSummary = !!((lesson.summary || '').trim());
+    const hasSummaryDate = !!(lesson.summaryDate || lesson.startedAt || lesson.completedAt);
+    const isCompleted = hasSummary && hasSummaryDate;
+
+    return {
+      isCompleted,
+      statusText: isCompleted ? '已完成' : '待记录',
+      displayStatusClass: isCompleted ? 'done' : 'pending'
+    };
+  },
+
   buildScheduleView(schedule) {
-    return (schedule || []).map(item => ({
-      ...item,
-      startedAtText: item.startedAt ? this.formatTime(item.startedAt) : '',
-      completedAtText: item.completedAt ? this.formatTime(item.completedAt) : '',
-      // 旧状态驱动文案保留注释，不删除；现在统一只把课节当记录项展示
-      // statusText: LESSON_STATUS_TEXT_MAP[item.status] || item.status || '待处理'
-      statusText: '课节记录'
-    }));
+    return (schedule || [])
+      .map(item => ({
+        ...item,
+        ...this.buildLessonDisplayMeta(item),
+        startedAtText: item.startedAt ? this.formatTime(item.startedAt) : '',
+        completedAtText: item.completedAt ? this.formatTime(item.completedAt) : '',
+        // 旧状态驱动文案保留注释，不删除；现在统一只把课节当记录项展示
+        // statusText: LESSON_STATUS_TEXT_MAP[item.status] || item.status || '待处理'
+      }))
+      // 新增展示排序：未完成课节置顶，已完成课节沉到列表底部，便于教练先处理还没记录的课
+      // 这里说的“已完成”是指这个课节已经写过总结并带有上课日期，不是单纯点过某个按钮
+      .sort((a, b) => {
+        if (a.isCompleted === b.isCompleted) {
+          return (a.lesson || 0) - (b.lesson || 0);
+        }
+        return a.isCompleted ? 1 : -1;
+      });
+  },
+
+  // 新增课表锁定统计：只统计接入后课表里真实记录完成的课节，历史汇总课次不计入“三节后锁定”
+  getRecordedLessonCount(schedule = []) {
+    return (schedule || []).filter(item => this.buildLessonDisplayMeta(item).isCompleted).length;
+  },
+
+  // 新增课表锁定限制：前 3 节课都可以修改，记录满 3 节后自动锁定；半途接入时只统计接入后的课节
+  buildLessonPlanGuard(orderData) {
+    const schedule = Array.isArray((orderData || {}).schedule) ? orderData.schedule : [];
+    const historySync = (orderData || {}).history_sync;
+    const recordedLessonCount = this.getRecordedLessonCount(schedule);
+    const remainingEditableCount = Math.max(0, 3 - recordedLessonCount);
+    const lessonPlanLocked = recordedLessonCount >= 3;
+    const lessonPlanLockText = lessonPlanLocked
+      ? `当前课程在接入后已记录 ${recordedLessonCount} 节课，已达到“三节后锁定”规则，不再支持修改总课时或重新半途接入。`
+      : (historySync
+        ? `当前是半途接入课程，历史 ${historySync.syncedCount || 0} 节不计入锁定统计；从接入后的课节开始，累计再记录 ${remainingEditableCount} 节后将自动锁定。`
+        : `当前课程从第 1 节开始统计；累计记录满 3 节课后，将自动锁定“设置总课时 / 半途接入”，目前还可再记录 ${remainingEditableCount} 节。`);
+
+    return {
+      recordedLessonCount,
+      lessonPlanLocked,
+      lessonPlanLockText
+    };
   },
 
   // 新增课节展示整理：半途接入时在前面插入一个历史汇总框
@@ -382,7 +685,8 @@ Page({
         isHistorySummary: true,
         actualIndex: -1,
         title: `0-${historyCount}`,
-        statusText: '历史已完成'
+        statusText: '已完成',
+        displayStatusClass: 'done'
       });
     }
 
@@ -398,12 +702,24 @@ Page({
   },
 
   // 新增表单分组整理：数据库按页面结构保存四类信息
+  buildAutoCourseTitle(className = '', subPlanName = '') {
+    const baseName = String(subPlanName || className || '').trim();
+    return baseName ? `${baseName}课程` : '';
+  },
+
+  // 新增表单分组整理：数据库按页面结构保存四类信息
   buildGroupedSubmitForm(rawForm) {
+    const childProfiles = this.normalizeChildProfiles(rawForm.child_profiles);
+    const firstChildProfile = childProfiles[0] || { nickname: '', age: '', gender: '', height: '', weight: '' };
+
     return {
       course_target: {
         category: rawForm.category || '',
         title: rawForm.title || '',
-        description: rawForm.description || ''
+        sub_plan_name: rawForm.sub_plan_name || '',
+        description: rawForm.description || '',
+        // 新增课程计划字段：支持在课程说明卡里直接二次编辑
+        course_plan: rawForm.course_plan || ''
       },
       course_basic: {
         course_size_mode: rawForm.course_size_mode || '1对1',
@@ -413,11 +729,15 @@ Page({
         safety_confirmed: !!rawForm.safety_confirmed
       },
       child_profile: {
-        age: rawForm.child_age || '',
-        gender: rawForm.child_gender || '',
-        height: rawForm.child_height || '',
-        weight: rawForm.child_weight || ''
+        // 兼容旧结构：child_profile 继续保留第一个孩子，避免旧页面和旧数据链路断掉
+        nickname: firstChildProfile.nickname || '',
+        age: firstChildProfile.age || '',
+        gender: firstChildProfile.gender || '',
+        height: firstChildProfile.height || '',
+        weight: firstChildProfile.weight || ''
       },
+      // 新增多孩子结构：新页面优先读取 child_profiles
+      child_profiles: childProfiles,
       coach_private: {
         price_interval: rawForm.price_interval || '',
         coach_private_note: rawForm.coach_private_note || '',
@@ -426,18 +746,52 @@ Page({
     };
   },
 
+  // 新增多孩子数据收口：统一把页面录入和老数据回填都整理成数组
+  normalizeChildProfiles(childProfiles = []) {
+    const safeList = Array.isArray(childProfiles) ? childProfiles : [];
+    const normalizedList = safeList.map(item => ({
+      nickname: String((item || {}).nickname || '').trim(),
+      age: String((item || {}).age || '').trim(),
+      gender: String((item || {}).gender || '').trim(),
+      height: String((item || {}).height || '').trim(),
+      weight: String((item || {}).weight || '').trim()
+    }));
+
+    const filteredList = normalizedList.filter(item =>
+      item.nickname || item.age || item.gender || item.height || item.weight
+    );
+
+    return filteredList.length
+      ? filteredList
+      : [{ nickname: '', age: '', gender: '', height: '', weight: '' }];
+  },
+
   applyOrderToForm(order) {
     const courseTarget = order.course_target || {};
     const courseBasic = order.course_basic || {};
     const childProfile = order.child_profile || {};
     const coachPrivate = order.coach_private || {};
     const categoryName = courseTarget.category || order.category || '';
+    const savedSubPlanName = courseTarget.sub_plan_name || order.sub_plan_name || '';
     const matchedClass = this.data.classTypes.find(item => item.name === categoryName) || null;
+    const childProfiles = this.normalizeChildProfiles(
+      (Array.isArray(order.child_profiles) && order.child_profiles.length)
+        ? order.child_profiles
+        : [{
+            nickname: childProfile.nickname || order.child_nickname || '',
+            age: childProfile.age || order.child_age || '',
+            gender: childProfile.gender || order.child_gender || '',
+            height: childProfile.height || order.child_height || '',
+            weight: childProfile.weight || order.child_weight || ''
+          }]
+    );
 
     this.setData({
       form: {
         ...this.data.form,
         title: courseTarget.title || order.title || '',
+        sub_plan_name: savedSubPlanName,
+        course_plan: courseTarget.course_plan || order.course_plan || (matchedClass ? matchedClass.planText : ''),
         frequency: courseBasic.frequency || order.frequency || '',
         category: categoryName,
         description: courseTarget.description || order.description || '',
@@ -446,10 +800,7 @@ Page({
         contact: courseBasic.contact || order.contact || '',
         course_size_mode: courseBasic.course_size_mode || order.course_size_mode || '1对1',
         safety_confirmed: courseBasic.safety_confirmed !== undefined ? !!courseBasic.safety_confirmed : !!order.safety_confirmed,
-        child_age: childProfile.age || order.child_age || '',
-        child_gender: childProfile.gender || order.child_gender || '',
-        child_height: childProfile.height || order.child_height || '',
-        child_weight: childProfile.weight || order.child_weight || '',
+        child_profiles: childProfiles,
         coach_private_note: coachPrivate.coach_private_note || order.coach_private_note || '',
         allow_transfer_to_other_coach: coachPrivate.allow_transfer_to_other_coach !== undefined ? !!coachPrivate.allow_transfer_to_other_coach : !!order.allow_transfer_to_other_coach,
         latitude: order.latitude,
@@ -457,7 +808,7 @@ Page({
       },
       currentClassId: matchedClass ? matchedClass.id : null,
       currentClass: matchedClass,
-      selectedSubName: null
+      selectedSubName: savedSubPlanName || null
     });
   },
 
@@ -466,11 +817,13 @@ Page({
     const targetLesson = (schedule || [])[lessonIndex] || {};
     const targetSummaryIndex = targetLesson.lesson ? lessonIndex : 0;
     const safeLesson = (schedule || [])[targetSummaryIndex] || {};
+    const dimensionRatings = this.buildSummaryDimensionRatingsFromLesson(safeLesson);
     this.setData({
-      summaryLessonIndex: targetSummaryIndex,
+      ...this.buildLessonScrollViewState(targetSummaryIndex),
       summaryInput: safeLesson.summary || '',
       ...this.buildSummaryTimeEditorData(safeLesson)
     });
+    this.applySummaryDimensionRatings(dimensionRatings);
   },
 
   // 新增课节选择器：课节管理先选中目标课节，再执行对应操作
@@ -478,7 +831,7 @@ Page({
     const lessonIndex = this.data.selectedLessonIndex || 0;
     const targetLesson = (schedule || [])[lessonIndex] || {};
     this.setData({
-      selectedLessonIndex: targetLesson.lesson ? lessonIndex : 0
+      ...this.buildLessonScrollViewState(targetLesson.lesson ? lessonIndex : 0)
     });
   },
 
@@ -504,6 +857,7 @@ Page({
       const schedule = this.buildScheduleView(orderData.schedule || []);
       const displaySchedule = this.buildDisplaySchedule(schedule, orderData);
       const historyCount = (((orderData || {}).history_sync || {}).syncedCount) || 0;
+      const lessonPlanGuard = this.buildLessonPlanGuard(orderData);
 
       this.setData({
         orderId,
@@ -513,7 +867,10 @@ Page({
         displaySchedule,
         setTotalLessonsInput: `${orderData.progress_total || 1}`,
         syncTotalLessonsInput: `${orderData.progress_total || 1}`,
-        syncHistoryCountInput: `${historyCount || 0}`
+        syncHistoryCountInput: `${historyCount || 0}`,
+        closeSummaryInput: (((orderData || {}).course_flow_info || {}).close_summary) || '',
+        closeCoachNoteInput: (((orderData || {}).course_flow_info || {}).close_coach_note) || '',
+        ...lessonPlanGuard
       });
 
       this.applyOrderToForm(orderData);
@@ -567,8 +924,10 @@ Page({
     // Auto-fill form description
     this.setData({
       'form.category': cls.name,
-      'form.title': `寻找${cls.name}相关教练/陪练`,
-      'form.description': `我想学习${cls.name}，${cls.brief}。`
+      'form.title': this.buildAutoCourseTitle(cls.name, ''),
+      'form.sub_plan_name': '',
+      'form.description': `我想学习${cls.name}，${cls.brief}。`,
+      'form.course_plan': cls.planText || ''
     });
   },
 
@@ -585,17 +944,54 @@ Page({
     // Update form description
     this.setData({
       'form.category': targetClass.name,
-      'form.title': `寻找${targetClass.name}(${name})相关教练/陪练`,
-      'form.description': `我想学习${targetClass.name}，专项练习：${name}。`
+      'form.title': this.buildAutoCourseTitle(targetClass.name, name),
+      'form.sub_plan_name': name,
+      'form.description': `我想学习${targetClass.name}，专项练习：${name}。`,
+      'form.course_plan': (targetClass.subPlans && targetClass.subPlans[name]) || targetClass.planText || ''
     });
   },
 
   // ========== Input Binding ==========
   onInput(e) {
     const field = e.currentTarget.dataset.field;
+    let value = e.detail.value;
+    // 新增联系方式输入收口：创建班课程时输入阶段就限制为 11 位大陆手机号
+    if (field === 'contact') {
+      value = String(value || '').replace(/\D/g, '').slice(0, 11);
+    }
     this.setData({
-      [`form.${field}`]: e.detail.value
+      [`form.${field}`]: value
     });
+  },
+
+  // 新增孩子表单输入：每个孩子独立编辑，互不覆盖
+  onChildProfileInput(e) {
+    const index = Number(e.currentTarget.dataset.index || 0);
+    const field = String(e.currentTarget.dataset.field || '').trim();
+    if (!field) {
+      return;
+    }
+
+    const childProfiles = this.normalizeChildProfiles(this.data.form.child_profiles);
+    let value = String((e.detail || {}).value || '');
+
+    if (field === 'age') {
+      value = value.replace(/\D/g, '');
+    }
+
+    childProfiles[index] = {
+      ...(childProfiles[index] || { nickname: '', age: '', gender: '', height: '', weight: '' }),
+      [field]: value
+    };
+
+    this.setData({
+      'form.child_profiles': childProfiles
+    });
+  },
+
+  // 新增手机号格式校验：创建班课程时统一按 11 位大陆手机号收口
+  isValidPhone(value) {
+    return /^1[3-9]\d{9}$/.test(String(value || '').trim());
   },
 
   // 新增教练私有字段：记录仅供内部查看的备注和是否允许流转
@@ -621,8 +1017,42 @@ Page({
 
   // 新增孩子性别收集：作为教练内部建档信息
   onChildGenderChange(e) {
+    const index = Number(e.currentTarget.dataset.index || 0);
+    const childProfiles = this.normalizeChildProfiles(this.data.form.child_profiles);
+    childProfiles[index] = {
+      ...(childProfiles[index] || { nickname: '', age: '', gender: '', height: '', weight: '' }),
+      gender: e.detail.value || ''
+    };
+
     this.setData({
-      'form.child_gender': e.detail.value || ''
+      'form.child_profiles': childProfiles
+    });
+  },
+
+  // 新增孩子卡片操作：支持继续追加孩子资料
+  addChildProfile() {
+    const childProfiles = this.normalizeChildProfiles(this.data.form.child_profiles);
+    childProfiles.push({ nickname: '', age: '', gender: '', height: '', weight: '' });
+    this.setData({
+      'form.child_profiles': childProfiles
+    });
+  },
+
+  // 新增孩子卡片删除：至少保留一个录入框，避免页面直接空掉
+  removeChildProfile(e) {
+    const index = Number(e.currentTarget.dataset.index || 0);
+    const childProfiles = this.normalizeChildProfiles(this.data.form.child_profiles);
+
+    if (childProfiles.length <= 1) {
+      this.setData({
+        'form.child_profiles': [{ nickname: '', age: '', gender: '', height: '', weight: '' }]
+      });
+      return;
+    }
+
+    childProfiles.splice(index, 1);
+    this.setData({
+      'form.child_profiles': childProfiles
     });
   },
 
@@ -631,6 +1061,7 @@ Page({
       this.setData({
         form: {
           title: '',
+          sub_plan_name: '',
           frequency: '',
           category: '',
           description: '',
@@ -640,10 +1071,10 @@ Page({
           contact: '',
           course_size_mode: '1对1',
           safety_confirmed: false,
-          child_age: '',
-          child_gender: '',
-          child_height: '',
-          child_weight: '',
+          course_plan: '',
+          child_profiles: [
+            { nickname: '', age: '', gender: '', height: '', weight: '' }
+          ],
           coach_private_note: '',
           allow_transfer_to_other_coach: false
         },
@@ -696,6 +1127,12 @@ Page({
       return;
     }
 
+    // 新增三节锁定保护：累计记录满 3 节课后不允许再改总课时
+    if (this.data.lessonPlanLocked) {
+      wx.showToast({ title: '已记录满3节课，不能再修改', icon: 'none' });
+      return;
+    }
+
     // 新增总课时设置：直接控制下面应该生成多少个课节框
     this.setData({
       showSetTotalModal: true,
@@ -706,6 +1143,12 @@ Page({
   openSyncModal() {
     if (!this.data.orderId) {
       wx.showToast({ title: '请先发布课程', icon: 'none' });
+      return;
+    }
+
+    // 新增三节锁定保护：累计记录满 3 节课后不允许再改半途接入
+    if (this.data.lessonPlanLocked) {
+      wx.showToast({ title: '已记录满3节课，不能再修改', icon: 'none' });
       return;
     }
 
@@ -740,6 +1183,11 @@ Page({
   },
 
   async submitSetTotalLessons() {
+    if (this.data.lessonPlanLocked) {
+      wx.showToast({ title: '已记录满3节课，不能再修改', icon: 'none' });
+      return;
+    }
+
     const totalLessons = parseInt(this.data.setTotalLessonsInput, 10);
 
     if (!totalLessons || totalLessons < 1) {
@@ -780,6 +1228,11 @@ Page({
   },
 
   async submitSyncLessonProgress() {
+    if (this.data.lessonPlanLocked) {
+      wx.showToast({ title: '已记录满3节课，不能再修改', icon: 'none' });
+      return;
+    }
+
     const totalLessons = parseInt(this.data.syncTotalLessonsInput, 10);
     const historyCount = parseInt(this.data.syncHistoryCountInput, 10);
 
@@ -889,27 +1342,40 @@ Page({
     }
     const index = Number(e.currentTarget.dataset.index || 0);
     const lesson = this.data.schedule[index] || {};
+    const dimensionRatings = this.buildSummaryDimensionRatingsFromLesson(lesson);
     this.setData({
-      selectedLessonIndex: index,
-      summaryLessonIndex: index,
+      ...this.buildLessonScrollViewState(index),
       summaryInput: lesson.summary || '',
       ...this.buildSummaryTimeEditorData(lesson)
     });
+    this.applySummaryDimensionRatings(dimensionRatings);
   },
 
   selectSummaryLesson(e) {
     const index = Number(e.currentTarget.dataset.index || 0);
     const lesson = this.data.schedule[index] || {};
+    const dimensionRatings = this.buildSummaryDimensionRatingsFromLesson(lesson);
     this.setData({
       selectedTab: 'summary',
-      summaryLessonIndex: index,
+      ...this.buildLessonScrollViewState(index),
       summaryInput: lesson.summary || '',
       ...this.buildSummaryTimeEditorData(lesson)
     });
+    this.applySummaryDimensionRatings(dimensionRatings);
   },
 
   handleSummaryInput(e) {
     this.setData({ summaryInput: e.detail.value });
+  },
+
+  // 新增结课输入：记录面向家长/课程的结语内容
+  handleCloseSummaryInput(e) {
+    this.setData({ closeSummaryInput: e.detail.value });
+  },
+
+  // 新增结课教练备注：仅在教练管理页内部可见，不对外展示
+  handleCloseCoachNoteInput(e) {
+    this.setData({ closeCoachNoteInput: e.detail.value });
   },
 
   // 新增总结日期选择：上下课时间默认共用同一天，便于一小时自动推算
@@ -955,12 +1421,45 @@ Page({
       return;
     }
 
+    const summaryInput = (this.data.summaryInput || '').trim();
+    if (!summaryInput) {
+      wx.showToast({ title: '请先填写总结内容', icon: 'none' });
+      return;
+    }
+
+    const summaryDimensionRatings = this.normalizeSummaryDimensionRatings(this.data.summaryDimensionRatings);
+    const summaryRating = this.buildAverageSummaryRating(summaryDimensionRatings);
+    const summaryRatingTags = this.buildSummaryRatingTagsFromDimensions(summaryDimensionRatings);
+    if (!summaryRatingTags.length) {
+      wx.showToast({ title: '多维评分至少选一个', icon: 'none' });
+      return;
+    }
+
+    if (!this.data.summaryDate) {
+      wx.showToast({ title: '请选择上课日期', icon: 'none' });
+      return;
+    }
+    if (!this.data.summaryStartTime) {
+      wx.showToast({ title: '请选择上课时间', icon: 'none' });
+      return;
+    }
+    if (!this.data.summaryEndTime) {
+      wx.showToast({ title: '请选择下课时间', icon: 'none' });
+      return;
+    }
+
     wx.showLoading({ title: '保存中' });
     try {
       const startedAt = this.buildLessonDateTime(this.data.summaryDate, this.data.summaryStartTime);
       const completedAt = this.buildLessonDateTime(this.data.summaryDate, this.data.summaryEndTime);
       const lessonContent = {
-        summary: this.data.summaryInput
+        summary: summaryInput,
+        // 新增总结日期保存：已完成状态依赖“总结内容 + 上课日期”同时存在
+        summaryDate: this.data.summaryDate,
+        // 新增评分与标签保存：多维评分自动汇总总分，并保留每个维度的分数
+        rating: summaryRating,
+        ratingTags: summaryRatingTags,
+        dimensionRatings: summaryDimensionRatings
       };
 
       // 新增上下课时间保存：填写了时间就和总结一起落到当前课节里
@@ -987,17 +1486,22 @@ Page({
         wx.showToast({ title: '保存成功', icon: 'success' });
         const targetLesson = {
           ...lesson,
-          summary: this.data.summaryInput,
+          summary: summaryInput,
+          summaryDate: this.data.summaryDate,
+          rating: summaryRating,
+          ratingTags: summaryRatingTags,
+          dimensionRatings: summaryDimensionRatings,
           startedAt: startedAt || lesson.startedAt,
           completedAt: completedAt || lesson.completedAt
         };
         const lessonStr = encodeURIComponent(JSON.stringify(targetLesson));
         const lessonIndex = this.data.summaryLessonIndex;
+        const lessonNo = targetLesson.lesson || (lessonIndex + 1);
 
         // 新增保存后跳转：总结保存成功后直接进入对应课节详情页，详情页会自行刷新最新数据
         setTimeout(() => {
           wx.navigateTo({
-            url: `/pages/task/progress/progress_specialOperation/progress_classdetailed/progress_classdetailed?lesson=${lessonStr}&index=${lessonIndex}&orderId=${this.data.orderId}&sourcePage=publish_summary`
+            url: `/pages/task/progress/progress_specialOperation/progress_classdetailed/progress_classdetailed?lesson=${lessonStr}&index=${lessonIndex}&lessonNo=${lessonNo}&orderId=${this.data.orderId}&sourcePage=publish_summary`
           });
         }, 300);
         return;
@@ -1009,6 +1513,61 @@ Page({
       console.error('[publish] [saveSummary] 失败:', error);
       wx.showToast({ title: '保存失败', icon: 'none' });
     }
+  },
+
+  // 新增结课提交：先填写结语和教练备注，再真正把课程状态改成 closed
+  async submitCloseCourse() {
+    if (!this.data.orderId) {
+      wx.showToast({ title: '请先进入已有班级', icon: 'none' });
+      return;
+    }
+
+    const closeSummary = (this.data.closeSummaryInput || '').trim();
+    const closeCoachNote = (this.data.closeCoachNoteInput || '').trim();
+
+    if (!closeSummary) {
+      wx.showToast({ title: '请先填写结课结语', icon: 'none' });
+      return;
+    }
+
+    wx.showModal({
+      title: '确认结课',
+      content: '确认提交结课吗？提交后课程会进入 closed 状态。',
+      success: async (res) => {
+        if (!res.confirm) {
+          return;
+        }
+
+        wx.showLoading({ title: '处理中' });
+        try {
+          const token = wx.getStorageSync('token');
+          const result = await wx.cloud.callFunction({
+            name: 'NEWDL_execution_order',
+            data: {
+              action: 'close',
+              orderId: this.data.orderId,
+              userId: token,
+              closeSummary,
+              closeCoachNote,
+              envVersion: app.globalData.miniEnvVersion || 'develop'
+            }
+          });
+
+          wx.hideLoading();
+          if (result.result.code === 0) {
+            wx.showToast({ title: '结课成功', icon: 'success' });
+            this.fetchOrderDetails(this.data.orderId);
+            return;
+          }
+
+          wx.showToast({ title: result.result.msg || '结课失败', icon: 'none' });
+        } catch (error) {
+          wx.hideLoading();
+          console.error('[publish] [submitCloseCourse] 失败:', error);
+          wx.showToast({ title: '网络错误', icon: 'none' });
+        }
+      }
+    });
   },
 
   handleToProgressDisplay() {
@@ -1026,36 +1585,56 @@ Page({
     if (this.data.isSubmitting) return;
 
     const rawForm = this.data.form;
+    const safeSubPlanName = rawForm.sub_plan_name || this.data.selectedSubName || '';
+    const safeTitle = rawForm.title || this.buildAutoCourseTitle(rawForm.category || ((this.data.currentClass || {}).name || ''), safeSubPlanName);
+    const safeForm = {
+      ...rawForm,
+      title: safeTitle,
+      sub_plan_name: safeSubPlanName
+    };
     const publishType = '发布看看';
 
     console.log(`[publish_pdd] [onSubmit] 开始发布, 类型: ${publishType}`);
 
     // 1. Validation
-    if (!rawForm.location) {
+    if (!safeForm.location) {
       wx.showToast({ title: '请选择任务位置', icon: 'none' });
       return;
     }
-    if (!rawForm.contact || !String(rawForm.contact).trim()) {
+    if (!safeForm.contact || !String(safeForm.contact).trim()) {
       wx.showToast({ title: '请填写联系方式', icon: 'none' });
       return;
     }
-    if (!rawForm.safety_confirmed) {
-      wx.showToast({ title: '请先勾选安全与规范', icon: 'none' });
+    if (!this.isValidPhone(safeForm.contact)) {
+      wx.showToast({ title: '请填写正确的11位手机号', icon: 'none' });
       return;
     }
+    // 临时注释必填校验：上面的 agreement-card 已按需求隐藏，如果这里继续拦截会导致页面无法提交
+    // if (!rawForm.safety_confirmed) {
+    //   wx.showToast({ title: '请先勾选安全与规范', icon: 'none' });
+    //   return;
+    // }
 
     const token = wx.getStorageSync('token');
     // 新增环境版本透传：云函数按 develop/trial/release 自动切换集合前缀
     const runtimeEnvVersion = app.globalData.miniEnvVersion || 'develop';
     
     // 2. Build submit data
-    const groupedForm = this.buildGroupedSubmitForm(rawForm);
+    const groupedForm = this.buildGroupedSubmitForm(safeForm);
+    const firstChildProfile = (groupedForm.child_profiles || [])[0] || { nickname: '', age: '', gender: '', height: '', weight: '' };
     const submitForm = {
-      ...rawForm,
+      ...safeForm,
       ...groupedForm,
+      // 兼容旧字段：继续把第一个孩子平铺到老字段里，避免旧展示链路直接空掉
+      child_nickname: firstChildProfile.nickname || '',
+      child_age: firstChildProfile.age || '',
+      child_gender: firstChildProfile.gender || '',
+      child_height: firstChildProfile.height || '',
+      child_weight: firstChildProfile.weight || '',
       publish_type: publishType,
-      // MVP: 发布后直接进入执行流程，默认使用当前课程预设课时
-      class_count: (this.data.currentClass && this.data.currentClass.defaultLessons) || 1,
+      // MVP: 发布后直接进入执行流程；当前所有全新班级统一默认 10 节课
+      // 如果教练后续发现这门课前面其实已经上过几节，再去“课节管理”里使用“半途接入”补录历史进度
+      class_count: (this.data.currentClass && this.data.currentClass.defaultLessons) || DEFAULT_CLASS_LESSON_COUNT,
       usertoken: token || 'guest_token',
       userInfo: app.globalData.userInfo || { nickName: '发布者', avatarUrl: '' },
       create_time: new Date().toISOString()

@@ -5,10 +5,33 @@
 
   <!-- 常驻状态（仅在登录后显示） -->
   <view class="header {{headerState}}">
-    <view class="header-left">
-      <view class="hello"> {{welcome}} 👋</view>
-      <view class="location">
-        📍 北京市朝阳区
+    <!-- 首页欢迎区新样式：补充顶部胶囊按钮和右侧装饰，让首页第一屏更有引导感 -->
+    <view class="header-topbar">
+      <view class="header-left">
+        <view class="hello"> {{welcome}} 👋</view>
+        <view class="header-desc">开启高效的课程管理之旅</view>
+        <view class="location">
+          <!-- 📍 北京市朝阳区 -->
+        </view>
+      </view>
+    </view>
+
+    <!-- 首页欢迎区右侧装饰：用简单图形模拟插画感，不影响任何业务逻辑 -->
+    <view class="header-illustration">
+      <text class="header-spark header-spark-left">✦</text>
+      <text class="header-spark header-spark-right">+</text>
+      <view class="header-note-card">
+        <view class="header-note-rings">
+          <view class="header-note-ring"></view>
+          <view class="header-note-ring"></view>
+          <view class="header-note-ring"></view>
+        </view>
+        <view class="header-note-page">
+          <view class="header-note-line"></view>
+          <view class="header-note-line short"></view>
+          <view class="header-note-line"></view>
+        </view>
+        <view class="header-note-pencil"></view>
       </view>
     </view>
   </view>
@@ -29,13 +52,109 @@
 <!-- 四功能区块---a版 -->
 <!-- 四功能区块---b版 -->
 <!-- 四功能区块---c版 -->
-<!-- 用 wx:for 渲染动态区块 -->
-<view wx:if="{{panelItems.length > 0}}" class="grid-box">
-  <view 
-    wx:for="{{panelItems}}" 
+<!-- 首页入口新布局：第1项作为核心按钮，第2/3项合并为教练简历分组 -->
+<view wx:if="{{panelItems.length >= 3}}" class="grid-box">
+  <view
+    class="primary-panel visible"
+    bindtap="onPanelTap"
+    data-action="{{panelItems[0].action}}"
+    animation="{{animations[0]}}"
+  >
+    <view class="panel-chip">核心功能</view>
+    <view class="panel-main">
+      <!-- 首页主卡片图标：保留纯样式实现，避免引入额外图片资源 -->
+      <view class="icon {{panelItems[0].color}} primary-icon">
+        <text class="primary-icon-symbol">+</text>
+      </view>
+      <view class="primary-copy">
+        <view class="grid-title primary-title">{{panelItems[0].title}}</view>
+        <view class="grid-sub primary-sub">{{panelItems[0].sub}}</view>
+      </view>
+    </view>
+
+    <!-- 首页主入口详细说明：直接解释为什么要创建班级，以及创建后可以继续做什么 -->
+    <view class="primary-detail-list">
+      <view class="primary-detail-item">
+        <view class="primary-detail-icon">?</view>
+        <view class="primary-detail-copy">
+          <view class="primary-detail-label">为什么要创建班级</view>
+          <view class="primary-detail-value">
+            把孩子信息、课程安排和上课记录放在一起，之后带课更方便。
+          </view>
+        </view>
+      </view>
+      <view class="primary-detail-item">
+        <view class="primary-detail-icon">+</view>
+        <view class="primary-detail-copy">
+          <view class="primary-detail-label">创建后可以做什么</view>
+          <view class="primary-detail-value">
+            安排课程 → 记录每次上课 → 查看训练情况 → 完成结课
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="panel-arrow">
+      <text>去创建班级</text>
+      <text class="panel-arrow-icon">›</text>
+    </view>
+
+        <!-- 首页主入口补充兜底跳转：给想直接去课程管理的用户一个单独小箭头入口 -->
+        <view class="primary-manage-shortcut" catchtap="goToCourseManage">
+          <text class="primary-manage-shortcut-text">已有班级？去课程管理</text>
+      <text class="primary-manage-shortcut-arrow">›</text>
+        </view>
+  </view>
+
+  <view class="resume-group visible" animation="{{animations[1]}}">
+    <view class="resume-group-head">
+      <view class="resume-group-title">教练简历</view>
+      <view class="resume-group-sub">完善资料并查看对外展示效果</view>
+    </view>
+
+    <view
+      class="resume-item"
+      bindtap="onPanelTap"
+      data-action="{{panelItems[1].action}}"
+    >
+      <view class="resume-item-left">
+        <view class="icon {{panelItems[1].color}} resume-icon">
+          <text class="resume-icon-symbol">资</text>
+        </view>
+        <view class="resume-copy">
+          <view class="grid-title">{{panelItems[1].title}}</view>
+          <view class="grid-sub">{{panelItems[1].sub}}</view>
+        </view>
+      </view>
+      <view class="resume-suffix">去完善</view>
+    </view>
+
+    <view
+      class="resume-item"
+      bindtap="onPanelTap"
+      data-action="{{panelItems[2].action}}"
+    >
+      <view class="resume-item-left">
+        <view class="icon {{panelItems[2].color}} resume-icon">
+          <text class="resume-icon-symbol">预</text>
+        </view>
+        <view class="resume-copy">
+          <view class="grid-title">{{panelItems[2].title}}</view>
+          <view class="grid-sub">{{panelItems[2].sub}}</view>
+        </view>
+      </view>
+      <view class="resume-suffix">去查看</view>
+    </view>
+  </view>
+</view>
+
+<!-- 兜底布局：当首页入口数量异常时仍保持基础可点击展示 -->
+<view wx:elif="{{panelItems.length > 0}}" class="grid-box">
+  <view
+    wx:for="{{panelItems}}"
     wx:key="title"
     bindtap="onPanelTap"
-  data-action="{{item.action}}"
+    data-action="{{item.action}}"
     class="grid-item visible"
     animation="{{animations[index]}}"
   >

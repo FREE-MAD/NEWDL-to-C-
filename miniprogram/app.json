@@ -9,6 +9,7 @@
     "pages/index/profile/profile",
     "pages/index/sport_events/sport_events",
     "pages/task/progress/progress",
+    "pages/profile/profile",
     "pages/profile/edit/edit",
     "pages/task/publish/publish",
     "pages/circle/circle",
@@ -45,7 +46,7 @@
       },
       {
         "pagePath": "pages/task/progress/progress",
-        "text": "任务进程",
+        "text": "课程管理",
         "iconPath": "images/icons/home.png",
         "selectedIconPath": "images/icons/home-active.png"
       },

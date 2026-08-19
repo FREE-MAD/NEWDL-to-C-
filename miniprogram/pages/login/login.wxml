@@ -42,7 +42,7 @@
         <!-- <input placeholder="昵称"/>
     <input placeholder="联系方式"/> -->
         <input placeholder="昵称" value="{{nickname}}" bindinput="onNickname" />
-        <input placeholder="联系方式" value="{{phone}}" bindinput="onPhone" />
+        <input type="number" maxlength="11" placeholder="请输入11位手机号" value="{{phone}}" bindinput="onPhone" />
         <input placeholder="详细地址" value="{{address}}" disabled="true" bindtap="chooseLocation" />
       </view>
     </view>

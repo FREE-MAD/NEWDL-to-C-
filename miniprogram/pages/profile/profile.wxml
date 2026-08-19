@@ -1,9 +1,40 @@
 <view class="page">
   <view class="header">
-    <text class="title">个人资料</text>
+    <view class="header-title">个人资料</view>
+    <view class="header-name">{{profile.nickname || '未设置昵称'}}</view>
+    <view class="header-sub">{{profile.city || '请先填写当前城市'}}</view>
   </view>
   
   <view class="content">
-    <text class="placeholder">个人资料页面开发中...</text>
+    <!-- 新增资料展示卡片：标准资料页直接展示当前用户资料 -->
+    <view class="summary-card">
+      <view class="summary-row">
+        <text class="summary-label">联系电话</text>
+        <text class="summary-value">{{profile.phone || '未填写'}}</text>
+      </view>
+      <view class="summary-row">
+        <text class="summary-label">详细地址</text>
+        <text class="summary-value">{{profile.address || '未填写'}}</text>
+      </view>
+    </view>
+
+    <view wx:if="{{isLoading}}" class="loading-box">资料加载中...</view>
+
+    <block wx:for="{{sections}}" wx:for-item="section" wx:key="title">
+      <view class="section-card">
+        <view class="section-title">{{section.title}}</view>
+        <block wx:for="{{section.items}}" wx:for-item="row" wx:key="label">
+          <view class="info-row">
+            <view class="info-label">{{row.label}}</view>
+            <view class="info-value">{{row.value}}</view>
+          </view>
+        </block>
+      </view>
+    </block>
+  </view>
+
+  <!-- 新增编辑入口：展示页底部统一跳转到资料完善页 -->
+  <view class="bottom-bar">
+    <button class="edit-btn" bindtap="goToProfileEditor">去完善资料</button>
   </view>
 </view>

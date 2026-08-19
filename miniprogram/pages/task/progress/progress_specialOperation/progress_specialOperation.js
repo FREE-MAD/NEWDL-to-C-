@@ -36,7 +36,13 @@ Page({
     hasRecordedEnter: false,
     statusText: '加载中...',
     currentStep: 0,
-    createdTimeDisplay: ''
+    createdTimeDisplay: '',
+    historySyncedCount: 0,
+    progressCompletedCount: 0,
+    progressPendingCount: 0,
+          progressTotalCount: 0,
+          isDisplayGuideExpanded: true,
+          isSubPlanExpanded: false
   },
 
   // 新增进入来源整理：先标记是否来自分享，再在分享态里区分分享者本人和普通查看者
@@ -94,20 +100,70 @@ Page({
     const courseTarget = orderData.course_target || {};
     const courseBasic = orderData.course_basic || {};
     const childProfile = orderData.child_profile || {};
+    const childProfiles = this.normalizeChildProfiles(
+      (Array.isArray(orderData.child_profiles) && orderData.child_profiles.length)
+        ? orderData.child_profiles
+        : [{
+            nickname: childProfile.nickname || orderData.child_nickname || '',
+            age: childProfile.age || orderData.child_age || '',
+            gender: childProfile.gender || orderData.child_gender || '',
+            height: childProfile.height || orderData.child_height || '',
+            weight: childProfile.weight || orderData.child_weight || ''
+          }]
+    );
+    const firstChildProfile = childProfiles[0] || {};
 
     return {
       ...orderData,
       title: courseTarget.title || orderData.title || '',
       category: courseTarget.category || orderData.category || '',
+      sub_plan_name: courseTarget.sub_plan_name || orderData.sub_plan_name || '',
+      course_plan: courseTarget.course_plan || orderData.course_plan || '',
       description: courseTarget.description || orderData.description || '',
       frequency: courseBasic.frequency || orderData.frequency || '',
       location: courseBasic.location || orderData.location || '',
       contact: courseBasic.contact || orderData.contact || '',
       course_size_mode: courseBasic.course_size_mode || orderData.course_size_mode || '',
-      child_age: childProfile.age || orderData.child_age || '',
-      child_gender: childProfile.gender || orderData.child_gender || '',
-      child_height: childProfile.height || orderData.child_height || '',
-      child_weight: childProfile.weight || orderData.child_weight || ''
+      // 新增多孩子展示：家长页优先展示 child_profiles，旧字段继续兼容第一个孩子
+      child_profiles: childProfiles,
+      child_nickname: firstChildProfile.nickname || '',
+      child_age: firstChildProfile.age || '',
+      child_gender: firstChildProfile.gender || '',
+      child_height: firstChildProfile.height || '',
+      child_weight: firstChildProfile.weight || ''
+    };
+  },
+
+  // 新增多孩子展示收口：把旧单孩子数据也整理成统一数组
+  normalizeChildProfiles(childProfiles = []) {
+    const safeList = Array.isArray(childProfiles) ? childProfiles : [];
+    const normalizedList = safeList.map(item => ({
+      nickname: String((item || {}).nickname || '').trim(),
+      age: String((item || {}).age || '').trim(),
+      gender: String((item || {}).gender || '').trim(),
+      height: String((item || {}).height || '').trim(),
+      weight: String((item || {}).weight || '').trim()
+    }));
+
+    const filteredList = normalizedList.filter(item =>
+      item.nickname || item.age || item.gender || item.height || item.weight
+    );
+
+    return filteredList.length
+      ? filteredList
+      : [{ nickname: '', age: '', gender: '', height: '', weight: '' }];
+  },
+
+  // 新增课节展示状态：统一按“是否已经记录完成”来决定展示状态
+  buildLessonDisplayMeta(lesson = {}) {
+    const hasSummary = !!((lesson.summary || '').trim());
+    const hasSummaryDate = !!(lesson.summaryDate || lesson.startedAt || lesson.completedAt);
+    const isCompleted = hasSummary && hasSummaryDate;
+
+    return {
+      isCompleted,
+      statusText: isCompleted ? '已完成' : '待记录',
+      displayStatusClass: isCompleted ? 'done' : 'pending'
     };
   },
 
@@ -121,7 +177,9 @@ Page({
         isHistorySummary: true,
         actualIndex: -1,
         title: `0-${historyCount}`,
-        statusText: '历史已完成'
+        statusText: '历史已完成',
+        displayStatusClass: 'done',
+        isCompleted: true
       });
     }
 
@@ -136,6 +194,22 @@ Page({
     return displaySchedule;
   },
 
+  // 新增表头计算：让卡片标题区和下面的课节状态使用同一套统计口径
+  buildProgressSummary(orderData = {}, schedule = []) {
+    const historyCount = Number((((orderData || {}).history_sync || {}).syncedCount) || 0);
+    const scheduleCompletedCount = (schedule || []).filter(item => item.isCompleted).length;
+    const totalCount = Number((orderData || {}).progress_total || (historyCount + (schedule || []).length) || 0);
+    const completedCount = Math.min(historyCount + scheduleCompletedCount, totalCount);
+    const pendingCount = Math.max(totalCount - completedCount, 0);
+
+    return {
+      historySyncedCount: historyCount,
+      progressCompletedCount: completedCount,
+      progressPendingCount: pendingCount,
+      progressTotalCount: totalCount
+    };
+  },
+
   /**
    * 生命周期函数--监听页面加载
    */
@@ -147,6 +221,7 @@ Page({
       statusBarHeight,
       ...entryState
     });
+         this.startDisplayGuideAutoCollapse();
 
     if (wx.showShareMenu) {
       wx.showShareMenu({
@@ -165,6 +240,38 @@ Page({
       icon: 'none'
     });
   },
+
+       // 班级展示页说明默认展开 5 秒后自动收起，减少顶部占位
+       startDisplayGuideAutoCollapse() {
+         this.clearDisplayGuideTimer();
+         this.displayGuideTimer = setTimeout(() => {
+           this.setData({ isDisplayGuideExpanded: false });
+           this.displayGuideTimer = null;
+         }, 5000);
+       },
+
+       clearDisplayGuideTimer() {
+         if (!this.displayGuideTimer) {
+           return;
+         }
+
+         clearTimeout(this.displayGuideTimer);
+         this.displayGuideTimer = null;
+       },
+
+       // 班级展示页说明支持手动展开/收起，避免自动收起后无法再次查看
+       toggleDisplayGuide() {
+         const nextExpanded = !this.data.isDisplayGuideExpanded;
+         this.setData({ isDisplayGuideExpanded: nextExpanded });
+         this.clearDisplayGuideTimer();
+       },
+
+       // 新增课程重点折叠开关：默认收起，点击后再展开查看当前子计划详情
+       toggleSubPlanSection() {
+         this.setData({
+           isSubPlanExpanded: !this.data.isSubPlanExpanded
+         });
+       },
 
   /**
    * 获取订单详情
@@ -200,11 +307,12 @@ Page({
       const pageMode = this.resolvePageMode(myOpenid);
       const schedule = (orderData.schedule || []).map(item => ({
         ...item,
+        ...this.buildLessonDisplayMeta(item),
         // 旧状态展示保留注释，不删除；当前展示页统一按“课节记录”理解
         // statusText: LESSON_STATUS_TEXT_MAP[item.status] || item.status || '待处理'
-        statusText: '课节记录'
       }));
       const displaySchedule = this.buildDisplaySchedule(schedule, orderData);
+      const progressSummary = this.buildProgressSummary(orderData, schedule);
 
       this.setData({
         order: orderData,
@@ -213,7 +321,8 @@ Page({
         isCoach,
         isOwner,
         pageMode,
-        createdTimeDisplay: this.buildCreatedTimeDisplay(orderData)
+        createdTimeDisplay: this.buildCreatedTimeDisplay(orderData),
+        ...progressSummary
       });
 
       this.updateUIByState(orderData.fulfill_state);
@@ -303,6 +412,7 @@ Page({
 
     const lessonStr = encodeURIComponent(JSON.stringify(lesson));
     const orderId = this.data.orderId;
+    const lessonNo = lesson.lesson || (Number(index) + 1);
     const isCoach = this.data.isCoach;
     const isRoleCoach = true;
     const isOwner = this.data.isOwner;
@@ -312,7 +422,7 @@ Page({
     const sharerOpenid = this.data.sharerOpenid || '';
 
     wx.navigateTo({
-      url: `/pages/task/progress/progress_specialOperation/progress_classdetailed/progress_classdetailed?lesson=${lessonStr}&index=${index}&orderId=${orderId}&isCoach=${isCoach}&isRoleCoach=${isRoleCoach}&isOwner=${isOwner}&pageMode=${pageMode}&isShareEntry=${isShareEntry}&from=${entryFrom}&shareOpenid=${sharerOpenid}&sourcePage=progress_specialOperation`
+      url: `/pages/task/progress/progress_specialOperation/progress_classdetailed/progress_classdetailed?lesson=${lessonStr}&index=${index}&lessonNo=${lessonNo}&orderId=${orderId}&isCoach=${isCoach}&isRoleCoach=${isRoleCoach}&isOwner=${isOwner}&pageMode=${pageMode}&isShareEntry=${isShareEntry}&from=${entryFrom}&shareOpenid=${sharerOpenid}&sourcePage=progress_specialOperation`
     });
   },
 
@@ -352,5 +462,13 @@ Page({
     }
 
     wx.stopPullDownRefresh();
+       },
+
+       onUnload() {
+         this.clearDisplayGuideTimer();
+       },
+
+       onHide() {
+         this.clearDisplayGuideTimer();
   }
 })

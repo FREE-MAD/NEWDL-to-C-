@@ -31,10 +31,32 @@
   </view>
 </view>
 
-<!-- 新增操作说明：progress 页现在只承担“找到班级并继续管理”的入口作用 -->
-<view class="flow-tip-card">
-  <text class="flow-tip-title">操作说明</text>
-  <text class="flow-tip-desc">这里只显示你创建的班级。未关闭的班级放在“可管理班级”，关闭后的班级放在“已关闭”。</text>
+    <!-- 新增操作说明：直接说明课程管理页展示什么，以及两个操作入口分别负责什么 -->
+<view class="flow-tip-card {{showFlowTipCard ? '' : 'collapsed'}}">
+  <!-- 新增标题栏点击展开/收起：默认 5 秒自动收起，收起后仍可点标题重新展开 -->
+  <view class="flow-tip-header" bindtap="toggleFlowTipCard">
+    <text class="flow-tip-title">课程管理页面说明</text>
+    <text class="flow-tip-status">{{showFlowTipCard ? '默认5秒收起' : '点击展开'}}</text>
+  </view>
+  <!-- 课程管理说明内容：展开时完整显示，5 秒后切到折叠态而不是直接移除 -->
+  <view class="flow-tip-body">
+    <view class="flow-guide-row">
+          <text class="flow-guide-label">这里展示什么</text>
+          <text class="flow-guide-value">这里展示您已经创建的全部班级。</text>
+    </view>
+    <view class="flow-guide-row">
+          <text class="flow-guide-label">班级展示</text>
+          <text class="flow-guide-value">进入班级展示页面，用于查看班级信息及课程内容。该页面主要功能是分享给家长，供家长查看。</text>
+    </view>
+    <view class="flow-guide-row">
+          <text class="flow-guide-label">班级管理</text>
+          <text class="flow-guide-value">进入班级管理页面，用于进行课程管理、每日总结等班级相关操作。</text>
+        </view>
+        <view class="flow-guide-row">
+          <text class="flow-guide-label">怎么选</text>
+          <text class="flow-guide-value">您可以根据当前需要，直接选择对应班级的“班级展示”或“班级管理”。</text>
+    </view>
+  </view>
 </view>
 
 <!-- Task List -->
@@ -72,7 +94,7 @@
         bindtap="onViewDetail"
         data-id="{{item.id}}"
       >
-        进入查看页
+              班级展示
       </button>
       <button
         wx:if="{{item.canManageClass}}"
@@ -80,7 +102,7 @@
         bindtap="onManageClass"
         data-id="{{item.id}}"
       >
-        继续管理班级
+              班级管理
       </button>
     </view>
 

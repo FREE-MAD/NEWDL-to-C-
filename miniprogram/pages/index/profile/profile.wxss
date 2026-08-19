@@ -1,7 +1,6 @@
 .page {
   background: #f5f6fa;
   min-height: 100%;
-  padding-bottom: 180rpx;
 }
 
 /* 顶部背景 */
@@ -27,10 +26,12 @@
 }
 
 .stats {
-  display: flex;
-  gap: 80rpx;
-  font-size: 40rpx;
+  font-size: 26rpx;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 16rpx;
   margin-bottom: 30rpx;
+  letter-spacing: 1rpx;
 }
 
 .profile-name {
@@ -149,6 +150,10 @@
   padding-top: 0;
 }
 
+.skill-select-box {
+  padding-top: 0;
+}
+
 @keyframes slideDown {
   from {
     opacity: 0;
@@ -179,10 +184,151 @@
   font-weight: 500;
 }
 
+.required-tip {
+  font-size: 24rpx;
+  color: #8a8fa3;
+}
+
+.required-star {
+  color: #ff4d4f;
+  margin-left: 6rpx;
+}
+
 .field-block {
   display: flex;
   flex-direction: column;
   gap: 16rpx;
+}
+
+.multi-block-card {
+  padding: 24rpx;
+  border-radius: 20rpx;
+  background: #ffffff;
+  border: 2rpx solid #eceefa;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.multi-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.multi-block-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1a1446;
+}
+
+.option-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.option-chip {
+  min-width: 140rpx;
+  height: 68rpx;
+  padding: 0 28rpx;
+  border-radius: 999rpx;
+  background: #ffffff;
+  border: 2rpx solid #e5e7f0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26rpx;
+  color: #4a4f66;
+}
+
+.option-chip.active {
+  background: #6f4aff;
+  border-color: #6f4aff;
+  color: #ffffff;
+}
+
+.skill-group {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.skill-group-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1a1446;
+}
+
+.skill-scroll-view {
+  white-space: nowrap;
+}
+
+.skill-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 176rpx;
+  height: 72rpx;
+  margin-right: 16rpx;
+  padding: 0 28rpx;
+  border-radius: 999rpx;
+  background: #ffffff;
+  border: 2rpx solid #e5e7f0;
+  box-sizing: border-box;
+  font-size: 26rpx;
+  color: #4a4f66;
+  white-space: nowrap;
+}
+
+.skill-chip.active {
+  background: linear-gradient(150deg, #6f4aff, #4d2cff);
+  border-color: #6f4aff;
+  color: #ffffff;
+}
+
+.skill-scroll-spacer {
+  display: inline-block;
+  width: 8rpx;
+  height: 1rpx;
+}
+
+.skill-selected-text {
+  min-height: 88rpx;
+  padding: 24rpx;
+  border-radius: 20rpx;
+  background: #ffffff;
+  border: 2rpx solid #eceefa;
+  box-sizing: border-box;
+  font-size: 28rpx;
+  color: #4a4f66;
+  line-height: 1.6;
+}
+
+.field-action-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.field-action-btn {
+  height: 64rpx;
+  line-height: 64rpx;
+  padding: 0 28rpx;
+  border-radius: 999rpx;
+  background: #6f4aff;
+  color: #ffffff;
+  font-size: 24rpx;
+  margin: 0;
+}
+
+.field-action-btn::after {
+  border: none;
+}
+
+.danger-action-btn {
+  background: #ff6b6b;
 }
 
 .input {
@@ -238,22 +384,41 @@
   transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
+.photo-upload {
+  padding: 24rpx;
+}
+
 .upload-area:active {
   border-color: #6f4aff;
   background-color: #f5f0ff;
 }
 
+.upload-placeholder {
+  color: #666;
+  font-size: 28rpx;
+}
+
+.upload-preview {
+  width: 100%;
+  height: 320rpx;
+  border-radius: 20rpx;
+  display: block;
+}
+
+.avatar-preview {
+  height: 420rpx;
+}
+
 .bottom-bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
   padding: 24rpx 30rpx 40rpx;
   background: rgba(245, 246, 250, 0.98);
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
 }
 
-.save-btn {
+.bottom-action-btn {
   width: 100%;
   height: 88rpx;
   line-height: 88rpx;
@@ -264,4 +429,7 @@
   border: none;
 }
 
-/* 里面样式===============e */
+.bottom-action-btn::after {
+  border: none;
+}
+

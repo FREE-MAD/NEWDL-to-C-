@@ -82,6 +82,52 @@ page {
 /* Banner */
 .banner-box {
   padding: 24rpx 32rpx;
+  margin: 24rpx 32rpx 0;
+  border: 2rpx solid #d9e7ff;
+  border-radius: 24rpx;
+  background: #ffffff;
+  box-sizing: border-box;
+  overflow: hidden;
+  transition: padding 0.3s ease, background-color 0.3s ease;
+}
+
+.banner-box.collapsed {
+  padding-top: 20rpx;
+  padding-bottom: 20rpx;
+  background: #f8fbff;
+}
+
+.banner-box-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 4rpx 0;
+}
+
+.banner-box-title {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #1565c0;
+}
+
+.banner-box-status {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  color: #7a8ca5;
+}
+
+.banner-box-body {
+  max-height: 1600rpx;
+  opacity: 1;
+  overflow: hidden;
+  transition: max-height 0.32s ease, opacity 0.2s ease, margin-top 0.28s ease;
+}
+
+.banner-box.collapsed .banner-box-body {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
 }
 
 .banner-content {
@@ -92,10 +138,61 @@ page {
   border-radius: 16rpx;
   border: 1rpx solid rgba(25, 118, 210, 0.1);
   line-height: 1.6;
+  margin-top: 20rpx;
+}
+
+/* 创建课程页详细说明：使用标题+分行描述，减少用户理解成本 */
+.guide-title {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1257b3;
+  margin-bottom: 18rpx;
+}
+
+.guide-row {
+  padding: 16rpx 18rpx;
+  border-radius: 16rpx;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.guide-row + .guide-row {
+  margin-top: 14rpx;
+}
+
+.guide-label {
+  display: block;
+  font-size: 22rpx;
+  color: #4f79a5;
+}
+
+.guide-value {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #1565c0;
+  line-height: 1.7;
+}
+
+.banner-tip {
+  display: block;
+  margin-top: 12rpx;
+  color: #d46b08;
+}
+
+/* 新增重要操作块：即使顶部说明收起后，也继续突出“家长展示页”这个下一步入口 */
+.banner-important-action {
+  margin-top: 20rpx;
+  padding: 20rpx 24rpx 24rpx;
+  border-radius: 20rpx;
+  background: linear-gradient(135deg, #fff7e6, #fffdf7);
+  border: 2rpx solid #ffd591;
 }
 
 .banner-action-btn {
-  margin-top: 20rpx;
+  margin-top: 16rpx;
+  width: 100%;
+  display: block;
   height: 72rpx;
   line-height: 72rpx;
   border-radius: 999rpx;
@@ -103,6 +200,19 @@ page {
   color: #1976d2;
   border: 2rpx solid #b7dcff;
   font-size: 26rpx;
+  font-weight: 600;
+  box-sizing: border-box;
+}
+
+.banner-box.collapsed .banner-action-btn {
+  margin-top: 14rpx;
+}
+
+.banner-action-tip {
+  display: block;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #ad4e00;
   font-weight: 600;
 }
 
@@ -133,6 +243,20 @@ page {
 /* 横向滚动 - 课程选择 */
 .section-header {
   margin: 40rpx 0 24rpx;
+}
+
+/* 新增课节管理头部卡片：把标题和说明提示统一收进同一个外边框容器 */
+.manage-header-card {
+  margin: 40rpx 0 24rpx;
+  padding: 24rpx;
+  border: 2rpx solid #e8eef8;
+  border-radius: 20rpx;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.manage-section-header {
+  margin: 0 0 20rpx;
 }
 
 .section-title {
@@ -292,6 +416,19 @@ page {
   text-align: justify;
 }
 
+.detail-edit-textarea {
+  width: 100%;
+  min-height: 180rpx;
+  background: #fff;
+  border: 2rpx solid #d9e7ff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  box-sizing: border-box;
+  font-size: 28rpx;
+  color: var(--text-main);
+  line-height: 1.6;
+}
+
 .detail-imgs {
   white-space: nowrap;
   height: 160rpx;
@@ -333,6 +470,47 @@ page {
   background: #fafcff;
   box-shadow: none;
   border: 1rpx solid #eef4ff;
+}
+
+.child-profile-card {
+  padding: 24rpx;
+  border-radius: 20rpx;
+  background: #fafcff;
+  border: 1rpx solid #e8f0ff;
+  margin-bottom: 24rpx;
+}
+
+.child-profile-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  margin-bottom: 24rpx;
+}
+
+.child-profile-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.child-profile-remove {
+  font-size: 24rpx;
+  color: #ff4d4f;
+}
+
+.child-profile-add {
+  min-height: 84rpx;
+  border-radius: 16rpx;
+  border: 2rpx dashed #91caff;
+  background: #f7fbff;
+  color: #1976d2;
+  font-size: 28rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .agreement-card {
@@ -449,6 +627,32 @@ page {
   height: 96rpx;
 }
 
+.form-input-with-unit {
+  width: 100%;
+  min-height: 96rpx;
+  background: #fff;
+  border: 2rpx solid var(--border-color);
+  border-radius: 16rpx;
+  padding: 0 24rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.unit-value-input {
+  flex: 1;
+  height: 96rpx;
+  font-size: 30rpx;
+  color: var(--text-main);
+}
+
+.input-unit {
+  flex-shrink: 0;
+  font-size: 28rpx;
+  color: #999;
+}
+
 .form-textarea,
 .summary-textarea {
   width: 100%;
@@ -531,7 +735,7 @@ page {
 }
 
 .manage-actions {
-  margin-bottom: 24rpx;
+  margin: 0 0 24rpx;
 }
 
 .manage-btn {
@@ -544,6 +748,10 @@ page {
 .manage-btn.ghost {
   color: #666;
   border-color: #ddd;
+}
+
+.manage-btn.disabled {
+  opacity: 0.6;
 }
 
 .section-card-title {
@@ -571,6 +779,17 @@ page {
 
 .sync-note.no-margin {
   margin-bottom: 0;
+}
+
+.operation-guide-note {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.strong-warning {
+  color: #a8071a;
+  background-color: #fff1f0;
+  border: 1rpx solid #ffccc7;
 }
 
 .manage-lesson-item {
@@ -619,18 +838,12 @@ page {
   color: #666;
 }
 
-.manage-lesson-status.PENDING {
+.manage-lesson-status.pending {
   background: #fff7e6;
   color: #fa8c16;
 }
 
-.manage-lesson-status.PARENT_CONFIRMED,
-.manage-lesson-status.COACH_READY {
-  background: #e6f7ff;
-  color: #1890ff;
-}
-
-.manage-lesson-status.DONE {
+.manage-lesson-status.done {
   background: #f6ffed;
   color: #52c41a;
 }
@@ -654,6 +867,19 @@ page {
 .mini-btn.finish {
   background: #52c41a;
   color: #fff;
+}
+
+/* 新增记录状态按钮样式：用颜色直接区分当前课节是否已经记录完成 */
+.lesson-record-btn.pending {
+  background: #fff7e6;
+  color: #d46b08;
+  border-color: #ffd591;
+}
+
+.lesson-record-btn.done {
+  background: #f6ffed;
+  color: #389e0d;
+  border-color: #b7eb8f;
 }
 
 .summary-lessons {
@@ -688,6 +914,181 @@ page {
   font-size: 24rpx;
   color: #666;
   margin-bottom: 20rpx;
+}
+
+.summary-rating-tip {
+  margin-top: 14rpx;
+  font-size: 24rpx;
+  color: #999;
+  line-height: 1.6;
+}
+
+.summary-dimension-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+  margin-top: 20rpx;
+}
+
+.summary-dimension-card {
+  padding: 24rpx;
+  border-radius: 20rpx;
+  background: #f8fbff;
+  border: 2rpx solid #dfeeff;
+  box-sizing: border-box;
+}
+
+.summary-dimension-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.summary-dimension-label {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.summary-dimension-value {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.summary-dimension-value.has-value {
+  color: #1976d2;
+  font-weight: 600;
+}
+
+.summary-dimension-tabbar {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-top: 20rpx;
+}
+
+.summary-dimension-tab {
+  width: 88rpx;
+  height: 72rpx;
+  border-radius: 18rpx;
+  background: #1976d2;
+  color: #fff;
+  font-size: 34rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.summary-dimension-tab.disabled {
+  background: #d9d9d9;
+  color: #fff;
+}
+
+.summary-dimension-center {
+  flex: 1;
+  min-height: 72rpx;
+  border-radius: 18rpx;
+  background: #fff;
+  border: 2rpx solid #dfeeff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26rpx;
+  color: #4d5b76;
+  box-sizing: border-box;
+}
+
+/* 新增固定分值按钮：直接点击目标分数，避免加减时不好控制 */
+.summary-dimension-score-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-top: 20rpx;
+}
+
+.summary-dimension-score-chip,
+.summary-dimension-clear-chip {
+  min-width: 100rpx;
+  height: 68rpx;
+  padding: 0 24rpx;
+  border-radius: 34rpx;
+  background: #fff;
+  border: 2rpx solid #dfeeff;
+  color: #4d5b76;
+  font-size: 26rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.summary-dimension-score-chip.active {
+  background: #1976d2;
+  border-color: #1976d2;
+  color: #fff;
+  font-weight: 600;
+}
+
+.summary-dimension-clear-chip {
+  color: #ff6b6b;
+  border-color: #ffd5d5;
+}
+
+.summary-dimension-clear-chip.disabled {
+  color: #bbb;
+  border-color: #e8e8e8;
+}
+
+/* 新增手动录分样式：每个维度直接输入具体分数，方便控制小数精度 */
+.summary-dimension-input-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-top: 20rpx;
+}
+
+.summary-dimension-input {
+  flex: 1;
+  height: 72rpx;
+  padding: 0 24rpx;
+  border-radius: 18rpx;
+  background: #fff;
+  border: 2rpx solid #dfeeff;
+  color: #333;
+  font-size: 26rpx;
+  box-sizing: border-box;
+}
+
+.summary-rating-result {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 20rpx;
+}
+
+.summary-rating-result-item {
+  flex: 1;
+  padding: 20rpx;
+  border-radius: 18rpx;
+  background: #fff;
+  border: 2rpx solid #e8eef8;
+  box-sizing: border-box;
+}
+
+.summary-rating-result-label {
+  display: block;
+  font-size: 22rpx;
+  color: #999;
+}
+
+.summary-rating-result-value {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1976d2;
 }
 
 .summary-time-grid {

@@ -10,12 +10,12 @@ Page({
   },
 
   onLoad() {
-    // MVP 工具页：承接首页迁移过来的“任务进程”入口
+    // MVP 工具页：承接首页迁移过来的“课程管理”入口
     this.setData({
       toolItems: [
         {
-          title: '任务进程',
-          sub: '查看任务进度',
+          title: '课程管理',
+          sub: '查看并管理已创建课程',
           action: 'TASK_PROGRESS'
         }
       ]

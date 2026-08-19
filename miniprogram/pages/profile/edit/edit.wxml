@@ -1,156 +1,87 @@
 <!-- pages/profile/edit/edit.wxml -->
-<view class="container">
-  <form bindsubmit="onSave">
-    <!-- 头像 -->
-    <view class="form-section">
-      <view class="section-title">头像</view>
-      <view class="avatar-container" bindtap="onChooseAvatar">
-        <image 
-          class="avatar" 
-          src="{{profile.avatar || '/images/default-avatar.png'}}"
+<view class="page">
+  <view class="header">
+    <!-- 新增头部资料总览：按示意图合并成头像、名字、ID、标签和三项概览 -->
+    <view class="header-main">
+      <!-- 新增头部头像展示：左侧固定显示用户照片 -->
+      <view class="header-avatar-wrap">
+        <image
+          wx:if="{{profile.avatarUrl}}"
+          class="header-avatar"
+          src="{{profile.avatarUrl}}"
           mode="aspectFill"
-        />
-        <view class="avatar-edit">
-          <text>点击更换</text>
+        ></image>
+        <view wx:else class="header-avatar header-avatar-placeholder">教练</view>
+      </view>
+
+      <view class="header-left">
+        <!-- 新增头部姓名直连：固定拉取昵称字段 -->
+        <view class="header-name">{{headerName}}</view>
+        <view class="header-id">ID：{{coachId}}</view>
+        <view class="header-tagline">悦动邻：让教练更专注教学</view>
+      </view>
+    </view>
+
+    <view class="header-stats">
+      <!-- 新增头部统计直连：第1项固定拉取工作经验 -->
+      <view class="header-stat-item">
+        <view class="header-stat-icon">💼</view>
+        <view class="header-stat-value">{{headerStats.experienceLevel}}</view>
+        <view class="header-stat-label">工作经验</view>
+      </view>
+      <!-- 保留说明：用户要求把教育背景移到下面的个人资料卡片，头部不再展示这一项 -->
+      <!-- 新增头部统计直连：当前第2项固定拉取带过学员 -->
+      <view class="header-stat-item">
+        <view class="header-stat-icon">👥</view>
+        <view class="header-stat-value">{{headerStats.studentCountLevel}}</view>
+        <view class="header-stat-label">带过学员</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 新增资料展示区域：恢复个人资料和教练介绍两个信息块 -->
+  <view class="content">
+    <view wx:if="{{isLoading}}" class="loading-box">资料加载中...</view>
+
+    <view wx:if="{{!isLoading}}" class="profile-card">
+      <view class="card-head">
+        <view class="card-title-wrap">
+          <text class="card-title-icon">👤</text>
+          <text class="card-title">个人资料</text>
         </view>
-      </view>
-    </view>
-
-    <!-- 基本信息 -->
-    <view class="form-section">
-      <view class="section-title">基本信息</view>
-      
-      <view class="form-item">
-        <text class="label">昵称</text>
-        <input 
-          class="input" 
-          value="{{profile.nickname}}"
-          data-field="nickname"
-          bindinput="onInput"
-          placeholder="请输入昵称"
-        />
+        <!-- 保留说明：用户要求把卡片头编辑入口移到底部操作区，这里不再单独显示 -->
       </view>
 
-      <view class="form-item">
-        <text class="label">性别</text>
-        <radio-group bindchange="onGenderChange">
-          <label class="radio-item">
-            <radio value="1" checked="{{profile.gender === 1}}" color="#007AFF"/>
-            <text>男</text>
-          </label>
-          <label class="radio-item">
-            <radio value="2" checked="{{profile.gender === 2}}" color="#007AFF"/>
-            <text>女</text>
-          </label>
-        </radio-group>
-      </view>
-
-      <view class="form-item">
-        <text class="label">年龄</text>
-        <input 
-          class="input" 
-          type="number"
-          value="{{profile.age}}"
-          data-field="age"
-          bindinput="onInput"
-          placeholder="请输入年龄"
-        />
-      </view>
-
-      <view class="form-item">
-        <text class="label">身高(cm)</text>
-        <input 
-          class="input" 
-          type="number"
-          value="{{profile.height}}"
-          data-field="height"
-          bindinput="onInput"
-          placeholder="请输入身高"
-        />
-      </view>
-
-      <view class="form-item">
-        <text class="label">体重(kg)</text>
-        <input 
-          class="input" 
-          type="number"
-          value="{{profile.weight}}"
-          data-field="weight"
-          bindinput="onInput"
-          placeholder="请输入体重"
-        />
-      </view>
-    </view>
-
-    <!-- 联系方式 -->
-    <view class="form-section">
-      <view class="section-title">联系方式</view>
-      
-      <view class="form-item">
-        <text class="label">手机号</text>
-        <input 
-          class="input" 
-          value="{{profile.phone}}"
-          data-field="phone"
-          bindinput="onInput"
-          placeholder="请输入手机号"
-        />
-      </view>
-
-      <view class="form-item">
-        <text class="label">邮箱</text>
-        <input 
-          class="input" 
-          value="{{profile.email}}"
-          data-field="email"
-          bindinput="onInput"
-          placeholder="请输入邮箱"
-        />
-      </view>
-
-      <view class="form-item">
-        <text class="label">位置</text>
-        <view class="location-picker" bindtap="onLocationChoose">
-          <text class="location-text">{{profile.location || '请选择位置'}}</text>
-          <text class="location-arrow">></text>
+      <!-- 新增资料行渲染：统一展示个人资料大卡片里的所有横向信息行 -->
+      <block wx:for="{{profileRows}}" wx:key="label">
+        <view class="profile-row {{item.multiline ? 'profile-row-multiline' : ''}}">
+          <view class="row-icon">{{item.icon}}</view>
+          <view class="row-label">{{item.label}}</view>
+          <!-- 新增长文本换行：相关证书和荣誉展示支持多行展示，避免内容被截断 -->
+          <view class="row-value {{item.multiline ? 'row-value-multiline' : ''}}">
+            <block wx:if="{{item.multiline}}">
+              <block wx:for="{{item.lineList}}" wx:for-item="lineText" wx:key="index">
+                <view class="row-value-line">{{lineText}}</view>
+              </block>
+            </block>
+            <block wx:else>{{item.value}}</block>
+          </view>
+          <!-- 保留说明：用户要求把行尾箭头统一移到底部操作区，这里不再单独显示 -->
         </view>
-      </view>
+      </block>
     </view>
 
-    <!-- 运动爱好 -->
-    <view class="form-section">
-      <view class="section-title">运动爱好</view>
-      <checkbox-group bindchange="onSportChange">
-        <view class="sport-list">
-          <label 
-            wx:for="{{sportOptions}}" 
-            wx:key="value"
-            class="sport-item"
-          >
-            <checkbox value="{{item.value}}" checked="{{profile.sports.includes(item.value)}}" color="#007AFF"/>
-            <text>{{item.name}}</text>
-          </label>
-        </view>
-      </checkbox-group>
+    <!-- 新增教练介绍：单独放一张说明卡，和统一资料大卡片区分开 -->
+    <view wx:if="{{!isLoading}}" class="intro-card">
+      <view class="intro-title">“ 教练介绍</view>
+      <view class="intro-text">{{introText}}</view>
     </view>
+  </view>
 
-    <!-- 个人简介 -->
-    <view class="form-section">
-      <view class="section-title">个人简介</view>
-      <textarea 
-        class="textarea"
-        value="{{profile.bio}}"
-        data-field="bio"
-        bindinput="onInput"
-        placeholder="介绍一下自己吧..."
-        maxlength="200"
-      />
-      <view class="char-count">{{profile.bio.length}}/200</view>
-    </view>
-
-    <!-- 保存按钮 -->
-    <view class="save-section">
-      <button class="save-btn" form-type="submit">保存资料</button>
-    </view>
-  </form>
+  <!-- 新增分享入口：底部操作区改为页面自然流布局，分享查看者不显示 -->
+  <view wx:if="{{!isShareView}}" class="bottom-bar">
+    <!-- 新增底部编辑入口：把卡片头编辑入口和行尾操作统一收口到底部 -->
+    <button class="edit-btn secondary-btn" bindtap="goToProfileEditor">编辑资料</button>
+    <button class="edit-btn" open-type="share">分享给家长查看</button>
+  </view>
 </view>

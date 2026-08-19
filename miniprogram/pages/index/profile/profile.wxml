@@ -1,16 +1,17 @@
 <view class="page">
 
-<!-- 顶部背景 + 用户信息 -->
+
 <view class="header">
   <view class="header-info">
-    <view class="city">{{profileForm.city || '请填写当前城市'}}</view>
+    填写教练资料
+    </view>
 
     <view class="stats">
-      <view class="profile-name">{{profileForm.nickname || '未设置昵称'}}</view>
+      补充您的专业背景与教学信息，让家长更全面地了解您
     </view>
 
     <view class="edit-btn" bindtap="saveProfile">
-      {{isSaving ? '保存中' : '保存资料'}}
+      完善您的教练档案
       <text class="edit-icon">✎</text>
     </view>
   </view>
@@ -28,33 +29,54 @@
 
     <view class="expand-box base-box">
       <view class="expand-inner">
+        <!-- 新增必填提示：当前页保存时真正强校验的是昵称和电话 -->
+        <view class="required-tip">带 <text class="required-star">*</text> 的项目为必填</view>
         <!-- 新增基础信息编辑：用于提交自己的基础资料 -->
         <view class="field-block">
-          <view class="label">昵称</view>
-          <input class="input" placeholder="请输入昵称" value="{{profileForm.nickname}}" data-field="nickname" bindinput="onFieldInput" />
+          <view class="label">照片</view>
+          <!-- 新增照片上传：基础信息卡顶部直接维护个人照片 -->
+          <view class="upload-area photo-upload" data-field="avatarUrl" bindtap="chooseAndUploadImage">
+            <image wx:if="{{profileForm.avatarUrl}}" class="upload-preview avatar-preview" src="{{profileForm.avatarUrl}}" mode="aspectFill" data-url="{{profileForm.avatarUrl}}" catchtap="previewImage"></image>
+            <view wx:else class="upload-placeholder">点击上传照片</view>
+          </view>
         </view>
         <view class="field-block">
-          <view class="label">电话</view>
-          <input class="input" type="number" placeholder="请输入联系电话" value="{{profileForm.phone}}" data-field="phone" bindinput="onFieldInput" />
+          <view class="label">昵称<text class="required-star">*</text></view>
+          <input class="input" placeholder="如:xx教练" value="{{profileForm.nickname}}" data-field="nickname" bindinput="onFieldInput" />
         </view>
         <view class="field-block">
-          <view class="label">当前城市</view>
-          <input class="input" placeholder="请输入当前城市" value="{{profileForm.city}}" data-field="city" bindinput="onFieldInput" />
+          <!-- 新增展示对齐：表单页联系方式命名与预览页保持一致 -->
+          <view class="label">联系方式<text class="required-star">*</text></view>
+          <input class="input" type="number" maxlength="11" placeholder="请输入11位手机号" value="{{profileForm.phone}}" data-field="phone" bindinput="onFieldInput" />
+          <!-- 新增预览按钮：入口已挪到底部操作区，避免和基础信息输入区混在一起 -->
         </view>
         <view class="field-block">
-          <view class="label">详细地址</view>
-          <textarea placeholder="请输入详细地址" class="textarea" value="{{profileForm.address}}" data-field="address" bindinput="onFieldInput"></textarea>
+          <view class="label">工作经验</view>
+          <!-- 新增数字化资料收集：单独收集工作经验量级，展示页头部直接使用 -->
+          <view class="option-row">
+            <view class="option-chip {{profileForm.experienceLevel === '1年+' ? 'active' : ''}}" data-field="experienceLevel" data-value="1年+" bindtap="onOptionSelect">1年+</view>
+            <view class="option-chip {{profileForm.experienceLevel === '2年+' ? 'active' : ''}}" data-field="experienceLevel" data-value="2年+" bindtap="onOptionSelect">2年+</view>
+          </view>
+        </view>
+        <view class="field-block">
+          <view class="label">带过学员</view>
+          <!-- 新增数字化资料收集：单独收集带过学员量级，展示页头部直接使用 -->
+          <view class="option-row">
+            <view class="option-chip {{profileForm.studentCountLevel === '5+' ? 'active' : ''}}" data-field="studentCountLevel" data-value="5+" bindtap="onOptionSelect">5+</view>
+            <view class="option-chip {{profileForm.studentCountLevel === '10+' ? 'active' : ''}}" data-field="studentCountLevel" data-value="10+" bindtap="onOptionSelect">10+</view>
+            <view class="option-chip {{profileForm.studentCountLevel === '20+' ? 'active' : ''}}" data-field="studentCountLevel" data-value="20+" bindtap="onOptionSelect">20+</view>
+          </view>
         </view>
       </view>
     </view>
   </view>
 
-  <block wx:for="{{cards}}" wx:key="title">
+  <block wx:for="{{cards}}" wx:for-item="card" wx:key="title">
   <view class="item-wrapper">
     <view class="card" bindtap="toggleCard" data-index="{{index}}">
       <view class="left">
-        <text class="icon">{{item.icon}}</text>
-        <text class="title">{{item.title}}</text>
+        <text class="icon">{{card.icon}}</text>
+        <text class="title">{{card.title}}</text>
       </view>
 
       <view class="{{currentIndex === index ? 'arrow rotate' : 'arrow'}}">⌄</view>
@@ -64,13 +86,107 @@
     <view class="expand-box" wx:if="{{currentIndex === index}}">
       <view class="expand-inner">
         <!-- 新增资料编辑：每张卡片对应一个字段，输入后可直接提交入库 -->
-        <view class="label">{{item.title}}</view>
-        <textarea placeholder="{{item.placeholder}}" class="textarea" value="{{item.value}}" data-field="{{item.field}}" bindinput="onFieldInput"></textarea>
-        <!-- 材料上传 -->
+        <view class="label">{{card.title}}</view>
+
+        <!-- 新增多块资料编辑：相关证书和荣誉展示支持多个内容块，并且每块都单独上传佐证 -->
+        <block wx:if="{{card.isMultiBlock}}">
+          <block wx:for="{{card.blockList}}" wx:for-item="blockItem" wx:key="index">
+            <view class="multi-block-card">
+              <view class="multi-block-head">
+                <view class="multi-block-title">{{card.title}} {{index + 1}}</view>
+                <button wx:if="{{card.blockList.length > 1}}" class="field-action-btn danger-action-btn" data-field="{{card.field}}" data-index="{{index}}" bindtap="removeMultiBlock">删除</button>
+              </view>
+              <view class="field-block">
+                <view class="label">{{card.blockLabel}}</view>
+                <textarea placeholder="{{card.placeholder}}" class="textarea" value="{{blockItem.content}}" data-field="{{card.field}}" data-index="{{index}}" bindinput="onMultiBlockInput"></textarea>
+              </view>
+              <view class="field-block">
+                <view class="label">{{card.proofLabel}}<text class="required-star">*</text></view>
+                <view class="upload-area photo-upload" data-field="{{card.field}}" data-card-field="{{card.field}}" data-index="{{index}}" bindtap="chooseAndUploadImage">
+                  <image wx:if="{{blockItem.proof}}" class="upload-preview" src="{{blockItem.proof}}" mode="aspectFill" data-url="{{blockItem.proof}}" catchtap="previewImage"></image>
+                  <view wx:else class="upload-placeholder">点击上传对应佐证</view>
+                </view>
+              </view>
+            </view>
+          </block>
+          <view class="field-action-row">
+            <!-- 新增多块添加按钮：对应模块支持继续追加资料块和佐证 -->
+            <button class="field-action-btn" data-field="{{card.field}}" bindtap="addMultiBlock">添加{{card.title}}</button>
+          </view>
+        </block>
+
+        <block wx:else>
+          <textarea placeholder="{{card.placeholder}}" class="textarea" value="{{card.value}}" data-field="{{card.field}}" bindinput="onFieldInput"></textarea>
+        </block>
+
+        <!-- 新增材料上传：指定卡片可单独补充照片佐证 -->
+        <view wx:if="{{card.proofField}}" class="field-block">
+          <view class="label">{{card.proofLabel}}<text wx:if="{{card.proofRequired}}" class="required-star">*</text></view>
+          <view class="upload-area photo-upload" data-field="{{card.proofField}}" bindtap="chooseAndUploadImage">
+            <image wx:if="{{card.proofValue}}" class="upload-preview" src="{{card.proofValue}}" mode="aspectFill" data-url="{{card.proofValue}}" catchtap="previewImage"></image>
+            <view wx:else class="upload-placeholder">点击上传照片佐证</view>
+          </view>
+        </view>
       </view>
     </view>
   </view>
   </block>
+
+  <view class="item-wrapper">
+    <view class="card">
+      <view class="left">
+        <text class="icon">⭐</text>
+        <text class="title">擅长领域</text>
+      </view>
+    </view>
+
+    <view class="expand-box skill-select-box">
+      <view class="expand-inner">
+        <!-- 新增擅长领域收集：改成可多选标签，让家长一眼能看懂你适合带什么方向 -->
+        <view class="label">请选择你擅长带的课程方向（可多选）</view>
+        <view class="required-tip">文案直接参考创建课程页，按实际擅长内容选择即可。</view>
+
+        <block wx:for="{{skillOptionGroups}}" wx:key="title">
+          <view class="skill-group">
+            <view class="skill-group-title">{{item.title}}</view>
+            <scroll-view class="skill-scroll-view" scroll-x="true" enable-flex="true">
+              <block wx:for="{{item.options}}" wx:for-item="optionItem" wx:key="name">
+                <view
+                  class="skill-chip {{optionItem.selected ? 'active' : ''}}"
+                  data-value="{{optionItem.name}}"
+                  bindtap="toggleSkillOption"
+                >
+                  {{optionItem.name}}
+                </view>
+              </block>
+              <view class="skill-scroll-spacer"></view>
+            </scroll-view>
+          </view>
+        </block>
+
+        <view class="field-block">
+          <view class="label">当前已选</view>
+          <view class="skill-selected-text">{{profileForm.skills || '暂未选择'}}</view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="item-wrapper">
+    <view class="card" bindtap="toggleCard" data-index="aboutMe">
+      <view class="left">
+        <text class="icon">👤</text>
+        <text class="title">关于我</text>
+      </view>
+      <view class="{{currentIndex === 'aboutMe' ? 'arrow rotate' : 'arrow'}}">⌄</view>
+    </view>
+    <view class="expand-box" wx:if="{{currentIndex === 'aboutMe'}}">
+      <view class="expand-inner">
+        <view class="label">关于我</view>
+        <textarea placeholder="介绍一下自己" class="textarea" value="{{profileForm.aboutMe}}" data-field="aboutMe" bindinput="onFieldInput"></textarea>
+      </view>
+    </view>
+  </view>
 
 </view>
 <!-- 进度区 -->
@@ -79,7 +195,7 @@
 </view>
 
 <view class="bottom-bar">
-  <button class="save-btn" loading="{{isSaving}}" bindtap="saveProfile">保存我的资料</button>
-</view>
-
+  <!-- 新增底部预览按钮：在底部操作区统一跳到资料编辑预览页 -->
+  <button class="bottom-action-btn" bindtap="goToProfilePreview">预览资料</button>
+  <button class="bottom-action-btn" loading="{{isSaving}}" bindtap="saveProfile">保存我的资料</button>
 </view>

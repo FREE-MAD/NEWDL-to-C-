@@ -121,12 +121,14 @@ Page({
   },
 
   onPhone(e) {
+    // 新增手动手机号收口：登录页手填联系方式时统一限制为 11 位大陆手机号
+    const phone = String(e.detail.value || '').replace(/\D/g, '').slice(0, 11);
     this.setData({
-      phone: e.detail.value
+      phone
     });
 
     // 用户开始手动输入 → 自动采集取消
-    if (e.detail.value) {
+    if (phone) {
       this.setData({
         autoSelected: false
       });
@@ -184,6 +186,14 @@ Page({
       if (!this.data.phone) {
         wx.showToast({
           title: "请填写联系方式",
+          icon: "none"
+        });
+        return;
+      }
+      // 新增登录手机号校验：手动注册时统一校验中国大陆 11 位手机号
+      if (!/^1[3-9]\d{9}$/.test(String(this.data.phone || '').trim())) {
+        wx.showToast({
+          title: "请填写正确的11位手机号",
           icon: "none"
         });
         return;

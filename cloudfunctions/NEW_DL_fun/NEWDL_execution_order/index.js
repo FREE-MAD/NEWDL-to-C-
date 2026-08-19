@@ -24,6 +24,16 @@ function normalizeCollectionName(collectionName) {
   return getCollectionName(collectionName)
 }
 
+// 新增手机号标准化：课程联系方式统一收口成 11 位纯数字，避免空格和分隔符污染订单数据
+function normalizePhone(phone) {
+  return String(phone || '').replace(/\D/g, '').slice(0, 11)
+}
+
+// 新增手机号格式校验：发布班课程时只接受中国大陆 11 位手机号
+function isValidPhone(phone) {
+  return /^1[3-9]\d{9}$/.test(normalizePhone(phone))
+}
+
 function buildGroupedOrderPayload(submitForm = {}) {
   const courseTarget = submitForm.course_target || {}
   const courseBasic = submitForm.course_basic || {}
@@ -48,6 +58,7 @@ function buildGroupedOrderPayload(submitForm = {}) {
     },
     // 新增学员信息大类：孩子信息只保留一份，不再额外铺平到顶层
     child_profile: {
+      nickname: childProfile.nickname || submitForm.child_nickname || '',
       age: childProfile.age || submitForm.child_age || '',
       gender: childProfile.gender || submitForm.child_gender || '',
       height: childProfile.height || submitForm.child_height || '',
@@ -57,7 +68,9 @@ function buildGroupedOrderPayload(submitForm = {}) {
     teaching_record: {
       category: teachingRecord.category || courseTarget.category || submitForm.category || '',
       title: teachingRecord.title || courseTarget.title || submitForm.title || '',
-      description: teachingRecord.description || courseTarget.description || submitForm.description || ''
+      description: teachingRecord.description || courseTarget.description || submitForm.description || '',
+      // 新增课程计划字段：允许前端在默认模板基础上继续手动编辑
+      course_plan: teachingRecord.course_plan || courseTarget.course_plan || submitForm.course_plan || ''
     },
     // 新增课程配置大类：课时数量、频率、课程人数统一归档
     course_config: {
@@ -74,7 +87,7 @@ function buildGroupedOrderPayload(submitForm = {}) {
     course_basic_info: {
       safety_confirmed: courseBasicInfo.safety_confirmed !== undefined ? !!courseBasicInfo.safety_confirmed : !!courseBasic.safety_confirmed || !!submitForm.safety_confirmed,
       location: courseBasicInfo.location || courseBasic.location || submitForm.location || '',
-      contact: courseBasicInfo.contact || courseBasic.contact || submitForm.contact || '',
+      contact: normalizePhone(courseBasicInfo.contact || courseBasic.contact || submitForm.contact || ''),
       latitude: courseBasicInfo.latitude !== undefined ? courseBasicInfo.latitude : (submitForm.latitude !== undefined ? submitForm.latitude : null),
       longitude: courseBasicInfo.longitude !== undefined ? courseBasicInfo.longitude : (submitForm.longitude !== undefined ? submitForm.longitude : null)
     },
@@ -131,6 +144,24 @@ function getCourseFlowInfo(order = {}) {
   return order.course_flow_info || {}
 }
 
+// 新增课节完成判断：发布页只把“总结内容 + 上课日期”同时存在的课节视为已记录完成
+function isLessonRecorded(lesson = {}) {
+  const hasSummary = !!String(lesson.summary || '').trim()
+  const hasSummaryDate = !!(lesson.summaryDate || lesson.startedAt || lesson.completedAt)
+  return hasSummary && hasSummaryDate
+}
+
+// 新增课表锁定判断：允许修改到接入后累计记录满 3 节课为止；历史汇总课次不计入
+function hasLessonPlanConfigured(order = {}) {
+  const courseFlowInfo = getCourseFlowInfo(order)
+  const schedule = Array.isArray(courseFlowInfo.schedule)
+    ? courseFlowInfo.schedule
+    : (Array.isArray(order.schedule) ? order.schedule : [])
+
+  const recordedLessonCount = schedule.filter(item => isLessonRecorded(item)).length
+  return recordedLessonCount >= 3
+}
+
 function getShareVisibility(order = {}) {
   return order.share_visibility || {}
 }
@@ -158,6 +189,48 @@ function getAcceptorId(order = {}) {
 function currentSafeNumber(value) {
   const num = Number(value)
   return Number.isNaN(num) ? 0 : num
+}
+
+// 新增课节评分收口：统一限制在 0-5 分之间，支持 1 位小数
+function normalizeLessonRating(value) {
+  if (value === '' || value === null || value === undefined) {
+    return ''
+  }
+
+  const rating = Number(value)
+  if (Number.isNaN(rating)) {
+    return ''
+  }
+
+  const safeRating = Math.max(0, Math.min(5, rating))
+  return Number(safeRating.toFixed(1))
+}
+
+// 新增课节标签收口：只保留非空文本，避免脏数据直接进库
+function normalizeLessonRatingTags(tags) {
+  if (!Array.isArray(tags)) {
+    return []
+  }
+
+  return Array.from(new Set(tags
+    .map(item => String(item || '').trim())
+    .filter(Boolean)))
+}
+
+// 新增多维评分收口：只保留 1-5 的整数分，避免前端乱值直接入库
+function normalizeLessonDimensionRatings(rawRatings = {}) {
+  if (!rawRatings || typeof rawRatings !== 'object') {
+    return {}
+  }
+
+  return Object.keys(rawRatings).reduce((result, key) => {
+    const safeKey = String(key || '').trim()
+    const safeValue = Math.max(0, Math.min(5, Math.round(Number(rawRatings[key] || 0))))
+    if (safeKey && safeValue > 0) {
+      result[safeKey] = safeValue
+    }
+    return result
+  }, {})
 }
 
 function normalizeOrderForClient(order = {}) {
@@ -203,9 +276,11 @@ function normalizeOrderForClient(order = {}) {
     latitude: courseBasicInfo.latitude !== undefined ? courseBasicInfo.latitude : (order.latitude !== undefined ? order.latitude : null),
     longitude: courseBasicInfo.longitude !== undefined ? courseBasicInfo.longitude : (order.longitude !== undefined ? order.longitude : null),
     child_age: childProfile.age || order.child_age || '',
+    child_nickname: childProfile.nickname || order.child_nickname || '',
     child_gender: childProfile.gender || order.child_gender || '',
     child_height: childProfile.height || order.child_height || '',
     child_weight: childProfile.weight || order.child_weight || '',
+    course_plan: teachingRecord.course_plan || order.course_plan || '',
     price_interval: coachPrivate.price_interval || order.price_interval || '',
     coach_private_note: coachPrivate.coach_private_note || order.coach_private_note || '',
     allow_transfer_to_other_coach: courseFlowInfo.allow_transfer_to_other_coach !== undefined ? !!courseFlowInfo.allow_transfer_to_other_coach : !!order.allow_transfer_to_other_coach,
@@ -232,8 +307,8 @@ function normalizeOrderForClient(order = {}) {
 }
 
 /**
- * execution_order: 订单执行核心状态机
- * 负责：发布、开课、课节记录、完成、取消
+ * execution_order: 课程执行核心入口
+ * 负责：发布、课表初始化、课节记录、结课、取消
  */
 exports.main = async (event, context) => {
   const { action, orderId } = event
@@ -280,9 +355,9 @@ exports.main = async (event, context) => {
          return await cancelOrder(orderId, openid, userId, event.reason)
 
       case 'close':
-         // 新增结课入口：将课程状态直接切到 closed，供前端“节课”tab调用
+         // 新增结课入口：将课程状态直接切到 closed，并保存结语与教练备注
          if (!orderId) return { code: 1, msg: '缺少订单ID' }
-         return await closeOrder(orderId, openid, userId)
+         return await closeOrder(orderId, openid, userId, event.closeSummary, event.closeCoachNote)
 
       case 'list_myself':
          return await listMyself(openid, userId, event.page || 1, event.limit || 20)
@@ -313,7 +388,9 @@ exports.main = async (event, context) => {
 
       case 'add_lesson':
          if (!orderId) return { code: 1, msg: '缺少订单ID' }
-         return await addLesson(orderId, openid)
+         // 旧手动补加课节入口保留注释，不删除；当前改为通过“总课时 / 半途接入”统一维护，记录满 3 节后锁定，不再支持这里单独追加
+         // return await addLesson(orderId, openid)
+         return { code: 403, msg: '旧课节追加入口已下线' }
 
       case 'sync_lesson_progress':
          if (!orderId) return { code: 1, msg: '缺少订单ID' }
@@ -671,6 +748,11 @@ async function updateLessonContent(orderId, openid, userId, lessonIndex, content
     lesson.summaryUpdatedAt = now
     lesson.logs.push({ action: 'summary_update', time: now, userId })
   }
+  // 新增总结日期保存：发布页要求“总结内容 + 上课日期”同时具备才算已完成
+  if (content.summaryDate !== undefined) {
+    lesson.summaryDate = content.summaryDate || ''
+    lesson.logs.push({ action: 'summary_date_update', time: now, userId })
+  }
   // 新增上下课时间保存：publish 每日总结页填写时间后，和总结一起回写到当前课节
   if (content.startedAt !== undefined) {
     lesson.startedAt = content.startedAt || ''
@@ -679,6 +761,21 @@ async function updateLessonContent(orderId, openid, userId, lessonIndex, content
   if (content.completedAt !== undefined) {
     lesson.completedAt = content.completedAt || ''
     lesson.logs.push({ action: 'completed_at_update', time: now, userId })
+  }
+  // 新增训练评分保存：每日总结保存时同步记录本节课评分
+  if (content.rating !== undefined) {
+    lesson.rating = normalizeLessonRating(content.rating)
+    lesson.logs.push({ action: 'rating_update', time: now, userId })
+  }
+  // 新增训练评价标签保存：用于详情页展示本节课的核心反馈标签
+  if (content.ratingTags !== undefined) {
+    lesson.ratingTags = normalizeLessonRatingTags(content.ratingTags)
+    lesson.logs.push({ action: 'rating_tags_update', time: now, userId })
+  }
+  // 新增多维评分保存：把各个维度的具体分数一起落库，详情页可直接展示
+  if (content.dimensionRatings !== undefined) {
+    lesson.dimensionRatings = normalizeLessonDimensionRatings(content.dimensionRatings)
+    lesson.logs.push({ action: 'dimension_ratings_update', time: now, userId })
   }
   if (content.media !== undefined) lesson.media = content.media // Array of fileIDs
 
@@ -764,7 +861,7 @@ async function cancelOrder(orderId, openid, userId, reason) {
 /**
  * 结课
  */
-async function closeOrder(orderId, openid, userId) {
+async function closeOrder(orderId, openid, userId, closeSummary, closeCoachNote) {
   const { data, ref } = await findOrder(orderId)
   if (!data) return { code: 404, msg: '订单不存在' }
 
@@ -782,7 +879,10 @@ async function closeOrder(orderId, openid, userId) {
         ...getCourseFlowInfo(data),
         fulfill_state: 'closed',
         publish_state: 'closed',
-        closedAt: new Date()
+        closedAt: new Date(),
+        // 新增结课页字段：结语和教练备注随结课动作一起落库
+        close_summary: closeSummary || '',
+        close_coach_note: closeCoachNote || ''
       },
       updatedAt: new Date()
     }
@@ -898,6 +998,11 @@ async function syncLessonProgress(orderId, openid, userId, totalLessons, startLe
     return { code: 403, msg: '无权操作' }
   }
 
+  // 新增三节锁定限制：接入后累计记录满 3 节课后不再允许修改课表
+  if (hasLessonPlanConfigured(data)) {
+    return { code: 409, msg: '接入后已记录满3节课，当前课程不再允许修改总课时或重新半途接入' }
+  }
+
   const safeTotalLessons = parseInt(totalLessons, 10)
   const parsedHistoryCount = parseInt(historyCount, 10)
   const safeHistoryCount = Number.isNaN(parsedHistoryCount) ? null : parsedHistoryCount
@@ -915,34 +1020,37 @@ async function syncLessonProgress(orderId, openid, userId, totalLessons, startLe
   for (let lessonNum = safeStartLesson; lessonNum <= safeTotalLessons; lessonNum += 1) {
     newSchedule.push({
       lesson: lessonNum,
-      status: 'PENDING',
-      coach_status: 'none',
-      parent_status: 'none',
       logs: []
     })
   }
 
   // 新增历史补录摘要：把前面的历史课节收口到一个字段里，避免逐节补建
   const historyDoneCount = safeStartLesson - 1
+  const currentCourseFlowInfo = getCourseFlowInfo(data)
+  const { history_sync: ignoredLegacyHistorySync, ...courseFlowInfoWithoutHistorySync } = currentCourseFlowInfo
+  const nextHistorySync = {
+    synced: historyDoneCount > 0,
+    syncedCount: historyDoneCount,
+    startLesson: safeStartLesson,
+    updatedAt: new Date()
+  }
+  const nextCourseFlowInfo = {
+    ...courseFlowInfoWithoutHistorySync,
+    progress_total: safeTotalLessons,
+    progress_done: historyDoneCount,
+    schedule: newSchedule,
+    history_sync: nextHistorySync,
+    // 新增状态收敛：当前课程流程只区分“未关闭 / 已关闭”，不再在这里推进旧进行中状态
+    fulfill_state: 'pending'
+  }
   await ref.update({
     data: {
       order_base_info: {
         ...getOrderBaseInfo(data),
         updatedAt: new Date()
       },
-      course_flow_info: {
-        ...getCourseFlowInfo(data),
-        progress_total: safeTotalLessons,
-        progress_done: historyDoneCount,
-        schedule: newSchedule,
-        fulfill_state: historyDoneCount > 0 ? 'in_progress' : 'pending',
-        history_sync: {
-          synced: historyDoneCount > 0,
-          syncedCount: historyDoneCount,
-          startLesson: safeStartLesson,
-          updatedAt: new Date()
-        }
-      },
+      // 兼容旧订单里 history_sync 为 null 的情况：这里必须用 _.set 整块替换 course_flow_info，避免 update 深层写入 history_sync.startLesson 时报错
+      course_flow_info: _.set(nextCourseFlowInfo),
       updatedAt: new Date()
     }
   })
@@ -1008,6 +1116,10 @@ async function publishOrder(submitForm, openid, userId) {
   if (publishType !== '发布看看') {
     return { code: 1, msg: '当前仅支持发布看看' }
   }
+  // 新增联系方式校验：云端和前端统一按 11 位大陆手机号收口，避免旧页面绕过前端校验
+  if (!isValidPhone(submitForm.contact || ((submitForm.course_basic || {}).contact) || ((submitForm.course_basic_info || {}).contact))) {
+    return { code: 1, msg: '请填写正确的11位手机号' }
+  }
   const targetCollection = getCollectionName(ORDER_COLLECTION_BASE)
   const publishState = 'direct'
   
@@ -1018,9 +1130,6 @@ async function publishOrder(submitForm, openid, userId) {
   for (let lessonNum = 1; lessonNum <= classCount; lessonNum += 1) {
     schedule.push({
       lesson: lessonNum,
-      status: 'PENDING',
-      coach_status: 'none',
-      parent_status: 'none',
       logs: []
     })
   }
@@ -1087,6 +1196,10 @@ async function updateOrder(orderId, submitForm, openid, userId) {
 
   if (!isPublisher(data, openid, userId)) {
     return { code: 403, msg: '无权修改' }
+  }
+  // 新增修改兜底校验：编辑课程时联系方式也必须保持 11 位大陆手机号
+  if (!isValidPhone(submitForm.contact || ((submitForm.course_basic || {}).contact) || ((submitForm.course_basic_info || {}).contact))) {
+    return { code: 1, msg: '请填写正确的11位手机号' }
   }
 
   const groupedPayload = buildGroupedOrderPayload(submitForm)
