@@ -46,10 +46,8 @@ Page({
       contact: '',
       course_size_mode: '1对1',
       safety_confirmed: false,
-      // 新增多孩子表单：一个课程下允许连续录入多个孩子信息
-      child_profiles: [
-        { nickname: '', age: '', gender: '', height: '', weight: '' }
-      ],
+      // 新增多孩子表单：创建页默认先不放空白孩子卡片，真正点击“添加”后再开始录入
+      child_profiles: [],
       coach_private_note: '',
       allow_transfer_to_other_coach: false,
     },
@@ -67,10 +65,10 @@ Page({
           brief: '专门针对青少年中常见的圆肩、驼背、X/O型腿等问题设计的专项训练。通过一系列定制化的训练计划，帮助孩子改善不良体态，促进健康成长', 
           defaultLessons: DEFAULT_CLASS_LESSON_COUNT,
           images: [], 
-          planText: '一期 12 节：前 3 节进行体态评估与基础动作学习，中间 6 节重点训练肩颈、脊柱、下肢的稳定与拉伸，最后 3 节形成家庭可执行的体态改善方案并跟踪效果。', 
+          planText: '课程分为前期、中期、后期三个阶段推进：前期进行体态评估与基础动作学习，中期重点训练肩颈、脊柱、下肢的稳定与拉伸，后期形成家庭可执行的体态改善方案并跟踪效果。', 
           subItems: ['圆肩驼背改善', '脊柱侧弯预防', 'X/O 型腿调整'], 
           subPlans: { 
-            '圆肩驼背改善': '本子计划聚焦于现代青少年因久坐、低头使用电子设备导致的圆肩驼背问题。通过胸椎伸展、肩胛激活及颈部放松训练，帮助打开上背部、恢复自然肩颈曲线；中间引入弹力带抗阻训练、墙面贴靠站立练习等方法，强化深层稳定肌群，建立正确的静态与动态站姿习惯；最后根据孩子日常学习和生活场景，量身定制一套可在家中轻松执行的5–10分钟纠正操，并提供动作打卡表与视频指导，确保效果可持续。', 
+            '圆肩驼背改善': '本子计划聚焦于现代青少年因久坐、低头使用电子设备导致的圆肩驼背问题。通过胸椎伸展、肩胛激活及颈部放松训练，帮助打开上背部、恢复自然肩颈曲线；中间引入弹力带抗阻训练、墙面贴靠站立练习等方法，强化深层稳定肌群，建立正确的静态与动态站姿习惯；最后根据孩子日常学习和生活场景，量身定制一套可在家中轻松执行的数分钟纠正操，并提供动作打卡表与视频指导，确保效果可持续。', 
   
   
             '脊柱侧弯预防': '针对脊柱发育关键期可能出现的轻度功能性侧弯，本计划强调早期筛查与干预。通过评估（如Adam前屈测试、体表标志观察）判断脊柱力线是否对称，并检测左右侧核心肌群力量差异；围绕躯干旋转控制、单侧臀肌与背肌激活展开系统训练，采用瑞士球、平衡垫等器械提升本体感觉与对称发力能力；重点培训家长掌握居家观察要点（如双肩高度、骨盆倾斜等），并教授简单辅助拉伸与提醒技巧，形成联动干预机制。', 
@@ -85,7 +83,7 @@ Page({
           brief: '提高专项成绩，适合有一定基础、想要突破的孩子', 
           defaultLessons: DEFAULT_CLASS_LESSON_COUNT,
           images: [], 
-          planText: '一期 16 节：前 4 节基础体能与动作技术复盘，中间 8 节进行专项速度、力量、灵敏等强化训练，最后 4 节侧重专项测试与比赛模拟，帮助冲击更高水平。', 
+          planText: '课程分为前期、中期、后期三个阶段推进：前期基础体能与动作技术复盘，中期进行专项速度、力量、灵敏等强化训练，后期侧重专项测试与比赛模拟，帮助冲击更高水平。', 
           subItems: ['基础能力巩固', '专项成绩突破', '考级与比赛冲刺'], 
           subPlans: { 
             '基础能力巩固': '本子计划旨在为高水平专项训练筑牢体能根基。围绕全身力量发展（尤其下肢爆发力与核心抗旋能力）、动态柔韧性（如主动腿摆、髋关节活动度）及神经肌肉协调性展开系统训练，在确保动作模式标准的前提下，逐步提升训练强度与耐力水平；通过复合式动作组合与多方向移动练习，全面提升运动表现的稳定性、效率与抗疲劳能力，为后续突破打下坚实基础。', 
@@ -96,14 +94,14 @@ Page({
         { 
           id: 'track', 
           name: '田径专项', 
-          brief: '100/200 等中长跑、跑跳投综合训练', 
+          brief: '短跑、中长跑、跑跳投综合训练', 
           defaultLessons: DEFAULT_CLASS_LESSON_COUNT,
           images: [], 
-          planText: '一期 16 节：前 4 节学习跑姿、起跑与节奏控制，中间 8 节分模块训练短跑速度、中长跑耐力和跑跳投基础技术，最后 4 节进行全项目综合练习与测试。', 
+          planText: '课程分为前期、中期、后期三个阶段推进：前期学习跑姿、起跑与节奏控制，中期分模块训练短跑速度、中长跑耐力和跑跳投基础技术，后期进行全项目综合练习与测试。', 
           subItems: ['短跑爆发力', '中长跑耐力', '跑跳投综合训练'], 
           subPlans: { 
-            '短跑爆发力': '本计划聚焦100米、200米等短距离项目的核心能力——瞬间加速与高速维持。通过起跑反应训练、前30米蹬伸技术优化及途中跑躯干姿态控制，打造高效跑动模式；结合跨步跳、上坡冲刺、阻力伞跑等手段提升后蹬力量与步频协调性；同时利用视频分析逐帧纠正“坐着跑”“摆臂幅度过小”等常见错误，构建经济、快速、稳定的短跑技术体系。', 
-            '中长跑耐力': '本计划面向800米及以上项目，强调有氧能力与节奏感的协同发展。采用间歇跑、变速节奏跑与匀速耐力跑相结合的方式，循序渐进提升最大摄氧量与乳酸阈值；同步教授腹式呼吸技巧、步频调控策略及心理分段法（如“每200米设定小目标”），帮助孩子找到个人最佳配速节奏，避免因战术失误导致后程乏力，实现全程匀速甚至后程加速的理想状态。', 
+            '短跑爆发力': '本计划聚焦短距离项目的核心能力——瞬间加速与高速维持。通过起跑反应训练、起跑加速段蹬伸技术优化及途中跑躯干姿态控制，打造高效跑动模式；结合跨步跳、上坡冲刺、阻力伞跑等手段提升后蹬力量与步频协调性；同时利用视频分析逐帧纠正“坐着跑”“摆臂幅度过小”等常见错误，构建经济、快速、稳定的短跑技术体系。', 
+            '中长跑耐力': '本计划面向中长距离项目，强调有氧能力与节奏感的协同发展。采用间歇跑、变速节奏跑与匀速耐力跑相结合的方式，循序渐进提升最大摄氧量与乳酸阈值；同步教授腹式呼吸技巧、步频调控策略及心理分段法（如“每段距离设定小目标”），帮助孩子找到个人最佳配速节奏，避免因战术失误导致后程乏力，实现全程匀速甚至后程加速的理想状态。', 
             '跑跳投综合训练': '在稳固基本跑姿基础上，拓展田径基础技能模块。跳远训练注重助跑与起跳的衔接连贯性、空中收腹举腿姿态控制；立定跳远侧重下肢快速伸缩复合能力（SSC）的激发；实心球投掷则从蹬地转髋到鞭打出手进行动力链整合教学。所有内容均强调上下肢协调发力与核心传导效率，为未来参与全能项目或多方向运动发展奠定扎实技术基础。          ' 
           } 
         }, 
@@ -113,11 +111,11 @@ Page({
           brief: '围绕中考项目进行系统训练与模拟测试', 
           defaultLessons: DEFAULT_CLASS_LESSON_COUNT,
           images: [], 
-          planText: '一期 20 节：针对中考各项（如长跑、跳绳、实心球等）进行专项拆解练习，前 5 节打基础，中间 10 节逐项提升成绩，最后 5 节按照中考流程进行全真模拟与应试策略指导。', 
+          planText: '课程分为前期、中期、后期三个阶段推进：针对中考各项（如长跑、跳绳、实心球等）进行专项拆解练习，前期打基础，中期逐项提升成绩，后期按照中考流程进行全真模拟与应试策略指导。', 
           subItems: ['长跑专项', '跳绳专项', '实心球专项'], 
          subPlans: { 
-           '长跑专项': '本计划围绕中考1000米（男）/800米（女）项目，系统提升有氧耐力与跑步经济性。通过节奏跑、间歇跑与呼吸配合训练，帮助学生建立稳定配速策略；结合体能短板分析（如核心不稳、步幅过大），针对性优化跑姿，减少能量浪费；后期融入模拟测试与心理调适，确保考试当天发挥稳定、避免“撞墙”。', 
-           '跳绳专项': '本计划面向800米及以上项目，强调有氧能力与节奏感的协同发展。采用间歇跑、变速节奏跑与匀速耐力跑相结合的方式，循序渐进提升最大摄氧量与乳酸阈值；同步教授腹式呼吸技巧、步频调控策略及心理分段法（如“每200米设定小目标”），帮助孩子找到个人最佳配速节奏，避免因战术失误导致后程乏力，实现全程匀速甚至后程加速的理想状态。', 
+           '长跑专项': '本计划围绕中考长跑项目，系统提升有氧耐力与跑步经济性。通过节奏跑、间歇跑与呼吸配合训练，帮助学生建立稳定配速策略；结合体能短板分析（如核心不稳、步幅过大），针对性优化跑姿，减少能量浪费；后期融入模拟测试与心理调适，确保考试当天发挥稳定、避免“撞墙”。', 
+           '跳绳专项': '本计划面向跳绳专项，强调耐力与节奏感的协同发展。采用间歇跳、变速节奏跳与匀速耐力跳相结合的方式，循序渐进提升心肺能力与动作稳定性；同步教授呼吸配合技巧、摇绳节奏调控策略及心理分段法（如“每段节奏设定小目标”），帮助孩子找到个人最佳配速节奏，避免因体力分配失误导致后程掉速，实现全程稳定甚至后程提速的理想状态。', 
            '实心球专项': '本计划聚焦实心球投掷的技术链条优化，从握球姿势、下肢蹬伸、转髋送肩到最后鞭打出手，逐环节打磨发力顺序与协调性；通过轻重球交替训练、标志物目标投掷等方式提升出手速度与方向控制；同时结合核心抗旋与肩部柔韧性练习，预防运动损伤，确保动作既规范又具爆发力。 ' 
          } 
        }, 
@@ -127,7 +125,7 @@ Page({
          brief: '提升整体体能与协调性，增强自信心', 
          defaultLessons: DEFAULT_CLASS_LESSON_COUNT,
          images: [], 
-         planText: '一期 12 节：以游戏化形式提升孩子的跑、跳、爬、钻、平衡等基础体能，培养良好运动习惯和专注力，让孩子在快乐中爱上运动。', 
+         planText: '以游戏化形式提升孩子的跑、跳、爬、钻、平衡等基础体能，培养良好运动习惯和专注力，让孩子在快乐中爱上运动。', 
          subItems: ['基础体能', '协调性训练', '平衡能力'], 
          subPlans: { 
            '基础体能': '通过趣味障碍跑、动物模仿爬行、追逐游戏等形式，全面提升儿童的力量、速度、耐力与灵活性；所有动作设计符合儿童生长发育特点，避免过早专项化，在快乐中自然发展基础运动能力。', 
@@ -141,7 +139,7 @@ Page({
          brief: '跳绳基础与花样技巧训练，兼顾兴趣与考试', 
          defaultLessons: DEFAULT_CLASS_LESSON_COUNT,
          images: [], 
-         planText: '一期 12 节：从单摇、双摇等基础节奏入手，逐步加入交叉跳、花样跳等技巧训练，同时结合学校考试要求，提升速度与耐力。', 
+         planText: '从单摇、双摇等基础节奏入手，逐步加入交叉跳、花样跳等技巧训练，同时结合学校考试要求，提升速度与耐力。', 
          subItems: ['基础跳绳', '速度跳绳', '花样跳绳'], 
          subPlans: { 
            '基础跳绳': '从正确握绳、手腕摇动、双脚轻跳等基本要素入手，建立规范的单摇节奏；通过地面标记、节拍音乐辅助，帮助孩子掌握稳定、省力的跳绳模式，为后续提速与花样打下技术基础。', 
@@ -155,12 +153,12 @@ Page({
          brief: '乒乓球、羽毛球、篮球、足球等专项兴趣培养', 
          defaultLessons: DEFAULT_CLASS_LESSON_COUNT,
          images: [], 
-         planText: '一期 16 节：根据孩子选择的球类项目，从基本握拍、运球、传接球等动作教起，配合分组对抗、小比赛，提高技术的同时培养团队意识与规则意识。', 
+         planText: '根据孩子选择的球类项目，从基本握拍、运球、传接球等动作教起，配合分组对抗、小比赛，提高技术的同时培养团队意识与规则意识。', 
          subItems: ['乒乓球', '羽毛球', '篮球', '足球'], 
          subPlans: { 
            '乒乓球': '从握拍方式、基本站位、正反手推挡与攻球教起，逐步过渡到发球、接发与简单对打；通过多球训练提升反应速度与击球稳定性，结合小游戏培养球感与专注力，打好入门技术框架。', 
            '羽毛球': '重点训练握拍转换、高远球挥拍轨迹、步法移动（如并步、交叉步）及网前搓放技术；通过定点多球与半场对抗，提升控球能力与场上覆盖意识，激发对隔网对抗项目的兴趣。', 
-           '篮球': '从持球姿势、原地运球、传接球准确性开始，逐步加入行进间运球、三步上篮、基础防守滑步等内容；通过2v2、3v3小比赛培养团队配合意识、规则理解与比赛阅读能力。 ', 
+           '篮球': '从持球姿势、原地运球、传接球准确性开始，逐步加入行进间运球、三步上篮、基础防守滑步等内容；通过双人配合、三人小组等小比赛培养团队配合意识、规则理解与比赛阅读能力。 ', 
            '足球':'围绕脚内侧传球、停球、带球变向、射门等核心技能展开训练；结合绕杆、传准、小型对抗赛等形式，提升球感、空间感知与协作能力，在实战中体验足球乐趣。' 
          } 
        } 
@@ -187,6 +185,10 @@ Page({
     summaryDate: '',
     summaryStartTime: '',
     summaryEndTime: '',
+    // 已停用手动时长输入方案：先保留注释和位置，避免后续需要恢复时找不到上下文
+    // summaryDurationMinutes: '60',
+    // 新增首次自动补全标记：只有当另一侧时间还没填时，才按默认 60 分钟补一次
+    summaryTimeAutoFilled: false,
     // 新增多维评分维度：每个维度单独打分，最终自动汇总综合评分
     summaryDimensionOptions: ['专注', '动作完成', '课堂配合', '训练状态'],
     summaryDimensionRatings: {},
@@ -212,6 +214,55 @@ Page({
       topSafe: h,
       selectedTab: targetOrderId ? selectedTab : 'create'
     });
+
+    // 新增创建权限闸门：默认 V 只允许查看，不允许直接进入新建/编辑班级页面
+    if (!targetOrderId && !this.hasCoachCreatePermission()) {
+      // 新增角色重算兜底：静默登录刚启动时先给 V，这里再按资料/发课痕迹重算一次，避免真正教练被误拦
+      if (app.resolveUserRoleByBusiness) {
+        wx.showLoading({
+          title: '识别身份中...'
+        });
+        app.resolveUserRoleByBusiness(true).then(nextRole => {
+          wx.hideLoading();
+          if (nextRole === 'C') {
+            return;
+          }
+
+          wx.showToast({
+            title: '仅教练可创建课程',
+            icon: 'none'
+          });
+          setTimeout(() => {
+            wx.switchTab({
+              url: '/pages/index/index'
+            });
+          }, 600);
+        }).catch(() => {
+          wx.hideLoading();
+          wx.showToast({
+            title: '仅教练可创建课程',
+            icon: 'none'
+          });
+          setTimeout(() => {
+            wx.switchTab({
+              url: '/pages/index/index'
+            });
+          }, 600);
+        });
+        return;
+      }
+
+      wx.showToast({
+        title: '仅教练可创建课程',
+        icon: 'none'
+      });
+      setTimeout(() => {
+        wx.switchTab({
+          url: '/pages/index/index'
+        });
+      }, 600);
+      return;
+    }
 
     if (!targetOrderId && (selectedTab === 'manage' || selectedTab === 'summary' || selectedTab === 'close')) {
       wx.showToast({
@@ -241,6 +292,26 @@ Page({
 
   onUnload() {
     this.clearBannerBoxTimer();
+  },
+
+  // 新增静默角色判断：当前会话只要已经被业务判成 C，才允许走创建链路
+  hasCoachCreatePermission() {
+    const appRole = app.globalData.userRole || wx.getStorageSync('userRole') || 'V';
+    return appRole === 'C';
+  },
+
+  // 新增管理页权限收口：不是当前班级所属教练时，统一退回班级展示页
+  redirectToPreviewPage(orderId) {
+    if (!orderId) {
+      wx.switchTab({
+        url: '/pages/index/index'
+      });
+      return;
+    }
+
+    wx.redirectTo({
+      url: `/pages/task/progress/progress_specialOperation/progress_specialOperation?id=${orderId}`
+    });
   },
 
   // 新增顶部三 tab：创建班课程、课节管理、每日总结
@@ -377,12 +448,39 @@ Page({
     return {
       summaryDate: fallbackDate,
       summaryStartTime: this.formatPickerTime(startedAt),
-      summaryEndTime: this.formatPickerTime(completedAt)
+      summaryEndTime: this.formatPickerTime(completedAt),
+      summaryTimeAutoFilled: !!(startedAt && completedAt)
     };
   },
 
-  // 新增一小时自动推算：录入上课或下课时间时，另一个时间默认按一小时自动补全
-  shiftSummaryTime(dateValue, timeValue, offsetHours) {
+  // 新增分钟数清洗：时长输入只保留正整数分钟，避免把空值/非法值直接写进联动逻辑
+  parseSummaryDurationMinutes(rawValue) {
+    const cleanedValue = String(rawValue || '').replace(/[^\d]/g, '');
+    const parsedValue = Number(cleanedValue);
+    if (!cleanedValue || !Number.isFinite(parsedValue) || parsedValue <= 0) {
+      return 0;
+    }
+    return Math.min(parsedValue, 1440);
+  },
+
+  // 新增课节时长计算：已有上下课时间时，自动回填真实分钟数，方便继续编辑
+  calculateSummaryDurationMinutes(startInput, endInput) {
+    if (!startInput || !endInput) {
+      return 0;
+    }
+
+    const startedAt = startInput instanceof Date ? startInput : new Date(startInput);
+    const completedAt = endInput instanceof Date ? endInput : new Date(endInput);
+    if (Number.isNaN(startedAt.getTime()) || Number.isNaN(completedAt.getTime())) {
+      return 0;
+    }
+
+    const diffMinutes = Math.round((completedAt.getTime() - startedAt.getTime()) / 60000);
+    return diffMinutes > 0 ? diffMinutes : 0;
+  },
+
+  // 新增按分钟推算：录入上课/下课时间后，另一端时间按时长分钟自动联动
+  shiftSummaryTime(dateValue, timeValue, offsetMinutes) {
     if (!dateValue || !timeValue) {
       return { date: dateValue || '', time: '' };
     }
@@ -392,7 +490,7 @@ Page({
       return { date: dateValue || '', time: '' };
     }
 
-    shiftedDate.setHours(shiftedDate.getHours() + offsetHours);
+    shiftedDate.setMinutes(shiftedDate.getMinutes() + offsetMinutes);
     return {
       date: this.formatPickerDate(shiftedDate),
       time: this.formatPickerTime(shiftedDate)
@@ -761,9 +859,7 @@ Page({
       item.nickname || item.age || item.gender || item.height || item.weight
     );
 
-    return filteredList.length
-      ? filteredList
-      : [{ nickname: '', age: '', gender: '', height: '', weight: '' }];
+    return filteredList;
   },
 
   applyOrderToForm(order) {
@@ -800,6 +896,7 @@ Page({
         contact: courseBasic.contact || order.contact || '',
         course_size_mode: courseBasic.course_size_mode || order.course_size_mode || '1对1',
         safety_confirmed: courseBasic.safety_confirmed !== undefined ? !!courseBasic.safety_confirmed : !!order.safety_confirmed,
+        // 新增空孩子兼容：没填任何孩子资料时，这里保持 0 个，不再强行补一个空卡片
         child_profiles: childProfiles,
         coach_private_note: coachPrivate.coach_private_note || order.coach_private_note || '',
         allow_transfer_to_other_coach: coachPrivate.allow_transfer_to_other_coach !== undefined ? !!coachPrivate.allow_transfer_to_other_coach : !!order.allow_transfer_to_other_coach,
@@ -854,6 +951,31 @@ Page({
       }
 
       const orderData = result.data || {};
+      const myOpenid = app.globalData.openid || wx.getStorageSync('openid') || '';
+      const myToken = app.globalData.token || wx.getStorageSync('token') || '';
+      const isOwner = (orderData.publisher_openid && orderData.publisher_openid === myOpenid)
+        || (orderData.publisher_Id && orderData.publisher_Id === myToken);
+
+      // 新增所属教练校验：管理页只允许课程所属教练进入，其他用户统一回班级展示页
+      if (!isOwner) {
+        wx.showToast({
+          title: '仅课程所属教练可管理',
+          icon: 'none'
+        });
+        setTimeout(() => {
+          this.redirectToPreviewPage(orderId);
+        }, 600);
+        return;
+      }
+
+      // 新增角色即时升级：只要已命中所属教练，就把当前会话同步成 C
+      if (app.saveUserIdentity) {
+        app.saveUserIdentity({
+          userRole: 'C',
+          needChooseRole: false
+        });
+      }
+
       const schedule = this.buildScheduleView(orderData.schedule || []);
       const displaySchedule = this.buildDisplaySchedule(schedule, orderData);
       const historyCount = (((orderData || {}).history_sync || {}).syncedCount) || 0;
@@ -1038,14 +1160,14 @@ Page({
     });
   },
 
-  // 新增孩子卡片删除：至少保留一个录入框，避免页面直接空掉
+  // 新增孩子卡片删除：删除到最后一个时允许回到 0 个，和默认态保持一致
   removeChildProfile(e) {
     const index = Number(e.currentTarget.dataset.index || 0);
     const childProfiles = this.normalizeChildProfiles(this.data.form.child_profiles);
 
     if (childProfiles.length <= 1) {
       this.setData({
-        'form.child_profiles': [{ nickname: '', age: '', gender: '', height: '', weight: '' }]
+        'form.child_profiles': []
       });
       return;
     }
@@ -1072,9 +1194,7 @@ Page({
           course_size_mode: '1对1',
           safety_confirmed: false,
           course_plan: '',
-          child_profiles: [
-            { nickname: '', age: '', gender: '', height: '', weight: '' }
-          ],
+          child_profiles: [],
           coach_private_note: '',
           allow_transfer_to_other_coach: false
         },
@@ -1383,30 +1503,69 @@ Page({
     this.setData({ summaryDate: e.detail.value });
   },
 
-  // 新增上课时间选择：录入上课时间后，默认自动推算一小时后的下课时间
+  // 新增上课时间选择：只有下课时间还没填时，才按默认 60 分钟补一次；后续手动改时间不再强制联动
   handleSummaryStartTimeChange(e) {
     const summaryStartTime = e.detail.value;
     const summaryDate = this.data.summaryDate || this.formatPickerDate(new Date());
-    const shifted = this.shiftSummaryTime(summaryDate, summaryStartTime, 1);
-
-    this.setData({
+    const nextData = {
       summaryDate,
-      summaryStartTime,
-      summaryEndTime: shifted.time || this.data.summaryEndTime
-    });
+      summaryStartTime
+    };
+
+    if (!this.data.summaryEndTime) {
+      const shifted = this.shiftSummaryTime(summaryDate, summaryStartTime, 60);
+      nextData.summaryEndTime = shifted.time || this.data.summaryEndTime;
+      nextData.summaryTimeAutoFilled = true;
+    } else {
+      nextData.summaryTimeAutoFilled = false;
+    }
+
+    this.setData(nextData);
   },
 
-  // 新增下课时间选择：录入下课时间后，默认反推一小时前的上课时间
+  // 新增下课时间选择：只有上课时间还没填时，才按默认 60 分钟反推一次；后续手动改时间不再强制联动
   handleSummaryEndTimeChange(e) {
     const summaryEndTime = e.detail.value;
     const summaryDate = this.data.summaryDate || this.formatPickerDate(new Date());
-    const shifted = this.shiftSummaryTime(summaryDate, summaryEndTime, -1);
-
-    this.setData({
-      summaryDate: shifted.date || summaryDate,
-      summaryStartTime: shifted.time || this.data.summaryStartTime,
+    const nextData = {
+      summaryDate,
       summaryEndTime
-    });
+    };
+
+    if (!this.data.summaryStartTime) {
+      const shifted = this.shiftSummaryTime(summaryDate, summaryEndTime, -60);
+      nextData.summaryDate = shifted.date || summaryDate;
+      nextData.summaryStartTime = shifted.time || this.data.summaryStartTime;
+      nextData.summaryTimeAutoFilled = true;
+    } else {
+      nextData.summaryTimeAutoFilled = false;
+    }
+
+    this.setData(nextData);
+  },
+
+  // 新增时长手动输入：支持直接录入 90/120 等分钟数，并自动联动开始/结束时间
+  handleSummaryDurationInput(e) {
+    const rawValue = String(e.detail.value || '').replace(/[^\d]/g, '');
+    const summaryDurationMinutes = rawValue.slice(0, 4);
+    const durationMinutes = this.parseSummaryDurationMinutes(summaryDurationMinutes);
+    const summaryDate = this.data.summaryDate || this.formatPickerDate(new Date());
+    const nextData = {
+      summaryDurationMinutes
+    };
+
+    if (durationMinutes > 0) {
+      nextData.summaryDate = summaryDate;
+      if (this.data.summaryStartTime) {
+        const shifted = this.shiftSummaryTime(summaryDate, this.data.summaryStartTime, durationMinutes);
+        nextData.summaryEndTime = shifted.time || this.data.summaryEndTime;
+      } else if (this.data.summaryEndTime) {
+        const shifted = this.shiftSummaryTime(summaryDate, this.data.summaryEndTime, -durationMinutes);
+        nextData.summaryStartTime = shifted.time || this.data.summaryStartTime;
+      }
+    }
+
+    this.setData(nextData);
   },
 
   async saveSummary() {
@@ -1452,6 +1611,17 @@ Page({
     try {
       const startedAt = this.buildLessonDateTime(this.data.summaryDate, this.data.summaryStartTime);
       const completedAt = this.buildLessonDateTime(this.data.summaryDate, this.data.summaryEndTime);
+      // 新增时间先后校验：避免把同一天里“下课早于上课”的无效课节时间直接存入数据库
+      if (startedAt && completedAt) {
+        const startedAtTime = new Date(startedAt).getTime();
+        const completedAtTime = new Date(completedAt).getTime();
+        if (Number.isFinite(startedAtTime) && Number.isFinite(completedAtTime) && completedAtTime <= startedAtTime) {
+          wx.hideLoading();
+          wx.showToast({ title: '下课时间需晚于上课时间', icon: 'none' });
+          return;
+        }
+      }
+
       const lessonContent = {
         summary: summaryInput,
         // 新增总结日期保存：已完成状态依赖“总结内容 + 上课日期”同时存在
@@ -1661,6 +1831,12 @@ Page({
         const result = res.result || {};
         if (result.code === 0 || result.status === 'success' || result._id) {
             console.log(`[publish_pdd] [onSubmit] 发布成功, OrderID: ${result.orderId || result._id}`);
+            if (app.saveUserIdentity) {
+              app.saveUserIdentity({
+                userRole: 'C',
+                needChooseRole: false
+              });
+            }
             wx.showToast({ title: this.data.isEditMode ? '修改成功' : '发布成功' });
             
             setTimeout(() => {

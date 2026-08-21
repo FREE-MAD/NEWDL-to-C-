@@ -195,7 +195,7 @@
 </view>
 
 <view class="bottom-bar">
+  <button class="bottom-action-btn" loading="{{isSaving}}" bindtap="saveProfile">保存我的资料</button>
   <!-- 新增底部预览按钮：在底部操作区统一跳到资料编辑预览页 -->
   <button class="bottom-action-btn" bindtap="goToProfilePreview">预览资料</button>
-  <button class="bottom-action-btn" loading="{{isSaving}}" bindtap="saveProfile">保存我的资料</button>
 </view>

@@ -5,6 +5,18 @@ Page({
   data: {
     isLoading: false,
     isShareView: false,
+    sharerOpenid: '',
+    profileOwnerOpenid: '',
+    sharePageMode: 'normal',
+    securityReview: {
+      status: '',
+      reason: '',
+      message: '',
+      checkType: '',
+      failedTextIndex: -1,
+      failedImageIndex: -1
+    },
+    securityReviewText: '审核中',
     profile: {
       avatarUrl: '',
       nickname: '',
@@ -37,22 +49,78 @@ Page({
   onLoad(options) {
     // 新增分享来源识别：从分享卡片进入的查看者不显示底部操作区
     const isShareView = !!(options && options.fromShare === '1')
+    const sharerOpenid = String((options && options.sharerOpenid) || '').trim()
     this.setData({
-      isShareView
+      isShareView,
+      sharerOpenid
     })
+    this.syncSharePageMode()
     // 新增分享访问记录：从分享入口进入时，立即把 APPID 和访问时间写入数据库
     if (isShareView) {
       this.logShareView()
     }
-    // 新增预览草稿读取：进入预览页时先接收资料编辑页传来的未保存内容
-    this.previewDraft = this.consumePreviewDraft()
+    // 新增草稿使用边界：分享查看页只展示已保存资料，不再混入当前访客本地草稿
+    this.previewDraft = this.shouldUsePreviewDraft() ? this.consumePreviewDraft() : null
     this.loadProfile()
   },
 
   onShow() {
-    // 新增预览草稿刷新：页面再次展示时继续接收最新草稿，避免二次进入时漏掉新昵称
-    this.previewDraft = this.consumePreviewDraft() || this.previewDraft
+    this.syncSharePageMode()
+    this.applyShareViewLock()
+    // 新增草稿刷新边界：普通预览页继续吃最新草稿，分享查看页始终只看云端已保存结果
+    this.previewDraft = this.shouldUsePreviewDraft()
+      ? (this.consumePreviewDraft() || this.previewDraft)
+      : null
     this.loadProfile()
+  },
+
+  // 新增资料分享页模式同步：把分享者本人和普通查看者收口到同一份页面态数据里
+  syncSharePageMode() {
+    const sharePageMode = this.data.isShareView ? this.resolveSharePageMode() : 'normal'
+    this.setData({ sharePageMode })
+    return sharePageMode
+  },
+
+  // 新增资料分享锁页判断：除了分享者本人外，所有分享进入者都只允许停留在当前页查看
+  isShareLockedViewer() {
+    return this.data.isShareView && this.data.sharePageMode !== 'share_owner'
+  },
+
+  // 新增资料分享锁页应用：分享查看者进入当前页后隐藏首页按钮，尽量只保留当前页查看能力
+  applyShareViewLock() {
+    if (!this.isShareLockedViewer()) {
+      return
+    }
+
+    if (wx.hideHomeButton) {
+      wx.hideHomeButton()
+    }
+  },
+
+  // 新增旧分享页退出判断：只要本次唤起不是分享入口，就不再继续沿用缓存里的分享态
+  shouldExitSharePreview() {
+    if (!this.data.isShareView) {
+      return false
+    }
+
+    const enterSource = getApp().globalData.enterSource || 'normal'
+    return enterSource !== 'share'
+  },
+
+  // 新增资料分享页退出分流：分享者本人回资料编辑台，其他查看者回首页
+  redirectAfterShareSessionExpired() {
+    if (this.isShareLockedViewer()) {
+      return
+    }
+
+    if (this.data.sharePageMode === 'share_owner') {
+      this.goToMainPage()
+      return
+    }
+
+    wx.switchTab({
+      url: '/pages/index/index'
+    })
   },
 
   // 新增已填写判断：展示页只保留真正填写过的项目，空内容不再占位显示
@@ -167,10 +235,29 @@ Page({
     return String(profile.nickname || '').trim() || '默认教练'
   },
 
-  // 新增ID直显：用户要求 header-id 直接展示完整 openid，方便页面里一眼核对身份
-  buildCoachId() {
+  // 新增当前 openid 统一读取：资料本人态、分享本人态、分享访客态都走同一个入口判断
+  getCurrentOpenid() {
     const app = getApp()
-    const openid = app.globalData.openid || wx.getStorageSync('openid') || ''
+    return app.globalData.openid || wx.getStorageSync('openid') || ''
+  },
+
+  // 新增分享资料目标读取：分享查看优先读分享者资料，普通预览继续读当前用户自己的资料
+  getRequestedProfileOpenid() {
+    if (this.data.isShareView && this.data.sharerOpenid) {
+      return this.data.sharerOpenid
+    }
+
+    return this.getCurrentOpenid()
+  },
+
+  // 新增草稿可用判断：只有普通预览页允许吃本地临时草稿，分享查看页统一只看已保存内容
+  shouldUsePreviewDraft() {
+    return !this.data.isShareView
+  },
+
+  // 新增ID直显：分享查看时展示被分享教练自己的 openid，普通预览页继续展示当前用户 openid
+  buildCoachId(profileOwnerOpenid = '') {
+    const openid = String(profileOwnerOpenid || this.data.profileOwnerOpenid || this.getCurrentOpenid() || '').trim()
     return openid || '未设置'
   },
 
@@ -218,8 +305,12 @@ Page({
     }
   },
 
-  // 新增资料合并：预览页优先展示刚填写的草稿，没有草稿时再回退到云端资料
+  // 新增资料合并：普通预览页优先展示本地草稿，分享查看页只展示云端已保存资料
   mergeProfileWithDraft(profile = {}) {
+    if (!this.shouldUsePreviewDraft()) {
+      return Object.assign({}, profile || {})
+    }
+
     return Object.assign({}, profile || {}, this.previewDraft || {})
   },
 
@@ -232,11 +323,22 @@ Page({
     return '这位教练还没有填写教练介绍，先去完善资料吧。'
   },
 
-  // 新增资料展示加载：直接读取当前微信用户自己的云端资料
+  // 新增审核状态文案：底部固定显示资料当前审核进度，审核完成后切成“审核通过”
+  buildSecurityReviewText(review = {}) {
+    const status = String((review && review.status) || '').trim()
+    if (status === 'approved') {
+      return '审核通过'
+    }
+    return '审核中'
+  },
+
+  // 新增资料展示加载：普通预览读自己资料，分享查看按 sharerOpenid 读取被分享教练资料
   loadProfile() {
     if (this.data.isLoading) {
       return
     }
+
+    const requestedProfileOpenid = this.getRequestedProfileOpenid()
 
     this.setData({
       isLoading: true
@@ -246,27 +348,42 @@ Page({
       name: 'NEWDL_mine_user',
       data: {
         action: 'getProfile',
+        targetOpenid: requestedProfileOpenid,
         envVersion: getApp().globalData.miniEnvVersion || 'develop'
       },
       success: (res) => {
         const result = res && res.result
-        const profile = result && result.status === 'success' ? (result.profile || {}) : {}
+        if (!result || result.status !== 'success') {
+          wx.showToast({
+            title: (result && result.message) || '资料加载失败',
+            icon: 'none'
+          })
+          return
+        }
+
+        const profile = result.profile || {}
+        const securityReview = result.securityReview || {}
+        const profileOwnerOpenid = String(result.profileOwnerOpenid || requestedProfileOpenid || '').trim()
         const nextProfile = Object.assign({}, this.data.profile, this.mergeProfileWithDraft(profile))
         const app = getApp()
+        const shouldSyncLocalIdentity = !this.data.isShareView || this.data.sharePageMode === 'share_owner'
 
-        if (nextProfile.nickname) {
+        if (shouldSyncLocalIdentity && nextProfile.nickname) {
           app.globalData.nickname = nextProfile.nickname
           wx.setStorageSync('nickname', nextProfile.nickname)
         }
 
         this.setData({
           profile: nextProfile,
+          profileOwnerOpenid,
           headerName: this.buildHeaderName(nextProfile),
           profileRows: this.buildProfileRows(nextProfile),
           headerStats: this.buildHeaderStats(nextProfile),
           introText: this.buildIntroText(nextProfile),
-          coachId: this.buildCoachId(),
-          profileTagline: this.formatSingleLineValue(nextProfile.skills, '专注青少年体能训练')
+          coachId: this.buildCoachId(profileOwnerOpenid),
+          profileTagline: this.formatSingleLineValue(nextProfile.skills, '专注青少年体能训练'),
+          securityReview,
+          securityReviewText: this.buildSecurityReviewText(securityReview)
         })
       },
       fail: () => {
@@ -274,12 +391,14 @@ Page({
         if (this.previewDraft) {
           this.setData({
             profile: nextProfile,
+            profileOwnerOpenid: requestedProfileOpenid,
             headerName: this.buildHeaderName(nextProfile),
             profileRows: this.buildProfileRows(nextProfile),
             headerStats: this.buildHeaderStats(nextProfile),
             introText: this.buildIntroText(nextProfile),
-            coachId: this.buildCoachId(),
-            profileTagline: this.formatSingleLineValue(nextProfile.skills, '专注青少年体能训练')
+            coachId: this.buildCoachId(requestedProfileOpenid),
+            profileTagline: this.formatSingleLineValue(nextProfile.skills, '专注青少年体能训练'),
+            securityReviewText: this.buildSecurityReviewText(this.data.securityReview || {})
           })
           return
         }
@@ -298,8 +417,39 @@ Page({
 
   // 新增跳转编辑：展示页只负责查看，真正编辑统一走资料完善页
   goToProfileEditor() {
-    wx.navigateTo({
+    // 新增分享查看锁页兜底：即便按钮异常露出，非分享者本人也不允许离开当前分享页
+    if (this.isShareLockedViewer()) {
+      wx.showToast({
+        title: '该分享页已锁定，只支持当前页查看',
+        icon: 'none'
+      })
+      return
+    }
+
+    // 新增资料分享页返回分流：分享者本人从自己的分享页返回时替换当前页，避免继续停留在分享态页面栈里
+    this.openProfileEditor(!!this.data.isShareView)
+  },
+
+  // 新增资料操作台统一跳转：普通预览页保留原跳转，分享本人回编辑台时直接替换当前页
+  openProfileEditor(replaceCurrentPage = false) {
+    if (this.isShareLockedViewer()) {
+      wx.showToast({
+        title: '该分享页已锁定，只支持当前页查看',
+        icon: 'none'
+      })
+      return
+    }
+
+    const navigateMethod = replaceCurrentPage ? 'redirectTo' : 'navigateTo'
+    wx[navigateMethod]({
       url: '/pages/index/profile/profile'
+    })
+  },
+
+  // 新增主页面返回：分享者本人在自己的分享页里点击底部按钮时，直接回主页
+  goToMainPage() {
+    wx.switchTab({
+      url: '/pages/index/index'
     })
   },
 
@@ -313,6 +463,16 @@ Page({
     }
   },
 
+  // 新增资料分享页模式判断：保留和课程分享日志一致的 pageMode 字段，便于后续按本人/他人进入拆分统计
+  resolveSharePageMode() {
+    const currentOpenid = getApp().globalData.openid || wx.getStorageSync('openid') || ''
+    if (this.data.sharerOpenid && currentOpenid && this.data.sharerOpenid === currentOpenid) {
+      return 'share_owner'
+    }
+
+    return 'share_viewer'
+  },
+
   // 新增分享访问日志：从分享页进入时记录 APPID 和时间到数据库
   logShareView() {
     wx.cloud.callFunction({
@@ -323,7 +483,12 @@ Page({
         shareLog: {
           clientAppId: this.getMiniProgramAppId(),
           pagePath: '/pages/profile/edit/edit',
-          enteredAt: new Date().toISOString()
+          enteredAt: new Date().toISOString(),
+          from: 'share',
+          page: 'profile_edit',
+          pageMode: this.data.sharePageMode || this.resolveSharePageMode(),
+          sharerOpenid: this.data.sharerOpenid || '',
+          sourcePage: 'share'
         }
       },
       fail: (error) => {
@@ -335,10 +500,24 @@ Page({
   // 新增分享卡片：支持把当前资料页分享给家长查看
   onShareAppMessage() {
     const nickname = this.data.profile.nickname || '默认教练'
+    const sharerOpenid = getApp().globalData.openid || wx.getStorageSync('openid') || ''
     return {
       title: `${nickname}的教练资料`,
       // 新增分享查看参数：让分享进入的访问者隐藏底部操作区
-      path: '/pages/profile/edit/edit?fromShare=1'
+      path: `/pages/profile/edit/edit?fromShare=1&sharerOpenid=${sharerOpenid}`
     }
+  },
+
+  // 新增系统返回拦截：分享查看者触发物理返回或手势返回时，继续留在当前资料分享页
+  onBackPress() {
+    if (!this.isShareLockedViewer()) {
+      return false
+    }
+
+    wx.showToast({
+      title: '该分享页已锁定，只支持当前页查看',
+      icon: 'none'
+    })
+    return true
   }
 })

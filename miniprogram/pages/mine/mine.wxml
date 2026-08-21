@@ -12,7 +12,7 @@
         mode="aspectFill"
       />
       <view class="avatar-edit">
-        <image class="edit-icon" src="/images/camera.png" />
+        <text class="edit-icon">📷</text>
       </view>
     </view>
 
@@ -24,12 +24,12 @@
         </text>
         <text class="sub">
           ID: {{user.id || '—'}} ·
-          {{user.role ? roleMap[user.role] : '未设置身份'}}
+          {{user.roleLabel || '预览方'}}
         </text>
       </view>
 
       <button class="edit-btn" bindtap="onEditProfile">
-        编辑资料
+        {{editButtonText}}
       </button>
     </view>
 

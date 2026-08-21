@@ -1,3 +1,5 @@
+const { prepareImageForUpload } = require('../../utils/imageUpload')
+
 Page({
   data: {
     // 采集页面
@@ -61,7 +63,7 @@ Page({
   },
 
   // 选择头像
-  onChooseAvatar(e) {
+  async onChooseAvatar(e) {
     const {
       avatarUrl
     } = e.detail;
@@ -78,25 +80,28 @@ Page({
       title: '上传头像中...'
     });
 
-    wx.cloud.uploadFile({
-      cloudPath: cloudPath,
-      filePath: avatarUrl, // 临时文件路径
-      success: res => {
-        console.log('头像上传成功', res.fileID);
-        this.setData({
-          avatarUrl: res.fileID
-        }); // 更新为 fileID
-        wx.hideLoading();
-      },
-      fail: err => {
-        console.error('头像上传失败', err);
-        wx.hideLoading();
-        wx.showToast({
-          title: '头像上传失败',
-          icon: 'none'
-        });
-      }
-    });
+    try {
+      // 新增头像上传前压缩：登录页如果恢复启用，也统一先压缩图片再上传
+      const preparedImage = await prepareImageForUpload(avatarUrl, {
+        maxBytes: 300 * 1024
+      })
+      const res = await wx.cloud.uploadFile({
+        cloudPath: cloudPath,
+        filePath: preparedImage.filePath || avatarUrl // 临时文件路径
+      })
+      console.log('头像上传成功', res.fileID);
+      this.setData({
+        avatarUrl: res.fileID
+      }); // 更新为 fileID
+    } catch (err) {
+      console.error('头像上传失败', err);
+      wx.showToast({
+        title: '头像上传失败',
+        icon: 'none'
+      });
+    } finally {
+      wx.hideLoading();
+    }
   },
 
   // 协议勾选
@@ -236,16 +241,29 @@ Page({
             let nickname = res.result.nickname
             let role = res.result.role
             let isNewUser = res.result.isNewUser
+            let openid = res.result.openid || ''
             console.log("token是", token, "是否新用户:", isNewUser);
             
             const app = getApp();
-            app.globalData.token = token;
-            app.globalData.userRole = role;
-            app.globalData.nickname = nickname;
-            
-            wx.setStorageSync('token', token);
-            wx.setStorageSync('nickname', nickname);
-            wx.setStorageSync('userRole', role);
+            if (app.saveUserIdentity) {
+              app.saveUserIdentity({
+                token,
+                userRole: role,
+                nickname,
+                openid,
+                needChooseRole: false
+              });
+            } else {
+              app.globalData.token = token;
+              app.globalData.userRole = role;
+              app.globalData.nickname = nickname;
+              app.globalData.openid = openid;
+
+              wx.setStorageSync('token', token);
+              wx.setStorageSync('nickname', nickname);
+              wx.setStorageSync('userRole', role);
+              wx.setStorageSync('openid', openid);
+            }
 
             // 根据是否新用户显示不同的提示
             if (isNewUser) {
@@ -365,16 +383,30 @@ Page({
                   const role = result.role;
                   const isNewUser = result.isNewUser;
                   const avatarUrl = result.avatarUrl;
+                  const openid = result.openid || '';
                   const app = getApp();
-                  app.globalData.token = token;
-                  app.globalData.userRole = role;
-                  app.globalData.nickname = nickname;
-                  app.globalData.avatarUrl = avatarUrl;
-                  app.globalData.needChooseRole = false;
-                  wx.setStorageSync("token", token);
-                  wx.setStorageSync("userRole", role);
-                  wx.setStorageSync("nickname", nickname);
-                  wx.setStorageSync("avatarUrl", avatarUrl);
+                  if (app.saveUserIdentity) {
+                    app.saveUserIdentity({
+                      token,
+                      userRole: role,
+                      nickname,
+                      avatarUrl,
+                      openid,
+                      needChooseRole: false
+                    });
+                  } else {
+                    app.globalData.token = token;
+                    app.globalData.userRole = role;
+                    app.globalData.nickname = nickname;
+                    app.globalData.avatarUrl = avatarUrl;
+                    app.globalData.openid = openid;
+                    app.globalData.needChooseRole = false;
+                    wx.setStorageSync("token", token);
+                    wx.setStorageSync("userRole", role);
+                    wx.setStorageSync("nickname", nickname);
+                    wx.setStorageSync("avatarUrl", avatarUrl);
+                    wx.setStorageSync("openid", openid);
+                  }
                   
                   wx.showToast({
                     title: isNewUser ? "注册成功" : "登录成功",

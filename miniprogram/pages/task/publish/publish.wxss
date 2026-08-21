@@ -36,6 +36,8 @@ page {
   display: flex;
   background-color: #fff;
   height: 96rpx;
+  padding: 0 8rpx;
+  box-sizing: border-box;
   flex-shrink: 0;
   box-shadow: var(--shadow-sm);
   z-index: 100;
@@ -44,14 +46,26 @@ page {
 
 .tab-item {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 0 8rpx;
+  box-sizing: border-box;
   font-size: 28rpx;
   color: var(--text-sub);
   position: relative;
   transition: all 0.3s ease;
+}
+
+/* 新增真机页签收口：窄屏设备上避免标题互相挤压，保证点击区和文字都更稳定 */
+.tab-item text {
+  max-width: 100%;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tab-item.active {
@@ -732,6 +746,15 @@ page {
   width: 220rpx;
   height: 96rpx;
   line-height: 96rpx;
+  flex-shrink: 0;
+}
+
+/* 新增创建页底部操作区真机适配：给底部手势区域留出安全距离，避免按钮贴边太紧 */
+.create-actions {
+  align-items: center;
+  padding-bottom: 8rpx;
+  padding-bottom: calc(8rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(8rpx + env(safe-area-inset-bottom));
 }
 
 .manage-actions {
@@ -1168,7 +1191,9 @@ page {
 }
 
 .footer-spacer {
-  height: 100rpx;
+  height: 140rpx;
+  height: calc(140rpx + constant(safe-area-inset-bottom));
+  height: calc(140rpx + env(safe-area-inset-bottom));
 }
 
 /* 弹窗样式 */

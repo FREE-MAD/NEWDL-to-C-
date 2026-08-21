@@ -70,6 +70,11 @@ Page({
     return 'share_viewer';
   },
 
+  // 新增分享本人判断：课程分享页只给分享者本人保留“回操作台”分流
+  isShareOwnerMode() {
+    return this.data.pageMode === 'share_owner' && this.data.isOwner;
+  },
+
   // 新增进入日志：记录 from、pageMode、time、openid，后续方便排查分享链路
   recordEntryLog(extra = {}) {
     if (!this.data.orderId || this.data.hasRecordedEnter) {
@@ -149,9 +154,8 @@ Page({
       item.nickname || item.age || item.gender || item.height || item.weight
     );
 
-    return filteredList.length
-      ? filteredList
-      : [{ nickname: '', age: '', gender: '', height: '', weight: '' }];
+    // 新增空资料过滤：孩子信息展示页只保留真实填写过的孩子，没填就保持 0 个
+    return filteredList;
   },
 
   // 新增课节展示状态：统一按“是否已经记录完成”来决定展示状态
@@ -241,6 +245,16 @@ Page({
     });
   },
 
+  onShow() {
+    // 新增分享会话失效判断：页面是旧分享页，但本次小程序唤起已经不是分享入口时，立刻退出旧分享态
+    if (this.shouldExitSharePreview()) {
+      this.redirectAfterShareSessionExpired();
+      return;
+    }
+
+    this.startDisplayGuideAutoCollapse();
+  },
+
        // 班级展示页说明默认展开 5 秒后自动收起，减少顶部占位
        startDisplayGuideAutoCollapse() {
          this.clearDisplayGuideTimer();
@@ -257,6 +271,40 @@ Page({
 
          clearTimeout(this.displayGuideTimer);
          this.displayGuideTimer = null;
+       },
+
+       // 新增分享会话判断：分享态只对“本次分享唤起”生效，缓存恢复后要立即失效
+       shouldExitSharePreview() {
+         if (!this.data.isShareEntry) {
+           return false;
+         }
+
+         const enterSource = app.globalData.enterSource || 'normal';
+         return enterSource !== 'share';
+       },
+
+       // 新增分享态退出分流：所属教练回管理页，其他查看者回首页，避免继续停留在旧分享缓存里
+       redirectAfterShareSessionExpired() {
+         if (this.isShareOwnerMode() && this.data.orderId) {
+           this.openCoachConsole(true);
+           return;
+         }
+
+         wx.switchTab({
+           url: '/pages/index/index'
+         });
+       },
+
+       // 新增教练操作台统一跳转：分享本人回操作台时替换当前分享页，普通进入沿用原来的页面跳转
+       openCoachConsole(replaceCurrentPage = false) {
+         if (!this.data.orderId) {
+           return;
+         }
+
+         const navigateMethod = replaceCurrentPage ? 'redirectTo' : 'navigateTo';
+         wx[navigateMethod]({
+           url: `/pages/task/publish/publish?id=${this.data.orderId}&tab=manage`
+         });
        },
 
        // 班级展示页说明支持手动展开/收起，避免自动收起后无法再次查看
@@ -428,17 +476,20 @@ Page({
 
   // 新增教练操作台跳转：所有 C 方操作统一迁移到 publish 页面
   handleGoCoachConsole() {
-    if (!this.data.orderId || this.data.isShareEntry) {
+    if (!this.data.orderId) {
+      return;
+    }
+
+    if (!this.data.isOwner) {
       wx.showToast({
-        title: '分享查看模式不可操作',
+        title: '仅课程所属教练可操作',
         icon: 'none'
       });
       return;
     }
 
-    wx.navigateTo({
-      url: `/pages/task/publish/publish?id=${this.data.orderId}&tab=manage`
-    });
+    // 新增分享本人跳转分流：教练从自己分享页返回时直接替换当前页，避免继续停留在分享态页面栈里
+    this.openCoachConsole(!!this.data.isShareEntry);
   },
 
   // 新增分享路径：分享出去后先落分享态，再按分享者本人或普通查看者区分 pageMode

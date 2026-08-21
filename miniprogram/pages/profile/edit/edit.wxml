@@ -84,4 +84,25 @@
     <button class="edit-btn secondary-btn" bindtap="goToProfileEditor">编辑资料</button>
     <button class="edit-btn" open-type="share">分享给家长查看</button>
   </view>
+
+  <!-- 新增底部审核状态：资料保存后始终在页面最底下显示审核进度，审核完成后切换为“审核通过” -->
+  <view wx:if="{{!isShareView}}" class="security-review-footer {{securityReview.status === 'approved' ? 'security-review-footer-approved' : 'security-review-footer-pending'}}">
+    <text class="security-review-label">资料审核状态</text>
+    <text class="security-review-text">{{securityReviewText}}</text>
+  </view>
+
+  <!-- 新增资料分享态提示：分享态只限制当前资料页，分享者本人可直接返回编辑台 -->
+  <view wx:if="{{isShareView}}" class="share-view-banner">
+    <view class="share-view-banner-text">
+      {{sharePageMode === 'share_owner' ? '当前是你自己的资料分享页，先按家长视角预览；只有你本人可以返回主页面继续操作。' : '当前为资料分享锁定查看模式，除分享者本人外，其他进入者只能停留在当前页查看，不能返回或跳转其他页面。'}}
+    </view>
+    <!-- 新增资料分享本人回主页面入口：只给分享者本人显示，避免家长误入其他页面 -->
+    <button
+      wx:if="{{sharePageMode === 'share_owner'}}"
+      class="share-view-editor-btn"
+      bindtap="goToMainPage"
+    >
+      返回主页面
+    </button>
+  </view>
 </view>

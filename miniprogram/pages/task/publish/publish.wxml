@@ -231,7 +231,7 @@
           <!-- 新增孩子信息块：记录孩子基础画像，便于教练内部判断 -->
           <view class="section-card create-group-card">
             <view class="section-card-title">第三类：孩子信息</view>
-            <view class="group-subtitle">这里记录孩子的基础信息，方便教练判断课程安排。现在一个课程可以连续添加多个孩子。</view>
+            <view class="group-subtitle">这里记录孩子的基础信息，方便教练判断课程安排。现在一个课程可以连续添加多个孩子，当前已添加 {{form.child_profiles.length || 0}} 个孩子。</view>
 
             <!-- 新增多孩子录入：同一门课下可以连续新增多个孩子卡片 -->
             <block wx:for="{{form.child_profiles}}" wx:key="index">
@@ -283,6 +283,11 @@
                 </view>
               </view>
             </block>
+
+            <!-- 新增空态提示：默认 0 个孩子时，只展示提示和新增按钮，不先塞空白卡片 -->
+            <view class="empty-state" wx:if="{{!form.child_profiles || form.child_profiles.length === 0}}">
+              <text>当前还没有添加孩子，点下面按钮开始录入。</text>
+            </view>
 
             <!-- 新增添加孩子按钮：让教练继续往下补录更多孩子 -->
             <view class="child-profile-add" bindtap="addChildProfile">+ 再添加一个孩子</view>
@@ -517,6 +522,8 @@
                 </picker>
               </view>
 
+              <!-- 已停用手动时长输入方案：当前按你的需求恢复为“双时间独立可改，只在首次缺省时补 60 分钟” -->
+
               <view class="form-group">
                 <view class="form-label required">下课时间</view>
                 <picker mode="time" value="{{summaryEndTime}}" bindchange="handleSummaryEndTimeChange">
@@ -528,7 +535,7 @@
             </view>
 
             <view class="summary-time-tip">
-              上课时间、下课时间现在都必填；任选一个时间后，系统会先按 1 小时自动补全另一项，你也可以再手动调整。
+              上课时间、下课时间现在都必填；只有第一次录入且另一侧还没填时，系统才会默认补 60 分钟。两边都有值以后，你再改时间就不会再被 60 分钟逻辑锁住。
             </view>
 
             <view class="form-label required">课程总结</view>

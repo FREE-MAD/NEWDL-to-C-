@@ -9,7 +9,7 @@
     <view class="header-topbar">
       <view class="header-left">
         <view class="hello"> {{welcome}} 👋</view>
-        <view class="header-desc">开启高效的课程管理之旅</view>
+        <view class="header-desc">{{headerDesc}}</view>
         <view class="location">
           <!-- 📍 北京市朝阳区 -->
         </view>
@@ -109,7 +109,7 @@
   <view class="resume-group visible" animation="{{animations[1]}}">
     <view class="resume-group-head">
       <view class="resume-group-title">教练简历</view>
-      <view class="resume-group-sub">完善资料并查看对外展示效果</view>
+      <view class="resume-group-sub">{{resumeGroupSub}}</view>
     </view>
 
     <view

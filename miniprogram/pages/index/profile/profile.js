@@ -1,3 +1,5 @@
+const { prepareImageForUpload } = require('../../../utils/imageUpload')
+
 // 新增擅长领域选项：文案直接参考创建课程页的课程方向，资料页改成可多选收集
 const SKILL_OPTION_GROUPS = [
   { title: '体态矫正', options: ['圆肩驼背改善', '脊柱侧弯预防', 'X/O 型腿调整'] },
@@ -10,10 +12,20 @@ const SKILL_OPTION_GROUPS = [
 ]
 
 Page({
+  localImagePathMap: {},
+
   data: {
     currentIndex: -1,   // 当前展开的卡片索引（默认全部收起）
     isSaving: false,
     isUploadingImage: false,
+    securityReview: {
+      status: '',
+      reason: '',
+      message: '',
+      checkType: '',
+      failedTextIndex: -1,
+      failedImageIndex: -1
+    },
     profileForm: {
       avatarUrl: '',
       nickname: '',
@@ -50,6 +62,7 @@ Page({
   },
 
   onLoad() {
+    this.localImagePathMap = {}
     this.applyProfileForm(this.data.profileForm)
     this.loadProfile()
   },
@@ -163,6 +176,23 @@ Page({
     this.applyProfileForm(nextProfileForm)
     // 新增预览草稿联动：图片上传后同步缓存，保证预览页能立即看到
     this.savePreviewDraft(nextProfileForm)
+  },
+
+  // 新增本地图片路径键：普通图片和多块佐证统一生成稳定 key，方便提交审核时找到原始本地图
+  buildLocalImageKey(field, index = -1) {
+    if (typeof index === 'number' && index >= 0) {
+      return `${field}.${index}.proof`
+    }
+    return String(field || '').trim()
+  },
+
+  // 新增本地图片路径记录：上传原图后把当前本地路径记下来，后续审核时再压成最小图
+  rememberLocalImagePath(field, filePath, index = -1) {
+    const localImageKey = this.buildLocalImageKey(field, index)
+    if (!localImageKey || !filePath) {
+      return
+    }
+    this.localImagePathMap[localImageKey] = filePath
   },
 
   // 新增擅长领域多选：资料页支持直接点选多个方向，结果统一回写到 skills 字段
@@ -374,6 +404,93 @@ Page({
     return `NEWDL/users/${userKey}`
   },
 
+  // 新增审核图下载源：优先复用当前会话的本地图，没有时再从云存储把原图下载回来做最小压缩
+  async resolveReviewSourceFilePath(fileID, localImageKey = '') {
+    const localFilePath = localImageKey ? this.localImagePathMap[localImageKey] : ''
+    if (localFilePath) {
+      return localFilePath
+    }
+
+    const safeFileId = String(fileID || '').trim()
+    if (!safeFileId) {
+      return ''
+    }
+
+    const downloadRes = await wx.cloud.downloadFile({
+      fileID: safeFileId
+    })
+    return String((downloadRes && downloadRes.tempFilePath) || '').trim()
+  },
+
+  // 新增审核图上传：保存原图后，提交审核时单独压成最小图并上传到 review 目录，只给审核使用
+  async uploadReviewImage(field, originalFileId, localImageKey = '') {
+    const safeOriginalFileId = String(originalFileId || '').trim()
+    if (!safeOriginalFileId) {
+      return ''
+    }
+
+    const reviewSourceFilePath = await this.resolveReviewSourceFilePath(safeOriginalFileId, localImageKey)
+    if (!reviewSourceFilePath) {
+      return safeOriginalFileId
+    }
+
+    const preparedReviewImage = await prepareImageForUpload(reviewSourceFilePath, {
+      maxBytes: 80 * 1024,
+      qualityList: [20, 10, 5]
+    })
+    const userFolder = this.getUserUploadFolder()
+    const uploadRes = await wx.cloud.uploadFile({
+      cloudPath: `${userFolder}/_security_review/${field}/${Date.now()}-${Math.floor(Math.random() * 10000)}.jpg`,
+      filePath: preparedReviewImage.filePath || reviewSourceFilePath
+    })
+    return String((uploadRes && uploadRes.fileID) || safeOriginalFileId).trim()
+  },
+
+  // 新增审核资料构建：提交审核时单独组装一份“最小审核图”资料，不影响数据库里保存的原图
+  async buildReviewProfile(profileForm = {}) {
+    const reviewProfile = Object.assign({}, profileForm)
+
+    reviewProfile.avatarUrl = await this.uploadReviewImage('avatarUrl', profileForm.avatarUrl, this.buildLocalImageKey('avatarUrl'))
+    reviewProfile.basicPhotoProof = await this.uploadReviewImage('basicPhotoProof', profileForm.basicPhotoProof, this.buildLocalImageKey('basicPhotoProof'))
+    reviewProfile.educationPhotoProof = await this.uploadReviewImage('educationPhotoProof', profileForm.educationPhotoProof, this.buildLocalImageKey('educationPhotoProof'))
+
+    const relatedCertificatesList = this.parseMultiBlockValue(profileForm.relatedCertificates)
+    if (relatedCertificatesList.length) {
+      const nextRelatedCertificatesList = []
+      for (let index = 0; index < relatedCertificatesList.length; index += 1) {
+        const blockItem = relatedCertificatesList[index]
+        nextRelatedCertificatesList.push({
+          content: String((blockItem && blockItem.content) || '').trim(),
+          proof: await this.uploadReviewImage(
+            'relatedCertificates',
+            blockItem && blockItem.proof,
+            this.buildLocalImageKey('relatedCertificates', index)
+          )
+        })
+      }
+      reviewProfile.relatedCertificates = this.serializeMultiBlockValue(nextRelatedCertificatesList)
+    }
+
+    const honorShowcaseList = this.parseMultiBlockValue(profileForm.honorShowcase)
+    if (honorShowcaseList.length) {
+      const nextHonorShowcaseList = []
+      for (let index = 0; index < honorShowcaseList.length; index += 1) {
+        const blockItem = honorShowcaseList[index]
+        nextHonorShowcaseList.push({
+          content: String((blockItem && blockItem.content) || '').trim(),
+          proof: await this.uploadReviewImage(
+            'honorShowcase',
+            blockItem && blockItem.proof,
+            this.buildLocalImageKey('honorShowcase', index)
+          )
+        })
+      }
+      reviewProfile.honorShowcase = this.serializeMultiBlockValue(nextHonorShowcaseList)
+    }
+
+    return reviewProfile
+  },
+
   // 新增资料图片上传：按字段选择一张图片并上传到云存储
   chooseAndUploadImage(e) {
     const field = e.currentTarget.dataset.field
@@ -385,7 +502,7 @@ Page({
 
     wx.chooseImage({
       count: 1,
-      sizeType: ['compressed'],
+      sizeType: ['original'],
       success: async (res) => {
         const filePath = res.tempFilePaths && res.tempFilePaths[0]
         if (!filePath) {
@@ -408,6 +525,7 @@ Page({
           })
 
           if (cardField && !Number.isNaN(blockIndex)) {
+            this.rememberLocalImagePath(cardField, filePath, blockIndex)
             this.updateMultiBlockProof(cardField, blockIndex, uploadRes.fileID || '')
             wx.showToast({
               title: '上传成功',
@@ -416,6 +534,7 @@ Page({
             return
           }
 
+          this.rememberLocalImagePath(field, filePath)
           this.updateImageField(field, uploadRes.fileID || '')
           if (field === 'avatarUrl') {
             const app = getApp()
@@ -424,7 +543,7 @@ Page({
           }
 
           wx.showToast({
-            title: '上传成功',
+            title: field === 'avatarUrl' ? '已上传，保存时会自动检测' : '上传成功',
             icon: 'success'
           })
         } catch (error) {
@@ -463,6 +582,9 @@ Page({
             wx.setStorageSync('avatarUrl', nextProfileForm.avatarUrl)
           }
           this.applyProfileForm(nextProfileForm)
+          this.setData({
+            securityReview: result.securityReview || this.data.securityReview
+          })
         } else {
           wx.showToast({
             title: '资料加载失败',
@@ -480,6 +602,34 @@ Page({
         wx.hideLoading()
       }
     })
+  },
+
+  // 新增资料后台审核触发：保存成功后单独发起审核请求，不阻塞当前编辑和返回操作
+  async triggerProfileSecurityReview(profileForm = {}) {
+    try {
+      const reviewProfile = await this.buildReviewProfile(profileForm)
+      wx.cloud.callFunction({
+        name: 'NEWDL_mine_user',
+        data: {
+          action: 'submitProfileSecurityReview',
+          reviewProfile,
+          envVersion: getApp().globalData.miniEnvVersion || 'develop'
+        },
+        success: (res) => {
+          const result = res && res.result
+          if (result && result.status === 'success' && result.review) {
+            this.setData({
+              securityReview: result.review
+            })
+          }
+        },
+        fail: (error) => {
+          console.warn('资料后台审核触发失败', error)
+        }
+      })
+    } catch (error) {
+      console.warn('构建审核专用最小图片失败', error)
+    }
   },
 
   // 新增资料保存：提交当前页面编辑内容并入库到 users 集合
@@ -552,22 +702,45 @@ Page({
         if (result && result.status === 'success') {
           const app = getApp()
           const latestProfile = result.profile || profileForm
-          app.globalData.nickname = latestProfile.nickname || app.globalData.nickname
-          app.globalData.avatarUrl = latestProfile.avatarUrl || app.globalData.avatarUrl || ''
-          wx.setStorageSync('nickname', app.globalData.nickname || '')
-          wx.setStorageSync('avatarUrl', app.globalData.avatarUrl || '')
+          if (app.saveUserIdentity) {
+            app.saveUserIdentity({
+              nickname: latestProfile.nickname || app.globalData.nickname,
+              avatarUrl: latestProfile.avatarUrl || app.globalData.avatarUrl || '',
+              userRole: 'C',
+              needChooseRole: false
+            })
+          } else {
+            app.globalData.nickname = latestProfile.nickname || app.globalData.nickname
+            app.globalData.avatarUrl = latestProfile.avatarUrl || app.globalData.avatarUrl || ''
+            app.globalData.userRole = 'C'
+            wx.setStorageSync('nickname', app.globalData.nickname || '')
+            wx.setStorageSync('avatarUrl', app.globalData.avatarUrl || '')
+            wx.setStorageSync('userRole', 'C')
+          }
 
           this.applyProfileForm(Object.assign({}, this.data.profileForm, latestProfile))
+          this.setData({
+            securityReview: result.securityReview || {
+              status: 'pending',
+              reason: '',
+              message: '资料已保存，图片正在后台检测',
+              checkType: '',
+              failedTextIndex: -1,
+              failedImageIndex: -1
+            }
+          })
+          // 新增先保存后审核：资料入库成功后再异步发起审核，不占用用户当前保存操作时间
+          this.triggerProfileSecurityReview(profileForm)
 
           wx.showToast({
-            title: '保存成功',
+            title: (result && result.message) || '保存成功，图片正在后台检测',
             icon: 'success'
           })
           return
         }
 
         wx.showToast({
-          title: (result && result.message) || '保存失败',
+          title: ((result && result.message) === '您发布的内容含违规信息' ? '您发布的内容含违规信息' : ((result && result.message) || '保存失败')),
           icon: 'none'
         })
       },

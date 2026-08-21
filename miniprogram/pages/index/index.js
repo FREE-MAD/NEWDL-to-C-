@@ -4,7 +4,10 @@ Page({
     headerState: 'collapsed',
     animations: [{}, {}, {}, {}],
     role: null,
+    roleLabel: '预览方',
     nickname: '',
+    headerDesc: '先完善资料，再进入课程管理',
+    resumeGroupSub: '先填写资料，系统识别后即可进入教练链路',
 
     // Dashboard Data
     panelItems: [],
@@ -29,10 +32,78 @@ Page({
     this.checkLoginStatus();
   },
 
+  // 新增角色文案整理：首页和我的页统一按 C / V 两种口径给用户提示
+  getRoleLabel(role) {
+    return role === 'C' ? '教练' : '预览方';
+  },
+
+  // 新增顶部欢迎文案：教练看管理引导，预览方看成长引导
+  buildHeaderDesc(role) {
+    return role === 'C'
+      ? '开启高效的课程管理之旅'
+      : '先完善资料，再进入课程管理';
+  },
+
+  // 新增简历区说明：预览方直接告诉他先做什么，避免看到一堆入口还不知道第一步
+  buildResumeGroupSub(role) {
+    return role === 'C'
+      ? '完善资料并查看对外展示效果'
+      : '先填写资料，系统识别后即可进入教练链路';
+  },
+
+  // 新增首页入口口径统一：同一套卡片，根据当前角色切换更贴近用户的说明文案
+  buildPanelItems(role) {
+    const isCoachRole = role === 'C';
+
+    return [
+      {
+        title: "创建课程",
+        sub: isCoachRole ? "新建班级并填写时间、地点等信息" : "先填写教练资料，识别后再创建班级",
+        color: "green",
+        action: "P_TASK_PUBLISH"
+      },
+      {
+        title: "资料填写",
+        sub: isCoachRole ? "继续完善教练简历内容" : "先补一份教练资料，系统会自动识别",
+        color: "orange",
+        action: "C_PROFILE_EDIT"
+      },
+      {
+        title: "简历预览",
+        sub: isCoachRole ? "查看展示页面效果" : "先看看对外展示效果长什么样",
+        color: "purple",
+        action: "PROFILE_EDIT_PAGE"
+      }
+    ];
+  },
+
+  // 新增首页状态同步：统一把角色、文案和入口说明一次性刷到页面上
+  applyUserState(role, nickname, token) {
+    const safeRole = role || 'V';
+    const hasLoginIdentity = !!(token && nickname);
+
+    this.setData({
+      token: token || null,
+      role: hasLoginIdentity ? safeRole : null,
+      roleLabel: this.getRoleLabel(safeRole),
+      nickname: nickname || '',
+      headerState: 'collapsed',
+      welcome: hasLoginIdentity ? '欢迎回来' : '你好,远方的朋友',
+      headerDesc: this.buildHeaderDesc(safeRole),
+      resumeGroupSub: this.buildResumeGroupSub(safeRole),
+      panelItems: this.buildPanelItems(safeRole)
+    });
+  },
+
   checkLoginStatus() {
     const app = getApp();
     const { token, userRole, nickname } = app.globalData;
     
+    // 新增首页静默登录兜底：只要用户进入首页，就补一次默认登录态，保证“打开小程序直接可用”
+    if ((!token || !userRole || !nickname) && app.ensureSilentLogin) {
+      app.ensureSilentLogin();
+    }
+
     // 如果没有全局数据，尝试从缓存读取
     if (!token || !userRole || !nickname) {
         const cachedToken = wx.getStorageSync('token');
@@ -45,26 +116,25 @@ Page({
         }
     }
 
-    // 首页不再因为登录状态切换布局，统一保留 setPanelB
-    this.setPanelB();
-
     if (app.globalData.token && app.globalData.userRole && app.globalData.nickname) {
-      this.setData({
-        token: app.globalData.token,
-        role: app.globalData.userRole,
-        nickname: app.globalData.nickname,
-        headerState: 'collapsed',
-        welcome: '欢迎回来' 
-       
-      });
+      this.applyUserState(
+        app.globalData.userRole,
+        app.globalData.nickname,
+        app.globalData.token
+      );
     } else {
-      this.setData({
-        token: null,
-        role: null,
-        nickname: '',
-        headerState: 'collapsed',
-        welcome: '你好,远方的朋友'
-      });
+      this.applyUserState('V', '', '');
+    }
+
+    // 新增首页角色重算：静默登录后再按资料/发课痕迹刷新一次，避免首页提示慢半拍
+    if (app.resolveUserRoleByBusiness) {
+      app.resolveUserRoleByBusiness().then((nextRole) => {
+        this.applyUserState(
+          nextRole,
+          app.globalData.nickname || wx.getStorageSync('nickname') || '',
+          app.globalData.token || wx.getStorageSync('token') || ''
+        );
+      }).catch(() => {});
     }
   },
 
@@ -77,23 +147,30 @@ Page({
 
   // --- Dashboard Methods ---
   setPanelB() {
+    const safeRole = this.data.role || 'V';
     this.setData({
-      panelItems: [
-      // 首页第1项：突出“先创建课程”的起点，和底部“课程管理”形成清晰分工
-      { title: "创建课程", sub: "新建班级并填写时间、地点等信息", color: "green",  action: "P_TASK_PUBLISH" },
-      // 临时注释首页第二个功能入口（grid-box 第2项“需求管理”），后续需要时可直接恢复
-      // { title: "需求管理", sub: "管理已发需求", color: "orange", action: "P_DEMAND_MANAGE" },
-      // 首页第2/3项：统一归为教练简历功能分组
-      { title: "资料填写", sub: "完善教练简历内容", color: "orange", action: "C_PROFILE_EDIT" },
-      // 新增首页资料入口：第3个卡片点击后跳转到 pages/profile/edit/edit
-      { title: "简历预览", sub: "查看展示页面效果", color: "purple", action: "PROFILE_EDIT_PAGE" }
-      ]
+      panelItems: this.buildPanelItems(safeRole),
+      roleLabel: this.getRoleLabel(safeRole),
+      headerDesc: this.buildHeaderDesc(safeRole),
+      resumeGroupSub: this.buildResumeGroupSub(safeRole)
     });
   },
 
   onPanelTap(e) {
     const action = e.currentTarget.dataset.action;
     console.log("点击 action:", action);
+    // 新增首页教练入口引导：预览方点击“创建课程”时，先带去资料填写页，不让用户点完才被生硬拦下
+    if (action === 'P_TASK_PUBLISH' && this.data.role !== 'C') {
+      wx.showToast({
+        title: '先填写教练资料，再创建课程',
+        icon: 'none'
+      });
+      setTimeout(() => {
+        wx.navigateTo({ url: "/pages/index/profile/profile" });
+      }, 500);
+      return;
+    }
+
     const actionMap = {
       C_TASK_PROGRESS: () => wx.navigateTo({ url: "/pages/task/progress/progress" }),
       C_PROFILE_EDIT:  () => wx.navigateTo({ url: "/pages/index/profile/profile" }),

@@ -49,8 +49,8 @@
 }
 
 .edit-icon {
-  width: 20rpx;
-  height: 20rpx;
+  font-size: 20rpx;
+  line-height: 1;
 }
 
 /* 右侧信息 */

@@ -1,6 +1,6 @@
 // app.js
 App({
-  onLaunch: function () {
+  onLaunch: function (options) {
     
     this.globalData = {
       // env 参数说明：
@@ -10,6 +10,12 @@ App({
       env: "cloud1-6gh7jgl8c5b16a83"
       // cloud.init({ env: 'cloud1-6gh7jgl8c5b16a83' })
     };
+    // 新增唤起来源记录：分享预览态是否继续生效，统一看本次 onShow 的进入来源
+    this.globalData.enterSource = 'normal';
+    this.globalData.enterScene = 0;
+    this.globalData.enterPath = '';
+    this.globalData.enterQuery = {};
+    this.globalData.shareSessionActive = false;
     // 新增环境版本识别：develop 使用 NDLdev_，trial/release 使用 NDLreal_
     const miniEnvVersion = this.getMiniEnvVersion();
     this.globalData.miniEnvVersion = miniEnvVersion;
@@ -42,7 +48,9 @@ App({
       console.log("App 启动：需要选择身份");
     }
 
-    // MVP: 暂时绕过登录页，统一使用静默教练身份
+    // 新增首次启动来源初始化：冷启动时就先记住当前是不是分享唤起
+    this.updateEnterContext(options);
+    // MVP: 暂时绕过登录页，统一使用静默访客身份；后续再按资料/发课行为自动升级成 C
     this.ensureSilentLogin();
     // 新增静默登录补库：启动后补调登录云函数，自动创建/更新 users 集合中的当前用户
     this.ensureCloudUserRecord();
@@ -52,32 +60,27 @@ App({
     }
   },
 
-  // MVP: 如果本地没有登录态，则自动补一份默认 C 身份
+  onShow: function (options) {
+    this.updateEnterContext(options);
+  },
+
+  // MVP: 如果本地没有登录态，则自动补一份默认 V 身份；是否升级成 C 交给业务痕迹判断
   ensureSilentLogin: function () {
     if (this.globalData.token && this.globalData.userRole && this.globalData.nickname) {
       return;
     }
 
     const silentUser = {
-      token: 'silent_c_user',
-      userRole: 'C',
-      nickname: '默认教练',
+      token: 'silent_v_user',
+      userRole: 'V',
+      nickname: '微信用户',
       avatarUrl: '',
       needChooseRole: false
     };
 
-    this.globalData.token = silentUser.token;
-    this.globalData.userRole = silentUser.userRole;
-    this.globalData.nickname = silentUser.nickname;
-    this.globalData.avatarUrl = silentUser.avatarUrl;
-    this.globalData.needChooseRole = silentUser.needChooseRole;
+    this.saveUserIdentity(silentUser);
 
-    wx.setStorageSync('token', silentUser.token);
-    wx.setStorageSync('userRole', silentUser.userRole);
-    wx.setStorageSync('nickname', silentUser.nickname);
-    wx.setStorageSync('avatarUrl', silentUser.avatarUrl);
-
-    console.log('App 启动：已启用静默登录，默认身份为 C');
+    console.log('App 启动：已启用静默登录，默认身份为 V');
   },
 
   // 新增静默登录补库方法：保留本地静默登录，同时把当前微信用户同步到云端 users 集合
@@ -89,10 +92,19 @@ App({
     wx.cloud.callFunction({
       name: 'NEWDL_login_fun',
       data: {
-        nickname: this.globalData.nickname || '默认教练',
-        role: this.globalData.userRole || 'C',
+        nickname: this.globalData.nickname || '微信用户',
+        role: this.globalData.userRole || 'V',
         avatarUrl: this.globalData.avatarUrl || '',
-        envVersion: this.globalData.miniEnvVersion || 'develop'
+        // 新增启动补库标记：让云函数识别为轻量建档，不在首屏阶段跑重型审核和角色重算
+        bootstrapLogin: true,
+        envVersion: this.globalData.miniEnvVersion || 'develop',
+        // 新增首次进入来源：onLaunch 解析出的场景值/启动路径/来源类型/启动 query，仅用于新建用户时写入 firstLoginFrom
+        firstLoginFrom: {
+          scene: this.globalData.enterScene || 0,
+          path: this.globalData.enterPath || '',
+          source: this.globalData.enterSource || 'normal',
+          query: this.globalData.enterQuery || {}
+        }
       },
       success: (res) => {
         const result = res && res.result;
@@ -101,17 +113,16 @@ App({
           return;
         }
 
-        // 新增同步成功回填：把云端真实用户信息写回本地，后续业务统一使用真实 token
-        this.globalData.token = result.token || this.globalData.token;
-        this.globalData.userRole = result.role || this.globalData.userRole;
-        this.globalData.nickname = result.nickname || this.globalData.nickname;
-        this.globalData.avatarUrl = result.avatarUrl || this.globalData.avatarUrl || '';
-        this.globalData.needChooseRole = false;
-
-        wx.setStorageSync('token', this.globalData.token);
-        wx.setStorageSync('userRole', this.globalData.userRole);
-        wx.setStorageSync('nickname', this.globalData.nickname);
-        wx.setStorageSync('avatarUrl', this.globalData.avatarUrl);
+        // 新增同步成功回填：把云端真实用户信息写回本地，再按资料/发课痕迹重算最终角色
+        this.saveUserIdentity({
+          token: result.token || this.globalData.token,
+          userRole: result.role || this.globalData.userRole || 'V',
+          nickname: result.nickname || this.globalData.nickname || '微信用户',
+          avatarUrl: result.avatarUrl || this.globalData.avatarUrl || '',
+          openid: result.openid || this.globalData.openid || wx.getStorageSync('openid') || '',
+          needChooseRole: false
+        });
+        this.resolveUserRoleByBusiness(true);
 
         console.log('App 启动：静默登录补库成功');
       },
@@ -143,5 +154,152 @@ App({
   getDataPrefix: function (envVersion) {
     const runtimeEnvVersion = envVersion || this.globalData.miniEnvVersion || 'develop';
     return runtimeEnvVersion === 'develop' ? 'NDLdev_' : 'NDLreal_';
+  },
+
+  // 新增当前唤起来源判断：课程分享用 from=share / shareEntry=1，资料分享用 fromShare=1，三者都算本次分享进入
+  buildEnterContext: function (options = {}) {
+    const query = (options && options.query) || {};
+    const from = String(query.from || '').trim();
+    const shareEntry = String(query.shareEntry || '').trim();
+    const fromShare = String(query.fromShare || '').trim();
+    const isShareEnter = from === 'share' || shareEntry === '1' || fromShare === '1';
+
+    return {
+      enterSource: isShareEnter ? 'share' : 'normal',
+      enterScene: Number((options && options.scene) || 0),
+      enterPath: String((options && options.path) || '').trim(),
+      // 新增启动 query 透传：用于首次登录来源记录原始参数（如 from/shareEntry/id 等）
+      enterQuery: query,
+      shareSessionActive: isShareEnter,
+      lastEnterAt: Date.now()
+    };
+  },
+
+  // 新增全局唤起来源写入：分享页 onShow 时会据此判断旧分享态是否已经失效
+  updateEnterContext: function (options = {}) {
+    const enterContext = this.buildEnterContext(options);
+    this.globalData.enterSource = enterContext.enterSource;
+    this.globalData.enterScene = enterContext.enterScene;
+    this.globalData.enterPath = enterContext.enterPath;
+    this.globalData.enterQuery = enterContext.enterQuery;
+    this.globalData.shareSessionActive = enterContext.shareSessionActive;
+    this.globalData.lastEnterAt = enterContext.lastEnterAt;
+    return enterContext;
+  },
+
+  // 新增统一身份回填：token / role / nickname / avatar / openid 全部从这里落全局和缓存
+  saveUserIdentity: function (identity = {}) {
+    const nextToken = typeof identity.token === 'string' ? identity.token : (this.globalData.token || '');
+    const nextRole = typeof (identity.userRole || identity.role) === 'string'
+      ? (identity.userRole || identity.role)
+      : (this.globalData.userRole || 'V');
+    const nextNickname = typeof identity.nickname === 'string' ? identity.nickname : (this.globalData.nickname || '微信用户');
+    const nextAvatarUrl = typeof identity.avatarUrl === 'string' ? identity.avatarUrl : (this.globalData.avatarUrl || '');
+    const nextOpenid = typeof identity.openid === 'string' ? identity.openid : (this.globalData.openid || '');
+    const nextNeedChooseRole = typeof identity.needChooseRole === 'boolean'
+      ? identity.needChooseRole
+      : false;
+
+    this.globalData.token = nextToken;
+    this.globalData.userRole = nextRole || 'V';
+    this.globalData.nickname = nextNickname || '微信用户';
+    this.globalData.avatarUrl = nextAvatarUrl || '';
+    this.globalData.needChooseRole = nextNeedChooseRole;
+
+    wx.setStorageSync('token', this.globalData.token || '');
+    wx.setStorageSync('userRole', this.globalData.userRole || 'V');
+    wx.setStorageSync('nickname', this.globalData.nickname || '微信用户');
+    wx.setStorageSync('avatarUrl', this.globalData.avatarUrl || '');
+
+    if (nextOpenid) {
+      this.globalData.openid = nextOpenid;
+      wx.setStorageSync('openid', nextOpenid);
+    }
+
+    if (this.globalDataReadyCallback) {
+      this.globalDataReadyCallback(this.globalData);
+    }
+  },
+
+  // 新增教练资料痕迹判断：用户自己填写过对外展示资料，即可升级成 C
+  hasCoachProfile: function (profile = {}) {
+    const profileKeys = [
+      'avatarUrl',
+      'phone',
+      'experienceLevel',
+      'studentCountLevel',
+      'city',
+      'address',
+      'basicPhotoProof',
+      'aboutMe',
+      'workExperience',
+      'education',
+      'educationPhotoProof',
+      'skills',
+      'languages',
+      'honors',
+      'relatedCertificates',
+      'honorShowcase'
+    ];
+
+    return profileKeys.some(key => String(profile[key] || '').trim());
+  },
+
+  // 新增业务角色重算：当前用户只要有资料痕迹或发课痕迹，就自动视为 C，否则统一视为 V
+  resolveUserRoleByBusiness: function (forceRefresh = false) {
+    if (this.roleResolvePromise) {
+      return this.roleResolvePromise;
+    }
+
+    if (!wx.cloud) {
+      return Promise.resolve(this.globalData.userRole || 'V');
+    }
+
+    const currentToken = this.globalData.token || wx.getStorageSync('token') || '';
+
+    this.roleResolvePromise = Promise.all([
+      wx.cloud.callFunction({
+        name: 'NEWDL_mine_user',
+        data: {
+          action: 'getProfile',
+          envVersion: this.globalData.miniEnvVersion || 'develop'
+        }
+      }).catch(() => null),
+      wx.cloud.callFunction({
+        name: 'NEWDL_execution_order',
+        data: {
+          action: 'list_myself',
+          page: 1,
+          limit: forceRefresh ? 50 : 20,
+          userId: currentToken,
+          envVersion: this.globalData.miniEnvVersion || 'develop'
+        }
+      }).catch(() => null)
+    ]).then(([profileRes, orderRes]) => {
+      const profile = (profileRes && profileRes.result && profileRes.result.profile) || {};
+      const orderList = (orderRes && orderRes.result && orderRes.result.data) || [];
+      const myOpenid = this.globalData.openid || wx.getStorageSync('openid') || '';
+      const myToken = this.globalData.token || currentToken;
+      const hasCoachProfile = this.hasCoachProfile(profile);
+      const hasPublishedCourse = (orderList || []).some(item => {
+        const publisherOpenid = String((item && item.publisher_openid) || '').trim();
+        const publisherId = String((item && item.publisher_Id) || '').trim();
+        return (myOpenid && publisherOpenid === myOpenid) || (myToken && publisherId === myToken);
+      });
+      const nextRole = hasCoachProfile || hasPublishedCourse ? 'C' : 'V';
+
+      if (nextRole !== (this.globalData.userRole || 'V')) {
+        this.saveUserIdentity({
+          userRole: nextRole,
+          needChooseRole: false
+        });
+      }
+
+      return nextRole;
+    }).finally(() => {
+      this.roleResolvePromise = null;
+    });
+
+    return this.roleResolvePromise;
   }
 });

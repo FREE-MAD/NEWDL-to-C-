@@ -5,6 +5,38 @@
   padding-bottom: 180rpx;
 }
 
+.share-view-banner {
+  margin: 24rpx 24rpx 0;
+  padding: 24rpx 28rpx;
+  border-radius: 28rpx;
+  background: #fff7e8;
+  box-shadow: 0 12rpx 28rpx rgba(30, 24, 70, 0.06);
+}
+
+.share-view-banner-text {
+  font-size: 28rpx;
+  line-height: 1.7;
+  color: #7a5612;
+}
+
+/* 新增资料分享本人按钮：让教练本人在分享页中能直接回到资料编辑台 */
+.share-view-editor-btn {
+  margin-top: 18rpx;
+  width: 100%;
+  height: 84rpx;
+  line-height: 84rpx;
+  border-radius: 42rpx;
+  background: #ffffff;
+  color: #6f4aff;
+  border: 2rpx solid #d9d3ff;
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.share-view-editor-btn::after {
+  border: none;
+}
+
 .header {
   padding: 108rpx 32rpx 32rpx;
   background: linear-gradient(150deg, #6f4aff, #140043);
@@ -273,4 +305,43 @@
   background: #ffffff;
   color: #6f4aff;
   border: 2rpx solid #d9d3ff;
+}
+
+.security-review-footer {
+  margin: 0 24rpx 36rpx;
+  padding: 24rpx 28rpx;
+  border-radius: 28rpx;
+  background: #fff7e8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  box-shadow: 0 12rpx 28rpx rgba(30, 24, 70, 0.06);
+}
+
+.security-review-footer-approved {
+  background: #eefcf3;
+}
+
+.security-review-footer-pending {
+  background: #fff7e8;
+}
+
+.security-review-label {
+  font-size: 28rpx;
+  color: #7a6a39;
+}
+
+.security-review-text {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #c9871a;
+}
+
+.security-review-footer-approved .security-review-label {
+  color: #2c7a4b;
+}
+
+.security-review-footer-approved .security-review-text {
+  color: #1f9d55;
 }
