@@ -1,0 +1,455 @@
+/* pages/organization/organization_create/organization_create.wxss */
+.organization-create-page {
+  min-height: 100vh;
+  padding: 24rpx;
+  box-sizing: border-box;
+  background: #f5f7fb;
+}
+
+.hero-card,
+.auth-card,
+.form-card,
+.result-card {
+  margin-bottom: 24rpx;
+  padding: 30rpx 24rpx;
+  border-radius: 24rpx;
+  background: #ffffff;
+  box-shadow: 0 12rpx 32rpx rgba(15, 23, 42, 0.06);
+}
+
+/* 嵌套在 form-card 内部的子 form-card（如机构入口二维码卡片从外层挪入后）：
+   去掉外围阴影和外边距，减小内边距，避免卡片叠卡片造成双层厚重边框感 */
+.form-card-nested {
+  margin-bottom: 0;
+  margin-top: 28rpx;
+  padding: 22rpx 20rpx;
+  box-shadow: none;
+  background: #f8fbff;
+  border: 2rpx dashed #bfd2f7;
+}
+
+.hero-card {
+  background: linear-gradient(135deg, #1457ff 0%, #2f7cff 52%, #66b0ff 100%);
+  color: #ffffff;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.16);
+  font-size: 22rpx;
+  font-weight: 600;
+}
+
+.hero-title {
+  margin-top: 22rpx;
+  font-size: 36rpx;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.hero-desc {
+  margin-top: 14rpx;
+  font-size: 24rpx;
+  line-height: 1.8;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.auth-title,
+.section-title,
+.result-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #111827;
+}
+
+.auth-status {
+  margin-top: 16rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.auth-status-ready {
+  color: #0f9f4f;
+}
+
+.auth-status-blocked {
+  color: #d9485f;
+}
+
+.auth-tip,
+.section-desc,
+.result-desc,
+.result-row {
+  margin-top: 14rpx;
+  font-size: 26rpx;
+  line-height: 1.75;
+  color: #667085;
+}
+
+.form-help,
+.preview-box {
+  margin-top: 16rpx;
+  font-size: 26rpx;
+  line-height: 1.7;
+  color: #667085;
+}
+
+.auth-action,
+.submit-button,
+.result-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 76rpx;
+  margin-top: 22rpx;
+  border-radius: 18rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+.auth-action,
+.result-button {
+  background: #eef4ff;
+  color: #1457ff;
+}
+
+.tab-bar {
+  display: flex;
+  gap: 18rpx;
+  margin-bottom: 24rpx;
+}
+
+.tab-item {
+  flex: 1;
+  height: 78rpx;
+  border-radius: 20rpx;
+  background: #e9eef8;
+  color: #536075;
+  font-size: 26rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-item.active {
+  background: #1457ff;
+  color: #ffffff;
+}
+
+.form-item + .form-item {
+  margin-top: 32rpx;
+}
+
+.form-label {
+  margin-bottom: 16rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.form-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 96rpx;
+  padding: 26rpx 28rpx;
+  border-radius: 20rpx;
+  background: #f8fafc;
+  border: 2rpx solid #e5e7eb;
+  font-size: 32rpx;
+  line-height: 1.4;
+  color: #111827;
+}
+
+.form-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 240rpx;
+  padding: 26rpx 28rpx;
+  border-radius: 20rpx;
+  background: #f8fafc;
+  border: 2rpx solid #e5e7eb;
+  font-size: 32rpx;
+  line-height: 1.55;
+  color: #111827;
+}
+
+.submit-button {
+  background: linear-gradient(135deg, #1457ff 0%, #2d8cff 100%);
+  color: #ffffff;
+}
+
+.submit-button.disabled {
+  background: #c7d2e4;
+  color: #ffffff;
+}
+
+.upload-standard-card {
+  margin-top: 16rpx;
+  padding: 22rpx 20rpx;
+  border-radius: 20rpx;
+  background: #f8fbff;
+  border: 2rpx solid #dbe8ff;
+}
+
+.upload-standard-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1457ff;
+}
+
+.upload-standard-row {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #4b5563;
+}
+
+.swiper-upload-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18rpx;
+  margin-top: 20rpx;
+}
+
+.swiper-upload-item,
+.swiper-upload-add {
+  position: relative;
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: 20rpx;
+  overflow: hidden;
+}
+
+.swiper-upload-item {
+  background: #eef4ff;
+}
+
+.swiper-upload-image {
+  width: 100%;
+  height: 100%;
+}
+
+.swiper-upload-remove {
+  position: absolute;
+  right: 10rpx;
+  bottom: 10rpx;
+  min-width: 76rpx;
+  height: 42rpx;
+  padding: 0 14rpx;
+  border-radius: 999rpx;
+  background: rgba(17, 24, 39, 0.7);
+  color: #ffffff;
+  font-size: 22rpx;
+  line-height: 42rpx;
+  text-align: center;
+}
+
+.swiper-upload-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2rpx dashed #bfd2f7;
+  background: #f8fafc;
+}
+
+.swiper-upload-add-icon {
+  font-size: 48rpx;
+  line-height: 1;
+  color: #1457ff;
+}
+
+.swiper-upload-add-text {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: #536075;
+}
+
+/* 新增机构入口二维码卡片样式：展示区、图片、占位提示与转存失败警告 */
+.qrcode-showcase {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-top: 24rpx;
+  padding: 30rpx 20rpx;
+  border-radius: 20rpx;
+  background: #f8fbff;
+  border: 2rpx dashed #bfd2f7;
+}
+
+.qrcode-image {
+  width: 360rpx;
+  height: 360rpx;
+}
+
+/* 新增（2026-09-04）：合成码与原始码上下两行排列，便于对照 Logo 合成效果 */
+.qrcode-pair {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.qrcode-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 30rpx;
+}
+
+/* 两行排列用原尺寸（与单张展示一致，空间足够无需缩小） */
+.qrcode-pair .qrcode-image {
+  width: 360rpx;
+  height: 360rpx;
+}
+
+.qrcode-label {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #667085;
+}
+
+.qrcode-tap-tip {
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  color: #8a94a6;
+}
+
+.qrcode-empty {
+  min-height: 220rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 20rpx;
+  font-size: 26rpx;
+  line-height: 1.7;
+  color: #667085;
+  text-align: center;
+}
+
+.qrcode-warning {
+  margin-top: 14rpx;
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #d9485f;
+}
+
+/* 新增创建表单分区样式：区块一（Oncegenerated_cannotbemodified 生成后不可修改）与
+   区块二（PendingSupplement 待补充信息）在 form-card 内用浅色子卡片区分展示 */
+.create-section {
+  margin-top: 28rpx;
+  padding: 26rpx 22rpx;
+  border-radius: 20rpx;
+  background: #f8fafc;
+  border: 2rpx solid #e5e7eb;
+}
+
+.create-section.pending-supplement.locked {
+  opacity: 0.62;
+}
+
+.create-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.create-section-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+/* 区块英文标识小标签：对应设计命名 Oncegenerated_cannotbemodified / PendingSupplement */
+.create-section-key {
+  max-width: 320rpx;
+  font-size: 20rpx;
+  line-height: 1.4;
+  color: #8a94a6;
+  text-align: right;
+  word-break: break-all;
+}
+
+.create-section-desc {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #667085;
+}
+
+/* 新增区块二锁定提示：未生成入口二维码前展示门控说明 */
+.section-locked-tip {
+  margin-top: 14rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 16rpx;
+  background: #fff7ed;
+  border: 2rpx solid #fed7aa;
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #b45309;
+}
+
+/* 新增 DIY 二维码框样式（区块一字段）：二维码框始终显示不隐藏，
+   未上传时以空框 + 占位提示展示，上传后框内展示图片 */
+.diy-qrcode-frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-top: 18rpx;
+  width: 360rpx;
+  height: 360rpx;
+  border-radius: 20rpx;
+  background: #f8fbff;
+  border: 2rpx dashed #bfd2f7;
+  overflow: hidden;
+}
+
+.diy-qrcode-image {
+  width: 100%;
+  height: 100%;
+}
+
+.diy-qrcode-frame-icon {
+  font-size: 52rpx;
+  line-height: 1;
+  color: #1457ff;
+}
+
+.diy-qrcode-frame-text {
+  margin-top: 14rpx;
+  padding: 0 20rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #536075;
+  text-align: center;
+}
+
+/* 新增 DIY 二维码图片操作区：创建态支持重新上传 / 删除；编辑态不渲染（不可修改） */
+.diy-qrcode-actions {
+  display: flex;
+  gap: 18rpx;
+  margin-top: 16rpx;
+}
+
+.diy-qrcode-action {
+  padding: 10rpx 26rpx;
+  border-radius: 999rpx;
+  background: #eef4ff;
+  color: #1457ff;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.diy-qrcode-action-danger {
+  background: #fdecef;
+  color: #d9485f;
+}

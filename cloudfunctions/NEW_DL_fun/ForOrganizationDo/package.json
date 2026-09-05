@@ -1,0 +1,16 @@
+{
+  "name": "ForOrganizationDo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "sync:index": "node ../sync-dev-to-true.js .",
+    "sync:all": "node ../sync-dev-to-true.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "wx-server-sdk": "~3.0.3"
+  }
+}

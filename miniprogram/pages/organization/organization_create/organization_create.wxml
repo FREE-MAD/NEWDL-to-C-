@@ -1,0 +1,217 @@
+<!--pages/organization/organization_create/organization_create.wxml-->
+<view class="organization-create-page">
+  <view class="hero-card">
+    <view class="hero-badge">机构创建与加入</view>
+    <view class="hero-title">默认先做自由教练，机构身份从这里正式进入</view>
+    <view class="hero-desc">创建机构成功后自动成为机构管理层；填写邀请码加入成功后才成为机构执行教练。</view>
+  </view>
+
+  <view class="auth-card">
+    <view class="auth-title">认证校验</view>
+    <view class="auth-status {{authReady ? 'auth-status-ready' : 'auth-status-blocked'}}">{{authStatusText}}</view>
+    <view class="auth-tip">{{authTipText}}</view>
+    <view wx:if="{{!authReady}}" class="auth-action" bindtap="goToProfileCertification">去完成教练认证</view>
+  </view>
+
+  <view class="tab-bar">
+    <view
+      wx:for="{{tabList}}"
+      wx:key="key"
+      class="tab-item {{currentTab === item.key ? 'active' : ''}}"
+      data-tab="{{item.key}}"
+      bindtap="onTabTap"
+    >
+      {{item.label}}
+    </view>
+  </view>
+
+  <view wx:if="{{currentTab === 'create'}}" class="form-card">
+    <view class="section-title">{{isEditMode ? 'A 修改机构信息' : '建立机构信息'}}</view>
+    <view class="section-desc">{{isEditMode ? '你当前是机构管理层。第一步（生成后不可修改）只能查看，第二步可继续补充修改。' : '必须是已完成认证的教练。先在第一步提交生成基础信息与二维码，再在第二步补充其余资料。'}}</view>
+
+    <!-- 新增区块一：Oncegenerated_cannotbemodified（生成后不可修改）
+         收口三项必填且不可修改的资料：机构名称、邀请码前缀、DIY二维码图片（合成到入口二维码中间，作为教练头像 / 品牌 Logo）。
+         DIY 二维码框（diy-qrcode-frame）始终显示不隐藏：未上传时空框占位，上传后框内展示图片。 -->
+    <view class="create-section">
+      <view class="create-section-head">
+        <view class="create-section-title">第一步 · 生成后不可修改</view>
+      </view>
+      <view class="create-section-desc">以下三项提交生成后永久锁定，不可再修改，请确认无误后再提交。</view>
+
+      <!-- 机构名称：创建态可输入；编辑态（已生成）只读展示，不可修改 -->
+      <view class="form-item">
+        <view class="form-label">机构名称（必填）</view>
+        <input wx:if="{{!isEditMode}}" class="form-input" placeholder="例如：深大体陪南山校区" value="{{createForm.organization_name}}" data-field="organization_name" bindinput="onCreateInput" />
+        <view wx:else class="preview-box">{{createForm.organization_name || '未填写'}}</view>
+      </view>
+
+      <!-- 邀请码前缀：仅创建态可填；编辑态只读展示当前邀请码（原逻辑保留） -->
+      <view wx:if="{{!isEditMode}}" class="form-item">
+        <view class="form-label">自定义邀请码前缀</view>
+        <input class="form-input" placeholder="仅英文或数字，建议 2-6 位" value="{{createForm.invite_prefix}}" data-field="invite_prefix" bindinput="onCreateInput" />
+        <view class="form-help">最终邀请码共 16 位，前缀后面的位数由系统补足 16 进制字符。</view>
+        <view class="preview-box">邀请码预览：{{inviteCodePreview || '请输入前缀后预览'}}</view>
+      </view>
+
+      <view wx:if="{{isEditMode}}" class="form-item">
+        <view class="form-label">当前邀请码</view>
+        <view class="preview-box">{{currentInvitationCode || '暂未生成邀请码'}}</view>
+        <view class="form-help">修改机构信息时不改邀请码，避免原来的邀请关系失效。</view>
+      </view>
+
+      <!-- 新增 DIY 二维码图片：不同机构上传自己的图片，生成入口二维码时合成为二维码中间的样式（中间放教练头像 / 品牌 Logo）。
+           必填、生成后不可修改；二维码框始终显示（未上传时空框占位，不隐藏）。 -->
+      <view class="form-item">
+        <view class="form-label">DIY二维码图片（必填）</view>
+        <view class="form-help">将合成到机构入口二维码中间位置，可用教练头像或品牌 Logo；提交生成后不可修改。</view>
+        <!-- 调整（2026-09-04）：编辑态不再一刀切禁点 —— 旧值为空时允许点击补传（老机构修复入口），
+             旧值已有时依旧禁点（生成后不可修改）；放行/拦截的最终判定在 chooseDiyQrcodeImage 里兜底 -->
+        <view class="diy-qrcode-frame" bindtap="{{(isEditMode && createForm.diy_qrcode_image) ? '' : 'chooseDiyQrcodeImage'}}">
+          <image wx:if="{{createForm.diy_qrcode_image}}" class="diy-qrcode-image" src="{{createForm.diy_qrcode_image}}" mode="aspectFit" catchtap="previewDiyQrcodeImage" />
+          <block wx:else>
+            <view class="diy-qrcode-frame-icon">+</view>
+            <view class="diy-qrcode-frame-text">{{isEditMode ? '未上传，点击补传二维码图片' : '点击上传二维码中间 Logo'}}</view>
+          </block>
+        </view>
+        <!-- 创建态允许重传 / 删除；编辑态不可修改，只展示 -->
+        <view wx:if="{{!isEditMode && createForm.diy_qrcode_image}}" class="diy-qrcode-actions">
+          <view class="diy-qrcode-action" catchtap="chooseDiyQrcodeImage">重新上传</view>
+          <view class="diy-qrcode-action diy-qrcode-action-danger" catchtap="removeDiyQrcodeImage">删除</view>
+        </view>
+      </view>
+
+      <!-- 区块一提交按钮：仅创建态显示；编辑态资料已生成锁定，保存走区块二 -->
+      <view wx:if="{{!isEditMode}}" class="submit-button {{(!authReady || isSubmitting) ? 'disabled' : ''}}" bindtap="onCreateOrganization">
+        {{isSubmitting ? '提交中...' : '创建机构并生成邀请码'}}
+      </view>
+    </view>
+
+    <!-- 新增机构入口二维码卡片（二维码返回留位）：二维码由 B 侧（家长端）生成并归属 B，
+         A 侧 NEWDL_ResponseQRCode 转存图片到 A 侧云存储并把记录入库到机构文档 entry_qrcode 字段；
+         创建成功后就地展示，编辑态（机构管理层）进页自动回查展示。
+         （2026-09-04 调整：从页面顶部独立卡片移入，放在区块一「第一步生成后不可修改」下面，对应生成流程的就地展示位置） -->
+    <view wx:if="{{qrcodeCard.visible}}" class="form-card form-card-nested">
+      <view class="section-title">机构入口二维码</view>
+      <view class="section-desc">家长端扫码后进入机构入口页查看机构快照；真正的用户绑定在家长提交订单时才发生。</view>
+
+      <!-- 新增二维码展示区：优先展示 A 侧云存储 fileID（永久有效），生成中 / 未生成 / 转存失败时给对应占位 -->
+      <!-- 新增（2026-09-04）：合成码（带 Logo）与原始码（不带 Logo）并列展示，便于对照确认 DIY Logo 合成效果 -->
+      <view class="qrcode-showcase">
+        <view wx:if="{{qrcodeCard.isLoading}}" class="qrcode-empty">{{qrcodeCard.message || '正在生成二维码...'}}</view>
+        <block wx:elif="{{qrcodeCard.qrcodeFileId || qrcodeCard.rawQrcodeFileId}}">
+          <view class="qrcode-pair">
+            <view wx:if="{{qrcodeCard.qrcodeFileId}}" class="qrcode-cell">
+              <image class="qrcode-image" src="{{qrcodeCard.qrcodeFileId}}" mode="aspectFit" bindtap="previewQrcodeImage" data-type="composed" />
+              <view class="qrcode-label">合成码（带 Logo）</view>
+            </view>
+            <view wx:if="{{qrcodeCard.rawQrcodeFileId}}" class="qrcode-cell">
+              <image class="qrcode-image" src="{{qrcodeCard.rawQrcodeFileId}}" mode="aspectFit" bindtap="previewQrcodeImage" data-type="raw" />
+              <view class="qrcode-label">原始码（不带 Logo）</view>
+            </view>
+          </view>
+          <view class="qrcode-tap-tip">点击任意二维码可放大预览</view>
+        </block>
+        <view wx:else class="qrcode-empty">{{qrcodeCard.message || '二维码尚未生成'}}</view>
+      </view>
+
+      <!-- 新增二维码返回信息展示：entryId 是 B 侧中转表（entry_registry）入口标识，scene 即扫码携带参数 -->
+      <view wx:if="{{qrcodeCard.entryId}}" class="preview-box">入口ID：{{qrcodeCard.entryId}}</view>
+      <view wx:if="{{qrcodeCard.scene}}" class="preview-box">扫码参数：{{qrcodeCard.scene}}</view>
+      <view wx:if="{{qrcodeCard.transferWarning}}" class="qrcode-warning">{{qrcodeCard.transferWarning}}</view>
+
+      <!-- 新增二维码操作区：生成走 B 侧幂等逻辑可重复点击（已有记录直接复用）；进入机构首页复用原有返回入口 -->
+      <view wx:if="{{!qrcodeCard.isLoading}}" class="submit-button" bindtap="generateOrganizationQrcode">
+        {{qrcodeCard.qrcodeFileId ? '刷新二维码' : '生成机构入口二维码'}}
+      </view>
+      <view class="result-button" bindtap="backToOrganizationEntry">进入机构首页</view>
+    </view>
+
+    <!-- 新增区块二：PendingSupplement（待补充信息）
+         联系人 / 联系电话 / 所在城市 / 机构地址 / 机构简介 / 首页轮播图。
+         创建流程中：必须等区块一完成提交并且机构入口二维码生成成功后才解锁填写（supplementUnlocked）；
+         编辑态（机构已创建）进页直接可编辑。未解锁时输入框 disabled 并置灰。 -->
+    <view class="create-section pending-supplement {{supplementUnlocked ? '' : 'locked'}}">
+      <view class="create-section-head">
+        <view class="create-section-title">第二步 · 待补充信息</view>
+        <view class="create-section-key">PendingSupplement</view>
+      </view>
+      <view wx:if="{{!supplementUnlocked}}" class="section-locked-tip">完成第一步提交并生成机构入口二维码后，才可填写以下信息。</view>
+
+      <view class="form-item">
+        <view class="form-label">联系人</view>
+        <input class="form-input" placeholder="默认会带出你的昵称，可继续修改" value="{{createForm.contact_name}}" data-field="contact_name" bindinput="onCreateInput" disabled="{{!supplementUnlocked}}" />
+      </view>
+
+      <view class="form-item">
+        <view class="form-label">联系电话</view>
+        <input class="form-input" type="number" placeholder="请输入机构联系电话" value="{{createForm.contact_phone}}" data-field="contact_phone" bindinput="onCreateInput" disabled="{{!supplementUnlocked}}" />
+      </view>
+
+      <view class="form-item">
+        <view class="form-label">所在城市</view>
+        <input class="form-input" placeholder="例如：深圳" value="{{createForm.city}}" data-field="city" bindinput="onCreateInput" disabled="{{!supplementUnlocked}}" />
+      </view>
+
+      <view class="form-item">
+        <view class="form-label">机构地址</view>
+        <input class="form-input" placeholder="填写主要训练地点或机构地址" value="{{createForm.address}}" data-field="address" bindinput="onCreateInput" disabled="{{!supplementUnlocked}}" />
+      </view>
+
+      <view class="form-item">
+        <view class="form-label">机构简介</view>
+        <textarea class="form-textarea" placeholder="简单说明机构做什么、适合哪些孩子" value="{{createForm.intro}}" data-field="intro" bindinput="onCreateInput" maxlength="300" disabled="{{!supplementUnlocked}}" />
+      </view>
+
+      <view class="form-item">
+        <view class="form-label">首页轮播图</view>
+        <view class="form-help">用于机构首页 `organization_show > brand-swiper-section > swiper` 展示。</view>
+        <view class="upload-standard-card">
+          <view class="upload-standard-title">上传标准</view>
+          <view class="upload-standard-row">建议比例：16:9 横图</view>
+          <view class="upload-standard-row">建议尺寸：1280 x 720</view>
+          <view class="upload-standard-row">建议数量：3 到 5 张</view>
+          <view class="upload-standard-row">最多数量：5 张</view>
+          <view class="upload-standard-row">建议内容：机构门头、训练现场、场地环境、团队展示</view>
+        </view>
+
+        <view class="swiper-upload-list">
+          <block wx:for="{{createForm.brand_swiper_images}}" wx:key="*this">
+            <view class="swiper-upload-item">
+              <image class="swiper-upload-image" src="{{item}}" mode="aspectFill" bindtap="previewBrandSwiperImage" data-index="{{index}}" />
+              <!-- 未解锁时隐藏删除按钮：第二区锁定态只允许查看 -->
+              <view wx:if="{{supplementUnlocked}}" class="swiper-upload-remove" bindtap="removeBrandSwiperImage" data-index="{{index}}">删除</view>
+            </view>
+          </block>
+          <!-- 未解锁时隐藏上传入口：避免锁定态绕过门控上传图片 -->
+          <view wx:if="{{supplementUnlocked && createForm.brand_swiper_images.length < 5}}" class="swiper-upload-add" bindtap="chooseBrandSwiperImages">
+            <view class="swiper-upload-add-icon">+</view>
+            <view class="swiper-upload-add-text">上传轮播图</view>
+          </view>
+        </view>
+        <view class="preview-box">当前已上传 {{createForm.brand_swiper_images.length || 0}} / 5 张</view>
+      </view>
+
+      <!-- 区块二保存按钮：解锁后才显示（编辑态直接可编辑，同样走这里保存） -->
+      <view wx:if="{{supplementUnlocked}}" class="submit-button {{(!authReady || isSubmitting) ? 'disabled' : ''}}" bindtap="onSaveSupplement">
+        {{isSubmitting ? '提交中...' : '保存机构信息'}}
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{currentTab === 'join'}}" class="form-card">
+    <view class="section-title">B 教练加入</view>
+    <view class="section-desc">必须先完成教练认证，再填写机构邀请码。校验通过后，才成为机构执行教练。</view>
+
+    <view class="form-item">
+      <view class="form-label">机构邀请码</view>
+      <input class="form-input" placeholder="请输入 16 位邀请码" value="{{joinForm.invitation_code}}" bindinput="onJoinInput" />
+      <view class="preview-box">当前输入：{{joinCodePreview || '请输入机构邀请码'}}</view>
+    </view>
+
+    <view class="submit-button {{(!authReady || isSubmitting) ? 'disabled' : ''}}" bindtap="onJoinOrganization">
+      {{isSubmitting ? '提交中...' : '校验邀请码并加入机构'}}
+    </view>
+  </view>
+
+  <!-- 新增结果卡片位置调整：提交成功结果统一放到机构首页入口区展示，这里不再重复渲染 -->
+</view>

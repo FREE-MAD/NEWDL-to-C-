@@ -283,10 +283,10 @@ Page({
          return enterSource !== 'share';
        },
 
-       // 新增分享态退出分流：所属教练回管理页，其他查看者回首页，避免继续停留在旧分享缓存里
+       // 新增分享态退出分流：所属教练和普通查看者都回首页，避免继续停留在旧分享缓存里
        redirectAfterShareSessionExpired() {
-         if (this.isShareOwnerMode() && this.data.orderId) {
-           this.openCoachConsole(true);
+         if (this.isShareOwnerMode()) {
+           this.openCoachConsole();
            return;
          }
 
@@ -295,15 +295,11 @@ Page({
          });
        },
 
-       // 新增教练操作台统一跳转：分享本人回操作台时替换当前分享页，普通进入沿用原来的页面跳转
-       openCoachConsole(replaceCurrentPage = false) {
-         if (!this.data.orderId) {
-           return;
-         }
-
-         const navigateMethod = replaceCurrentPage ? 'redirectTo' : 'navigateTo';
-         wx[navigateMethod]({
-           url: `/pages/task/publish/publish?id=${this.data.orderId}&tab=manage`
+       // 新增教练操作台统一跳转：首页已承接教练主入口，因此这里统一回首页
+       openCoachConsole() {
+         // 新增首页回跳统一：无论是分享页点击返回，还是分享态过期自动退出，都直接回 tab 首页
+         wx.switchTab({
+           url: '/pages/index/index'
          });
        },
 
@@ -489,7 +485,7 @@ Page({
     }
 
     // 新增分享本人跳转分流：教练从自己分享页返回时直接替换当前页，避免继续停留在分享态页面栈里
-    this.openCoachConsole(!!this.data.isShareEntry);
+    this.openCoachConsole();
   },
 
   // 新增分享路径：分享出去后先落分享态，再按分享者本人或普通查看者区分 pageMode

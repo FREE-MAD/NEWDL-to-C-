@@ -1,0 +1,222 @@
+<!--pages/organization/organization.wxml-->
+<view class="organization-page">
+  <!-- 新增机构入口模块：把这个 tab 正式变成机构管理层 / 执行教练的进入入口 -->
+  <view class="entry-section">
+    <view class="entry-hero">
+      <view class="entry-badges">
+        <view class="entry-badge">团队入口</view>
+        <view class="entry-badge entry-badge-soft">{{currentBizRoleLabel}}</view>
+        <view wx:if="{{currentOrgName}}" class="entry-badge entry-badge-soft">{{currentOrgName}}</view>
+      </view>
+      <view class="entry-title">{{entryTitle}}</view>
+      <view class="entry-desc">{{entryDesc}}</view>
+      <view class="entry-hint">{{entryHint}}</view>
+    </view>
+
+    <view class="entry-action-list">
+      <view
+        wx:for="{{entryActionList}}"
+        wx:key="title"
+        class="entry-action-card"
+        data-action="{{item.action}}"
+        bindtap="onEntryActionTap"
+        hover-class="entry-action-card-active"
+        hover-stay-time="80"
+      >
+        <!-- 新增整卡可点击：用户点“创建机构/加入机构”整块区域都触发同一动作，不再只能点底部小按钮 -->
+        <view class="entry-action-title">{{item.title}}</view>
+        <view class="entry-action-desc">{{item.desc}}</view>
+        <view class="entry-action-button">
+          {{item.buttonText}}
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 新增机构展示总容器：把结果卡片和机构门面统一包进 organization_show，后续方便整体控制 -->
+  <view class="organization_show">
+    <!-- 新增机构结果卡片承接：创建机构/加入机构成功后的结果卡片统一放到首页入口区下面 -->
+    <view wx:if="{{submitResultCard}}" class="result-card">
+      <view class="result-title">{{submitResultCard.title}}</view>
+      <view class="result-row">团队名称：{{submitResultCard.organizationName}}</view>
+      <!-- 新增：机构邀请码支持点击复制到剪贴板，方便教练/管理员分享给其他成员 -->
+      <view wx:if="{{submitResultCard.invitationCode}}" class="result-row result-row-copyable" bindtap="onCopyInvitationCode" data-code="{{submitResultCard.invitationCode}}">
+        <text>团队邀请码：</text>
+        <text class="invitation-code-text">{{submitResultCard.invitationCode}}</text>
+        <text class="copy-btn">复制</text>
+      </view>
+      <view class="result-row">当前身份：{{submitResultCard.memberRoleLabel}}</view>
+      <view class="result-desc">{{submitResultCard.message}}</view>
+    </view>
+
+    <!-- 新增品牌轮播模块：品牌展示 + 教练团队统一放到同一卡片容器内 -->
+    <view class="brand-swiper-section">
+      <view class="module-head">
+        <view class="module-title">团队门面</view>
+        <view class="module-subtitle">团队入口在上面，下面继续承接品牌展示和教练团队</view>
+      </view>
+
+      <swiper
+        class="brand-swiper"
+        indicator-dots="{{true}}"
+        autoplay="{{true}}"
+        interval="{{3500}}"
+        duration="{{500}}"
+        circular="{{true}}"
+        indicator-color="rgba(255,255,255,0.36)"
+        indicator-active-color="#ffffff"
+      >
+        <block wx:for="{{brandSwiperList}}" wx:key="imageUrl">
+          <swiper-item>
+            <view class="brand-slide-card">
+              <image wx:if="{{item.imageUrl}}" class="brand-slide-image" src="{{item.imageUrl}}" mode="aspectFill" />
+              <!-- 新增轮播展示收口：swiper 内部只保留图片；没有图片时显示写死的“代码肌广告”空白态 -->
+              <view wx:else class="brand-slide-empty">
+                <view class="brand-slide-empty-title">{{item.emptyTitle || '代码肌广告'}}</view>
+              </view>
+            </view>
+          </swiper-item>
+        </block>
+      </swiper>
+    </view>
+
+    <!-- 新增品牌理念模块：直接告诉用户机构怎么理解训练和陪伴 -->
+    <!-- 新增调整：理念模块从外层移入 organization_show，按「1轮播 2理念 3教练团队」顺序竖直排布 -->
+    <view class="philosophy-section">
+      <!-- 品牌理念标题区只保留标题：副标题已移除，不再展示说明文案 -->
+      <view class="module-head">
+        <view class="module-title">品牌理念</view>
+      </view>
+
+      <block wx:for="{{philosophyList}}" wx:key="title">
+        <view class="philosophy-card">
+          <view class="philosophy-title">{{item.title}}</view>
+          <view class="philosophy-desc">{{item.desc}}</view>
+        </view>
+      </block>
+    </view>
+
+    <!-- 新增：教练团队模块合并到品牌轮播卡片内部，品牌 + 团队在同一视觉区块展示 -->
+    <!-- 新增调整：教练团队拆出为独立区块并改为竖直方向排布，不再使用横向滑动，按顺序排为第 3 个模块 -->
+    <view class="coach-section">
+      <view class="module-head">
+        <view class="module-title">教练团队</view>
+        <view class="module-subtitle">先看团队方向，后续再继续补头像、履历和擅长项目</view>
+      </view>
+
+      <view class="coach-list-vertical">
+        <block wx:for="{{coachTeamList}}" wx:key="name">
+          <view class="coach-card">
+            <view class="coach-avatar">{{item.avatar}}</view>
+            <view class="coach-name">{{item.name}}</view>
+            <view class="coach-role">{{item.role}}</view>
+            <view class="coach-tag">{{item.tag}}</view>
+            <view class="coach-intro">{{item.intro}}</view>
+          </view>
+        </block>
+      </view>
+    </view>
+  </view>
+
+  <!-- 新增第四模块预留：你这条消息里的第 4 块还没写完，我先留出位置方便继续补 -->
+  <view class="reserve-section">
+    <view class="module-head">
+      <view class="module-title">团队入口后续可接什么</view>
+      <view class="module-subtitle">后面这里可以继续接团队邀请码、成员管理、课程码查询和执行记录看板</view>
+    </view>
+  </view>
+
+  <view wx:if="{{showLegacySection}}">
+  <!-- 新增机构头部展示：先让用户一进来就知道这是做什么的 -->
+  <view class="hero-section">
+    <view class="hero-badge">{{orgInfo.badge}}</view>
+    <view class="hero-title">{{orgInfo.name}}</view>
+    <view class="hero-slogan">{{orgInfo.slogan}}</view>
+    <view class="hero-intro">{{orgInfo.intro}}</view>
+    <view class="hero-sub-intro">{{orgInfo.subIntro}}</view>
+
+    <view class="hero-stats">
+      <block wx:for="{{quickStats}}" wx:key="label">
+        <view class="stat-card">
+          <view class="stat-value">{{item.value}}</view>
+          <view class="stat-label">{{item.label}}</view>
+        </view>
+      </block>
+    </view>
+  </view>
+
+  <!-- 新增服务内容模块：把机构主要做什么直接展开给用户看 -->
+  <view class="section-card">
+    <view class="section-head">
+      <view class="section-title">我们主要做什么</view>
+      <view class="section-subtitle">先看服务方向，再决定适不适合你</view>
+    </view>
+
+    <view class="service-grid">
+      <block wx:for="{{serviceList}}" wx:key="title">
+        <view class="service-card">
+          <view class="service-title">{{item.title}}</view>
+          <view class="service-desc">{{item.desc}}</view>
+        </view>
+      </block>
+    </view>
+  </view>
+
+  <!-- 新增适合人群模块：帮助家长快速判断自己是不是目标用户 -->
+  <view class="section-card">
+    <view class="section-head">
+      <view class="section-title">适合哪些人</view>
+      <view class="section-subtitle">如果你正处于这些情况，这个页面就和你有关</view>
+    </view>
+
+    <block wx:for="{{fitCrowdList}}" wx:key="*this">
+      <view class="list-row">
+        <view class="list-dot"></view>
+        <view class="list-text">{{item}}</view>
+      </view>
+    </block>
+  </view>
+
+  <!-- 新增服务流程模块：让用户知道进来后第一步做什么、后面怎么走 -->
+  <view class="section-card">
+    <view class="section-head">
+      <view class="section-title">合作流程</view>
+      <view class="section-subtitle">从了解需求到开始训练，路径尽量讲清楚</view>
+    </view>
+
+    <block wx:for="{{processList}}" wx:key="step">
+      <view class="process-row">
+        <view class="process-step">{{item.step}}</view>
+        <view class="process-content">
+          <view class="process-title">{{item.title}}</view>
+          <view class="process-desc">{{item.desc}}</view>
+        </view>
+      </view>
+    </block>
+  </view>
+
+  <!-- 新增机构优势模块：强调这个页面适合承担宣传和转化入口 -->
+  <view class="section-card highlight-card">
+    <view class="section-head">
+      <view class="section-title">为什么先做这个页面</view>
+      <view class="section-subtitle">它更像一个团队门面，负责先把信任建立起来</view>
+    </view>
+
+    <view class="advantage-grid">
+      <block wx:for="{{advantageList}}" wx:key="*this">
+        <view class="advantage-item">{{item}}</view>
+      </block>
+    </view>
+  </view>
+
+  <!-- 新增底部联系模块：先把下一步动作讲清楚，后续再接真实按钮 -->
+  <view class="contact-card">
+    <view class="contact-title">下一步可以放什么</view>
+    <view class="contact-desc">当前先完成团队展示页面，后面可以继续往下接课程入口、咨询入口、真实案例和教练团队。</view>
+
+    <block wx:for="{{bottomActionList}}" wx:key="*this">
+      <view class="contact-tag">{{item}}</view>
+    </block>
+  </view>
+  </view>
+</view>

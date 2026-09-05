@@ -1,5 +1,17 @@
 const { prepareImageForUpload } = require('../../../utils/imageUpload')
 
+// 新增教练默认头像：未上传照片时按性别自动套用官方默认头像，保证资料页头像不会空白
+const DEFAULT_COACH_AVATAR = {
+  男: 'cloud://cloud1-6gh7jgl8c5b16a83.636c-cloud1-6gh7jgl8c5b16a83-1398046944/NEWDL/users/默认头像defaultavatar/default_coach_avatar_male_cropped.png',
+  女: 'cloud://cloud1-6gh7jgl8c5b16a83.636c-cloud1-6gh7jgl8c5b16a83-1398046944/NEWDL/users/默认头像defaultavatar/default_coach_avatar_female_cropped.png'
+}
+
+// 新增性别选项：基础信息区收集教练性别，同时决定默认头像
+const GENDER_OPTIONS = ['男', '女']
+
+// 新增默认昵称：新用户（数据库无昵称）自动填入该昵称，与输入框占位文案保持一致
+const DEFAULT_NICKNAME = 'XX教练'
+
 // 新增擅长领域选项：文案直接参考创建课程页的课程方向，资料页改成可多选收集
 const SKILL_OPTION_GROUPS = [
   { title: '体态矫正', options: ['圆肩驼背改善', '脊柱侧弯预防', 'X/O 型腿调整'] },
@@ -30,6 +42,7 @@ Page({
       avatarUrl: '',
       nickname: '',
       phone: '',
+      gender: '',
       experienceLevel: '',
       studentCountLevel: '',
       city: '',
@@ -46,6 +59,11 @@ Page({
       honorShowcase: ''
     },
     skillOptionGroups: [],
+    genderOptions: GENDER_OPTIONS,
+    // 新增默认头像展示源：按当前性别算出的官方默认头像，与自定义照片并列展示
+    defaultAvatarUrl: '',
+    // 新增自定义照片标记：区分「用户自己上传的照片」与「系统默认头像」
+    hasCustomAvatar: false,
 
     cards: [
       // 新增资料模块：表单页补充相关证书和荣誉展示，和展示页保持同步
@@ -112,9 +130,38 @@ Page({
     }))
   },
 
+  // 新增默认头像取值：按性别返回官方默认教练头像，未选择性别时返回空
+  getDefaultAvatarByGender(gender = '') {
+    return DEFAULT_COACH_AVATAR[String(gender || '').trim()] || ''
+  },
+
+  // 新增默认头像识别：判断当前头像是否仍是官方默认头像（空值也算，方便切换性别时跟随替换）
+  isDefaultCoachAvatar(avatarUrl = '') {
+    const currentAvatarUrl = String(avatarUrl || '').trim()
+    if (!currentAvatarUrl) {
+      return true
+    }
+    return Object.keys(DEFAULT_COACH_AVATAR).some((gender) => DEFAULT_COACH_AVATAR[gender] === currentAvatarUrl)
+  },
+
+  // 新增默认昵称兜底：数据库里没有昵称时（新用户 / 老数据空值）自动填入默认昵称
+  resolveNickname(rawValue) {
+    const nickname = String(rawValue || '').trim()
+    return nickname || DEFAULT_NICKNAME
+  },
+
   // 新增资料表单统一回填：普通输入、多选和图片上传都走同一个 setData 收口
   applyProfileForm(nextProfileForm = {}) {
     const mergedProfileForm = Object.assign({}, this.data.profileForm, nextProfileForm)
+    // 新增默认昵称兜底：库里没有昵称时自动填入「XX教练」，用户可随时改成自己的昵称
+    mergedProfileForm.nickname = this.resolveNickname(mergedProfileForm.nickname)
+    // 新增自定义照片识别：非官方默认头像且非空才算用户自己上传的照片
+    const customAvatarUrl = this.isDefaultCoachAvatar(mergedProfileForm.avatarUrl)
+      ? ''
+      : String(mergedProfileForm.avatarUrl || '').trim()
+    const defaultAvatarUrl = this.getDefaultAvatarByGender(mergedProfileForm.gender)
+    // 新增默认头像兜底：没有自定义照片时，按当前性别自动套用对应默认头像（切换性别会跟随变化）
+    mergedProfileForm.avatarUrl = customAvatarUrl || defaultAvatarUrl
     const skillSelectionList = this.parseSkillSelectionList(mergedProfileForm.skills)
     const normalizedProfileForm = Object.assign({}, mergedProfileForm, {
       skills: this.serializeSkillSelectionList(skillSelectionList)
@@ -122,8 +169,24 @@ Page({
 
     this.setData({
       profileForm: normalizedProfileForm,
+      defaultAvatarUrl,
+      hasCustomAvatar: !!customAvatarUrl,
       cards: this.buildCardsWithValue(normalizedProfileForm),
       skillOptionGroups: this.buildSkillOptionGroups(skillSelectionList)
+    })
+  },
+
+  // 新增恢复默认头像：清掉自定义照片，回落到当前性别的官方默认头像
+  resetAvatarToDefault() {
+    const nextProfileForm = Object.assign({}, this.data.profileForm, {
+      avatarUrl: ''
+    })
+    this.applyProfileForm(nextProfileForm)
+    this.syncGlobalAvatar(this.data.profileForm.avatarUrl)
+    this.savePreviewDraft(this.data.profileForm)
+    wx.showToast({
+      title: '已恢复默认头像',
+      icon: 'none'
     })
   },
 
@@ -152,7 +215,18 @@ Page({
     this.savePreviewDraft(nextProfileForm)
   },
 
-  // 新增数字资料选择：基础信息区单独收集工作经验和带过学员量级
+  // 新增全局头像同步：头像变化后立即写入全局与本地缓存，其它页面即时展示
+  syncGlobalAvatar(avatarUrl = '') {
+    const safeAvatarUrl = String(avatarUrl || '').trim()
+    if (!safeAvatarUrl) {
+      return
+    }
+    const app = getApp()
+    app.globalData.avatarUrl = safeAvatarUrl
+    wx.setStorageSync('avatarUrl', safeAvatarUrl)
+  },
+
+  // 新增数字资料选择：基础信息区单独收集工作经验、带过学员量级和性别
   onOptionSelect(e) {
     const field = e.currentTarget.dataset.field
     const value = e.currentTarget.dataset.value || ''
@@ -164,6 +238,12 @@ Page({
       [field]: value
     })
     this.applyProfileForm(nextProfileForm)
+    // 新增性别联动头像：切换性别后若头像仍是默认头像，立即同步全局头像
+    if (field === 'gender' && this.isDefaultCoachAvatar(this.data.profileForm.avatarUrl)) {
+      this.syncGlobalAvatar(this.data.profileForm.avatarUrl)
+      this.savePreviewDraft(this.data.profileForm)
+      return
+    }
     // 新增预览草稿联动：选项变化时同步缓存，避免头部统计预览滞后
     this.savePreviewDraft(nextProfileForm)
   },
@@ -450,7 +530,10 @@ Page({
   async buildReviewProfile(profileForm = {}) {
     const reviewProfile = Object.assign({}, profileForm)
 
-    reviewProfile.avatarUrl = await this.uploadReviewImage('avatarUrl', profileForm.avatarUrl, this.buildLocalImageKey('avatarUrl'))
+    // 新增默认头像免压缩：官方默认教练头像无需重复下载压缩送审，直接沿用原 fileID
+    reviewProfile.avatarUrl = this.isDefaultCoachAvatar(profileForm.avatarUrl)
+      ? String(profileForm.avatarUrl || '').trim()
+      : await this.uploadReviewImage('avatarUrl', profileForm.avatarUrl, this.buildLocalImageKey('avatarUrl'))
     reviewProfile.basicPhotoProof = await this.uploadReviewImage('basicPhotoProof', profileForm.basicPhotoProof, this.buildLocalImageKey('basicPhotoProof'))
     reviewProfile.educationPhotoProof = await this.uploadReviewImage('educationPhotoProof', profileForm.educationPhotoProof, this.buildLocalImageKey('educationPhotoProof'))
 
@@ -733,7 +816,7 @@ Page({
           this.triggerProfileSecurityReview(profileForm)
 
           wx.showToast({
-            title: (result && result.message) || '保存成功，图片正在后台检测',
+            title: '成功保存',
             icon: 'success'
           })
           return

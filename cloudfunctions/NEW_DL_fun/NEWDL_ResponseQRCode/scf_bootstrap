@@ -1,0 +1,6 @@
+#!/bin/bash
+# HTTP 云函数启动脚本（与 B 侧 DLforP_entry_qrcode / twowaybinding_1_DLforP 约定一致）：
+# 1) 文件名必须是 scf_bootstrap，不能带扩展名；
+# 2) 直接启动 index.js，由 index.js 加载业务代码并监听 9000 端口；
+# 3) 如果后续换入口文件，只改这一行即可。
+node index.js

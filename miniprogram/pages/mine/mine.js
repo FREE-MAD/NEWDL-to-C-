@@ -1,5 +1,11 @@
 // pages/mine/mine.js
 const { prepareImageForUpload } = require('../../utils/imageUpload')
+const {
+  BIZ_ROLE_VISITOR,
+  BIZ_ROLE_FREE_COACH,
+  createEmptyOrganizationProfile,
+  getBizRoleLabel
+} = require('../../utils/bizRole')
 
 Page({
   data: {
@@ -23,7 +29,10 @@ Page({
       'V': '预览方'
     },
     editButtonText: '先填写教练资料',
-    activeTab: 0
+    activeTab: 0,
+    currentBizRole: BIZ_ROLE_VISITOR,
+    currentBizRoleLabel: '访客模式',
+    currentOrgName: ''
   },
 
   onLoad() {
@@ -63,20 +72,29 @@ Page({
   loadUserInfo() {
     const app = getApp()
     const safeRole = app.globalData.userRole || wx.getStorageSync('userRole') || 'V'
+    const businessIdentity = app.getBusinessIdentity ? app.getBusinessIdentity() : {
+      bizRole: safeRole === 'C' ? BIZ_ROLE_FREE_COACH : BIZ_ROLE_VISITOR,
+      organizationProfile: createEmptyOrganizationProfile()
+    }
+    const currentBizRole = businessIdentity.bizRole || BIZ_ROLE_VISITOR
+    const currentOrgName = (businessIdentity.organizationProfile && businessIdentity.organizationProfile.orgName) || ''
     
     // 强制从全局数据刷新
     const user = {
       nickname: app.globalData.nickname || '未设置',
       id: app.globalData.token || '---',
       role: safeRole,
-      roleLabel: this.getRoleLabel(safeRole),
+      roleLabel: `${this.getRoleLabel(safeRole)} · ${getBizRoleLabel(currentBizRole)}`,
       avatar: app.globalData.avatarUrl || ''
     }
 
     // 只有当数据变化时才 setData，避免无意义渲染，但这里为了确保刷新，直接设置
     this.setData({
       user,
-      editButtonText: this.getEditButtonText(safeRole)
+      editButtonText: this.getEditButtonText(safeRole),
+      currentBizRole,
+      currentBizRoleLabel: getBizRoleLabel(currentBizRole),
+      currentOrgName
     })
     
     // 如果没有昵称，尝试从缓存读取
@@ -98,10 +116,13 @@ Page({
               nickname: cacheNick,
               id: cacheToken || '---',
               role: nextRole,
-              roleLabel: this.getRoleLabel(nextRole),
+              roleLabel: `${this.getRoleLabel(nextRole)} · ${getBizRoleLabel(currentBizRole)}`,
               avatar: cacheAvatar || ''
             },
-            editButtonText: this.getEditButtonText(nextRole)
+            editButtonText: this.getEditButtonText(nextRole),
+            currentBizRole,
+            currentBizRoleLabel: getBizRoleLabel(currentBizRole),
+            currentOrgName
           })
        }
     }
@@ -222,6 +243,7 @@ Page({
             app.saveUserIdentity({
               avatarUrl: uploadRes.fileID,
               userRole: 'C',
+              bizRole: this.data.currentBizRole || BIZ_ROLE_FREE_COACH,
               needChooseRole: false
             })
           } else {

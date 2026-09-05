@@ -1,0 +1,151 @@
+/* pages/index/do_certification/do_certification.wxss */
+.certification-page {
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 40rpx 32rpx 60rpx;
+  background: linear-gradient(180deg, #fff7f7 0%, #ffffff 36%);
+}
+
+.certification-nav {
+  display: flex;
+  align-items: center;
+  margin-bottom: 32rpx;
+  padding-top: 88rpx;
+  min-height: 44rpx;
+}
+
+.certification-banner {
+  width: 100%;
+  display: block;
+  border-radius: 20rpx;
+  margin-bottom: 32rpx;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.06);
+}
+
+.certification-back {
+  font-size: 28rpx;
+  color: #ef4444;
+}
+
+.certification-title {
+  flex: 1;
+  text-align: center;
+  margin-right: 88rpx;
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #2f3142;
+}
+
+.certification-card {
+  padding: 36rpx 30rpx;
+  border-radius: 28rpx;
+  background: #ffffff;
+  box-shadow: 0 12rpx 32rpx rgba(239, 68, 68, 0.08);
+}
+
+.certification-tabbar {
+  display: flex;
+  padding: 10rpx;
+  border-radius: 999rpx;
+  background: #fff3f3;
+}
+
+.certification-tab-item {
+  flex: 1;
+  height: 76rpx;
+  border-radius: 999rpx;
+  text-align: center;
+  line-height: 76rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #8c5560;
+}
+
+.certification-tab-item.is-active {
+  background: #ef4444;
+  color: #ffffff;
+  box-shadow: 0 8rpx 20rpx rgba(239, 68, 68, 0.2);
+}
+
+.certification-tab-panel {
+  margin-top: 28rpx;
+}
+
+.certification-tag {
+  display: inline-block;
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+  background: #fff1f1;
+  font-size: 22rpx;
+  color: #ef4444;
+}
+
+.certification-heading {
+  margin-top: 22rpx;
+  font-size: 42rpx;
+  font-weight: 700;
+  color: #2f3142;
+}
+
+.certification-desc {
+  margin-top: 18rpx;
+  font-size: 28rpx;
+  line-height: 1.7;
+  color: #5f6577;
+}
+
+.package-card {
+  margin-top: 24rpx;
+  padding: 26rpx 24rpx;
+  border-radius: 24rpx;
+  background: #fff8f8;
+  border: 1rpx solid #ffe0e0;
+}
+
+.package-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.package-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #2f3142;
+}
+
+.package-price {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #ef4444;
+}
+
+.package-desc {
+  margin-top: 14rpx;
+  font-size: 26rpx;
+  line-height: 1.7;
+  color: #5f6577;
+}
+
+.operation-image-card {
+  margin-top: 24rpx;
+  padding: 22rpx 20rpx;
+  border-radius: 24rpx;
+  background: #fff8f8;
+  border: 1rpx solid #ffe0e0;
+}
+
+.operation-image-title {
+  margin-bottom: 18rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+  line-height: 1.5;
+  color: #2f3142;
+}
+
+.operation-image {
+  width: 100%;
+  display: block;
+  border-radius: 18rpx;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.06);
+}

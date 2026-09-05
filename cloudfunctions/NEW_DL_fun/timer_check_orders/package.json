@@ -1,11 +1,15 @@
 ﻿{
-  "name": "timer_check_orders",
-  "version": "1.0.0",
-  "description": "Scheduled task for order reminders and auto-lock",
-  "main": "index.js",
-  "dependencies": {
-    "wx-server-sdk": "latest"
-  }
+    "name":  "timer_check_orders",
+    "version":  "1.0.0",
+    "description":  "Scheduled task for order reminders and auto-lock",
+    "main":  "index.js",
+    "dependencies":  {
+                         "wx-server-sdk":  "latest"
+                     },
+    "scripts":  {
+                    "test":  "echo \"Error: no test specified\" \u0026\u0026 exit 1",
+                    "sync:index":  "node ../sync-dev-to-true.js .",
+                    "sync:all":  "node ../sync-dev-to-true.js"
+                }
 }
-
 

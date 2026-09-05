@@ -1,14 +1,17 @@
-{
-  "name": "NEWDL_security_center",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "wx-server-sdk": "^4.0.2"
-  }
+﻿{
+    "name":  "NEWDL_security_center",
+    "version":  "1.0.0",
+    "description":  "",
+    "main":  "index.js",
+    "scripts":  {
+                    "test":  "echo \"Error: no test specified\" \u0026\u0026 exit 1",
+                    "sync:index":  "node ../sync-dev-to-true.js .",
+                    "sync:all":  "node ../sync-dev-to-true.js"
+                },
+    "author":  "",
+    "license":  "ISC",
+    "dependencies":  {
+                         "wx-server-sdk":  "^4.0.2"
+                     }
 }
+

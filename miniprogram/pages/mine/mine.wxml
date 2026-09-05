@@ -26,6 +26,7 @@
           ID: {{user.id || '—'}} ·
           {{user.roleLabel || '预览方'}}
         </text>
+        <text wx:if="{{currentOrgName}}" class="sub">机构：{{currentOrgName}}</text>
       </view>
 
       <button class="edit-btn" bindtap="onEditProfile">

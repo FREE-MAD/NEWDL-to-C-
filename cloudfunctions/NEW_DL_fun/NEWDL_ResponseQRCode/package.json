@@ -1,0 +1,16 @@
+{
+  "name": "NEWDL_ResponseQRCode",
+  "version": "1.0.0",
+  "description": "A 侧入口二维码联动云函数：通过 HTTP 调用 B 环境 DLforP_entry_qrcode 生成归属小程序 B 的机构入口小程序码，并转存到 A 侧云存储；支持 callFunction 与 HTTP 云函数（9000 端口）双入口",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "jpeg-js": "^0.4.4",
+    "pngjs": "^7.0.0",
+    "wx-server-sdk": "^4.0.2"
+  }
+}

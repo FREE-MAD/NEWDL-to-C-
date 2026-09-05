@@ -1,0 +1,70 @@
+<!-- pages/index/do_certification/do_certification.wxml -->
+<view class="certification-page">
+  <!-- 新增简易头部：由于全局使用自定义导航，这里直接给出返回按钮和页面标题 -->
+  <view class="certification-nav">
+    
+  </view>
+
+  <image
+    class="certification-banner"
+    src="cloud://cloud1-6gh7jgl8c5b16a83.636c-cloud1-6gh7jgl8c5b16a83-1398046944/NEWDL/yemian_ui_show/do_certification_adv/未命名的设计 (1).png"
+    mode="widthFix"
+  />
+
+  <view class="certification-card">
+    <!-- 新增卡片内 tabbar：把原先单段说明改成“套餐选择 / 具体操作”双页签 -->
+    <view class="certification-tabbar">
+      <block wx:for="{{tabList}}" wx:key="key">
+        <view
+          class="certification-tab-item {{activeTab === item.key ? 'is-active' : ''}}"
+          data-tab="{{item.key}}"
+          bindtap="onTabChange"
+        >
+          {{item.label}}
+        </view>
+      </block>
+    </view>
+
+    <!-- 新增套餐选择内容：先把用户最关心的套餐和价格放在第一个 tab -->
+    <view wx:if="{{activeTab === 'package'}}" class="certification-tab-panel">
+      <view class="certification-tag">套餐说明</view>
+      <view class="certification-heading">先选适合你的套餐</view>
+      <view class="certification-desc">
+        如果你现在还不知道怎么开始，先看套餐差异，先选清楚适合自己的办理节奏。
+      </view>
+
+      <block wx:for="{{packageList}}" wx:key="title">
+        <view class="package-card">
+          <view class="package-card-top">
+            <view class="package-title">{{item.title}}</view>
+            <view class="package-price">{{item.price}}</view>
+          </view>
+          <view class="package-desc">{{item.desc}}</view>
+        </view>
+      </block>
+    </view>
+
+    <!-- 新增具体操作内容：第二个 tab 负责讲清楚进入后第一步要做什么 -->
+    <view wx:elif="{{activeTab === 'operation'}}" class="certification-tab-panel">
+      <view class="certification-tag">操作说明</view>
+      <view class="certification-heading">具体怎么操作</view>
+      <view class="certification-desc">
+        下面按顺序放了具体操作图片，直接从上往下看就行，不容易走错步骤。
+      </view>
+      <view class="certification-desc">
+      详情联系客服微信：
+      </view>
+
+      <block wx:for="{{operationImageList}}" wx:key="src">
+        <view class="operation-image-card">
+          <view class="operation-image-title">{{item.title}}</view>
+          <image
+            class="operation-image"
+            src="{{item.src}}"
+            mode="widthFix"
+          />
+        </view>
+      </block>
+    </view>
+  </view>
+</view>

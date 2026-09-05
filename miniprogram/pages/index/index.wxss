@@ -58,6 +58,29 @@ page {
   min-width: 0;
 }
 
+.mode-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-bottom: 18rpx;
+}
+
+.mode-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 10rpx 20rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.78);
+  color: #5b4fcf;
+  font-size: 22rpx;
+  font-weight: 600;
+}
+
+.org-name-badge {
+  background: rgba(107, 86, 255, 0.16);
+  color: #3f2ec9;
+}
+
 .header-tools {
   flex-shrink: 0;
   display: flex;
@@ -99,97 +122,6 @@ page {
   color: #706b8f;
   line-height: 1.4;
 }
-
-.header-illustration {
-  position: absolute;
-  right: 24rpx;
-  bottom: 66rpx;
-  width: 240rpx;
-  height: 180rpx;
-  z-index: 1;
-}
-
-.header-spark {
-  position: absolute;
-  color: #f9c73f;
-  text-shadow: 0 8rpx 18rpx rgba(249, 199, 63, 0.28);
-}
-
-.header-spark-left {
-  top: 18rpx;
-  left: 0;
-  font-size: 44rpx;
-}
-
-.header-spark-right {
-  top: 22rpx;
-  right: 10rpx;
-  font-size: 26rpx;
-  font-weight: 700;
-}
-
-.header-note-card {
-  position: absolute;
-  right: 14rpx;
-  bottom: 0;
-  width: 144rpx;
-  height: 160rpx;
-  border-radius: 28rpx;
-  background: linear-gradient(180deg, rgba(132, 103, 255, 0.96) 0%, rgba(94, 70, 242, 0.94) 100%);
-  box-shadow: 0 18rpx 30rpx rgba(109, 90, 228, 0.22);
-  transform: rotate(10deg);
-}
-
-.header-note-page {
-  position: absolute;
-  left: 24rpx;
-  top: 34rpx;
-  width: 96rpx;
-  height: 104rpx;
-  border-radius: 18rpx;
-  background: rgba(255, 255, 255, 0.92);
-}
-
-.header-note-line {
-  width: 54rpx;
-  height: 8rpx;
-  margin: 18rpx auto 0;
-  border-radius: 999rpx;
-  background: rgba(104, 88, 214, 0.22);
-}
-
-.header-note-line.short {
-  width: 40rpx;
-}
-
-.header-note-rings {
-  position: absolute;
-  top: 8rpx;
-  left: 28rpx;
-  display: flex;
-  gap: 10rpx;
-}
-
-.header-note-ring {
-  width: 12rpx;
-  height: 18rpx;
-  border: 4rpx solid #8f71ff;
-  border-bottom: 0;
-  border-radius: 12rpx 12rpx 0 0;
-  background: #d7ccff;
-}
-
-.header-note-pencil {
-  position: absolute;
-  right: -10rpx;
-  bottom: 18rpx;
-  width: 18rpx;
-  height: 78rpx;
-  border-radius: 999rpx;
-  background: linear-gradient(180deg, #ffd24b 0%, #f8b61e 100%);
-  box-shadow: 0 4rpx 10rpx rgba(248, 182, 30, 0.2);
-}
-
 
 /* 展开状态时自动显示（header 没有 collapsed） */
 .header:not(.collapsed) .select-identity {
@@ -664,7 +596,7 @@ page {
 .grid-box {
   position: relative;
   z-index: 3;
-  margin-top: -84rpx;
+  margin-top: -140rpx;
   padding: 0 32rpx;
   display: flex;
   flex-direction: column;
@@ -711,6 +643,69 @@ page {
   margin-top: 8rpx;
   font-size: 24rpx;
   color: #767b92;
+}
+
+/* 首页新增办证入口：复用首页卡片风格，同时补充左右布局和箭头提示 */
+.certification-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 60rpx 10rpx 20rpx;
+}
+
+.certification-entry-main {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  margin-top: -40rpx;
+}
+
+.certification-entry-icon {
+  margin-bottom: 0;
+  margin-right: 20rpx;
+}
+
+.certification-entry-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.certification-swiper {
+  width: 100%;
+  height: 256rpx;
+  margin-top: 24rpx;
+  border-radius: 24rpx;
+}
+
+.certification-swiper-item {
+  height: 100%;
+  box-sizing: border-box;
+  padding: 0;
+  border-radius: 24rpx;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.certification-swiper-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.certification-entry-arrow {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #ef4444;
+  white-space: nowrap;
+}
+
+.grid-icon-symbol {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #ffffff;
 }
 
 /* 首页三入口新布局：突出课程安排主入口，并将简历相关入口合并为一组 */
@@ -1047,4 +1042,193 @@ page {
   margin-left: auto;
   color: #4b6bff;
   font-size: 28rpx;
+}
+
+/* 首页新增：教练「接取课程」入口卡片样式。 */
+.pickup-entry-card {
+  width: 100%;
+  border-radius: 24rpx;
+  background: linear-gradient(135deg, #e8f5e9 0%, #ffffff 60%);
+  border: 2rpx solid rgba(46, 125, 50, 0.15);
+  box-shadow: 0 10rpx 26rpx rgba(46, 125, 50, 0.06);
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+  box-sizing: border-box;
+}
+.pickup-entry-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pickup-entry-left {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+.pickup-entry-icon {
+  width: 84rpx;
+  height: 84rpx;
+  border-radius: 22rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36rpx;
+  font-weight: 800;
+  color: #fff;
+  box-shadow: 0 6rpx 16rpx rgba(46, 125, 50, 0.18);
+}
+.pickup-entry-copy {
+  display: flex;
+  flex-direction: column;
+}
+.pickup-entry-title {
+  color: #1b5e20;
+}
+.pickup-entry-arrow {
+  font-size: 24rpx;
+  color: #388e3c;
+  padding: 10rpx 16rpx;
+  border-radius: 999rpx;
+  background: rgba(56, 142, 60, 0.1);
+}
+.pickup-entry-body {
+  margin-top: 24rpx;
+  padding-top: 22rpx;
+  border-top: 2rpx dashed rgba(46, 125, 50, 0.2);
+}
+.pickup-entry-hint {
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #4a5a6a;
+  background: #ffffff;
+  padding: 14rpx 18rpx;
+  border-radius: 14rpx;
+  margin-bottom: 20rpx;
+}
+.pickup-entry-input-row {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+.pickup-entry-input {
+  flex: 1;
+  min-width: 0;
+  height: 82rpx;
+  padding: 0 20rpx;
+  border-radius: 14rpx;
+  background: #fff;
+  border: 2rpx solid #c8e6c9;
+  font-size: 32rpx;
+  font-family: Consolas, Monaco, "Courier New", monospace;
+  letter-spacing: 2rpx;
+  color: #1b5e20;
+  font-weight: 700;
+}
+.pickup-entry-input-placeholder {
+  color: #a5b3a6;
+  font-weight: 400;
+  letter-spacing: 0;
+  font-size: 26rpx;
+}
+.pickup-entry-quick-btns {
+  display: flex;
+  gap: 10rpx;
+  flex-shrink: 0;
+}
+.pickup-entry-mini {
+  margin: 0;
+  padding: 0 18rpx;
+  height: 72rpx;
+  line-height: 72rpx;
+  min-width: 0;
+  border-radius: 14rpx;
+  font-size: 24rpx;
+  background: #fff;
+  color: #2e7d32;
+  border: 2rpx solid #c8e6c9;
+}
+.pickup-entry-mini::after {
+  border: none;
+}
+.pickup-entry-char-hint {
+  margin-top: 12rpx;
+  text-align: right;
+  font-size: 22rpx;
+  color: #6d7d8d;
+}
+.pickup-entry-char-num {
+  color: #2e7d32;
+  font-weight: 700;
+  font-size: 24rpx;
+  padding: 0 6rpx;
+}
+.pickup-entry-submit {
+  width: 100%;
+  margin-top: 22rpx;
+  height: 86rpx;
+  line-height: 86rpx;
+  background: #2e7d32;
+  color: #fff;
+  border-radius: 16rpx;
+  font-size: 30rpx;
+  font-weight: 700;
+  letter-spacing: 2rpx;
+  border: none;
+}
+.pickup-entry-submit::after {
+  border: none;
+}
+.pickup-entry-submit-disabled {
+  background: #c8e6c9;
+  color: #ffffff;
+}
+.pickup-entry-result {
+  margin-top: 24rpx;
+  padding: 20rpx 22rpx;
+  border-radius: 18rpx;
+}
+.pickup-entry-result-ok {
+  background: #f1f8e9;
+  border: 2rpx solid #c5e1a5;
+}
+.pickup-entry-result-fail {
+  background: #fff8e1;
+  border: 2rpx solid #ffe082;
+}
+.pickup-result-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #33691e;
+  margin-bottom: 10rpx;
+}
+.pickup-result-title-fail {
+  color: #e65100;
+}
+.pickup-result-row {
+  font-size: 24rpx;
+  color: #3d4d3f;
+  line-height: 1.8;
+}
+.pickup-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+  margin-top: 18rpx;
+}
+.pickup-result-btn {
+  flex: 1 1 auto;
+  min-width: 40%;
+  background: #33691e;
+  color: #fff;
+  border-radius: 14rpx;
+  font-size: 26rpx;
+  border: none;
+}
+.pickup-result-btn::after {
+  border: none;
+}
+.pickup-result-btn-sub {
+  background: #ffffff;
+  color: #33691e;
+  border: 2rpx solid #c5e1a5;
 }

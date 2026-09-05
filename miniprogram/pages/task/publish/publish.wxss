@@ -73,6 +73,10 @@ page {
   font-weight: 600;
 }
 
+.tab-item.disabled {
+  opacity: 0.45;
+}
+
 .tab-indicator {
   width: 40rpx;
   height: 6rpx;
@@ -230,6 +234,42 @@ page {
   font-weight: 600;
 }
 
+/* 新增 publish 角色说明卡：把当前是谁、可做什么、不可做什么直接写在页面上，减少混权误操作 */
+.publish-role-card {
+  margin: 24rpx 32rpx 0;
+  padding: 24rpx 26rpx;
+  border-radius: 20rpx;
+  background: #ffffff;
+  box-shadow: var(--shadow-sm);
+}
+
+.publish-role-card-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1565c0;
+}
+
+.publish-role-row {
+  margin-top: 14rpx;
+  padding: 14rpx 16rpx;
+  border-radius: 14rpx;
+  background: #f7fbff;
+}
+
+.publish-role-label {
+  display: block;
+  font-size: 22rpx;
+  color: #4f79a5;
+}
+
+.publish-role-value {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #31455a;
+}
+
 /* 内容淡入动画 */
 .fade-in {
   animation: fadeIn 0.4s ease-out;
@@ -252,6 +292,246 @@ page {
   padding: 30rpx;
   margin-bottom: 32rpx;
   box-shadow: var(--shadow-sm);
+}
+
+/* 协作辅助块：已降级为"快速参考已有协作单"的旁路引导，而非 B 约课主入口。
+   视觉策略：更淡的底色、更弱的虚线边框、标题字重/配色压一级、副标题灰字多行引用块，
+   让用户扫一眼就感觉"这里是辅助区，主操作在下面/另一个页面"。 */
+.collaboration-card-hint {
+  margin-top: 32rpx;
+  margin-bottom: 12rpx;
+  background: #fafbfd;
+  border: 2rpx dashed #dcdfe6;
+  border-radius: 24rpx;
+  box-shadow: none;
+}
+
+.collaboration-title-hint {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #5a6170;
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.collaboration-title-icon {
+  color: #a0a8b8;
+  font-size: 26rpx;
+}
+
+/* 主流程建议副标题：左侧用一个 "›" 蓝灰竖线色块做引用效果，降低标题的视觉权重。 */
+.collaboration-subtitle-hint {
+  margin-top: 18rpx;
+  padding: 20rpx 20rpx 20rpx 20rpx;
+  border-radius: 18rpx;
+  background: #eef0f5;
+  border-left: 8rpx solid #b7bfcd;
+  display: flex;
+  align-items: flex-start;
+  gap: 10rpx;
+}
+
+.collaboration-subtitle-bullet {
+  flex-shrink: 0;
+  margin-right: 4rpx;
+  color: #8a919f;
+  font-size: 30rpx;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.collaboration-subtitle-text {
+  color: #6a7180;
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+
+/* 主流程推荐跳转行：把 progress/班级管理 的入口做成突出浅蓝按钮，
+   用户一进页面第一眼就被引导去"正确的主流程"，而不是先去填协作码。 */
+.collaboration-quick-row {
+  margin-top: 24rpx;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.pickup-code-final-row {
+  border: 2rpx dashed rgba(25, 118, 210, 0.18);
+}
+
+.pickup-final-code {
+  color: #2e7d32;
+}
+
+.pickup-readonly-tip {
+  margin-top: 16rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 14rpx;
+  background: #f7fbff;
+  color: #5c6b7a;
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+
+.collaboration-quick-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 76rpx;
+  padding: 0 24rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, #eaf2ff, #d6e4ff);
+  color: #1f5fd8;
+  font-size: 26rpx;
+  font-weight: 600;
+  border: 2rpx solid #c5d6fb;
+  line-height: 1.2;
+}
+
+.collaboration-quick-tip {
+  color: #8a919f;
+  font-size: 22rpx;
+  line-height: 1.4;
+}
+
+/* 分隔线：告诉用户"下面才是可选的参考入口"，用灰字 + 左右横线弱化。 */
+.collaboration-divider-hint {
+  margin-top: 22rpx;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  color: #a0a8b8;
+}
+
+.collaboration-divider-hint::before,
+.collaboration-divider-hint::after {
+  content: '';
+  flex: 1;
+  height: 2rpx;
+  background: #e3e6ec;
+  display: block;
+}
+
+.collaboration-divider-label {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  color: #a0a8b8;
+}
+
+/* 协作码输入框弱化为辅助区：不再是蓝色实线的"主要表单"感。 */
+.collaboration-code-input {
+  background: #f5f6f9;
+  border: 2rpx solid #e5e8ef;
+  color: #4a5060;
+}
+
+/* 次级按钮"参考该协作单"：降为重灰 + 文字按钮风，避免与上方主流程浅蓝按钮抢 CTA。 */
+.collaboration-fetch-btn-hint {
+  background: #ffffff;
+  color: #6a7180;
+  border: 2rpx solid #d9dde5;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.collaboration-fetch-btn-hint[disabled],
+.collaboration-fetch-btn-hint[disabled]:active {
+  background: #f1f2f5 !important;
+  color: #98a0ad !important;
+  border-color: #e5e8ef !important;
+}
+
+/* 新增：协作卡片锁定态 (导入后 / 编辑态)：背景整体变淡，视觉提示"只看不改" */
+.collaboration-card-locked {
+  background: #fafafa;
+  border-color: #e0e3e8;
+}
+
+/* 新增：标题行旁边的"已锁定"小标签，明确告知用户为什么输入框点不进去 */
+.section-card-tag-locked {
+  display: inline-block;
+  margin-left: 16rpx;
+  padding: 4rpx 16rpx;
+  border-radius: 999rpx;
+  background: #eef0f3;
+  color: #8a9099;
+  font-size: 22rpx;
+  font-weight: 500;
+  vertical-align: middle;
+}
+
+.collaboration-input-row {
+  display: flex;
+  align-items: stretch;
+  gap: 16rpx;
+  margin-top: 16rpx;
+}
+
+/* 新增：锁定态整行置灰，并进一步限制 pointer 事件，减少误触路径 */
+.collaboration-input-row-locked {
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* 新增：锁定态输入框样式切为"只读展示条"：浅灰底 + 灰字 + 禁用光标态 */
+.collaboration-code-input-locked {
+  background: #f2f3f5;
+  color: #6a7180;
+  caret-color: transparent;
+  cursor: not-allowed;
+}
+
+.collaboration-fetch-btn {
+  flex-shrink: 0;
+  min-width: 260rpx;
+  height: 96rpx;
+  line-height: 96rpx;
+  padding: 0 24rpx;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+}
+
+/* 新增：锁定态按钮切为"已导入"灰色按钮，和主操作做视觉区分 */
+.collaboration-fetch-btn-locked {
+  background: #d9dde2 !important;
+  color: #6a7180 !important;
+  border: 2rpx solid #e0e3e8;
+  font-weight: 500;
+}
+
+.collaboration-preview {
+  margin-top: 24rpx;
+  padding: 24rpx;
+  border-radius: 20rpx;
+  background: #fafbff;
+  border: 2rpx solid #dfe6f8;
+}
+
+/* 新增：已有课程编辑态的只读协作摘要，配色比导入态更淡，强调"历史数据"性质 */
+.collaboration-preview-readonly {
+  background: #fafafa;
+  border-color: #e6e8ec;
+}
+
+.collaboration-preview-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #556fc2;
+}
+
+.collaboration-preview-item,
+.collaboration-preview-tip {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #4d5b76;
+}
+
+.collaboration-preview-tip {
+  color: #666;
 }
 
 /* 横向滚动 - 课程选择 */
@@ -1270,4 +1550,195 @@ page {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* 新增：教练接取码卡片样式。
+   整体视觉沿用 collaboration-card，但强调「码块 + 动作区」，
+   让发布者一眼看懂 8 位班级码 / 4 位确认码 / 12 位完整接取码之间的关系。
+*/
+.pickup-code-card {
+  margin-top: 24rpx;
+  border: 2rpx solid rgba(25, 118, 210, 0.18);
+  background: linear-gradient(135deg, #f7fbff 0%, #ffffff 60%);
+  box-shadow: 0 8rpx 24rpx rgba(25, 118, 210, 0.06);
+}
+.pickup-code-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+.section-card-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  line-height: 1.4;
+}
+.section-card-tag-success {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+.section-card-tag-warn {
+  background: #fff5e0;
+  color: #b26a00;
+}
+.pickup-code-subtitle {
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #5c6b7a;
+  margin: 12rpx 0 20rpx;
+}
+.pickup-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14rpx 18rpx;
+  border-radius: 14rpx;
+  background: #f7fafc;
+  margin-bottom: 14rpx;
+}
+.pickup-code-full-row {
+  background: #1976d2;
+  color: #fff;
+  border-radius: 16rpx;
+  padding: 18rpx 20rpx;
+}
+.pickup-code-label {
+  font-size: 24rpx;
+  color: #7d8b99;
+  flex-shrink: 0;
+  margin-right: 16rpx;
+}
+.pickup-code-full-row .pickup-code-label {
+  color: rgba(255, 255, 255, 0.8);
+}
+.pickup-code-value {
+  font-family: Consolas, Monaco, "Courier New", monospace;
+  font-weight: 700;
+  letter-spacing: 2rpx;
+  font-size: 30rpx;
+  color: #1c2b3a;
+  text-align: right;
+}
+.pickup-full-code-value {
+  color: #fff;
+  font-size: 34rpx;
+  letter-spacing: 4rpx;
+}
+.pickup-course-code {
+  color: #1565c0;
+}
+.pickup-confirm-code {
+  color: #e65100;
+}
+.pickup-code-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-top: 8rpx;
+  /* 修复点击无反应：给动作容器建立定位上下文 + 更高 z-index，
+     防止被协作卡片或 scroll-view 内部的伪透明层吞掉触控事件。 */
+  position: relative;
+  z-index: 2;
+}
+.pickup-btn {
+  flex: 1 1 auto;
+  min-width: 40%;
+  border-radius: 14rpx;
+  font-size: 26rpx;
+  /* 修复点击无反应：原来 padding: 0 14rpx 导致按钮垂直方向没有触控余量，
+     手指很难精准点中（视觉字高只有 ~47rpx ≈ 23px），统一改为上下 20rpx，
+     保证最小触控高度在 80rpx ≈ 40px，符合移动端可点击区域下限。 */
+  padding: 20rpx 20rpx;
+  line-height: 1.5;
+  border: none;
+  /* 修复点击无反应：显式允许 pointer 事件，防止父级/全局样式意外禁用。 */
+  pointer-events: auto;
+}
+.pickup-btn::after {
+  border: none;
+}
+.pickup-btn-primary {
+  background: #1976d2;
+  color: #fff;
+}
+.pickup-btn-warn {
+  background: #ff8f00;
+  color: #fff;
+}
+.pickup-btn-sub {
+  background: #eef3f8;
+  color: #455a64;
+}
+/* 新增：第一步「完成课程信息编辑，允许教练接单」的醒目标题级按钮：
+   用高饱和绿色背景 + 白色字体，强调它是生成 12 位接取码前的强制前置动作。 */
+.pickup-btn-strong {
+  background: #00a870;
+  color: #fff;
+  font-weight: 600;
+}
+/* 新增：还没 mark_ready 前，生成 12 位接取码的按钮用灰色禁用态，提醒先做上一步。 */
+.pickup-btn-disabled {
+  background: #c9d3dc !important;
+  color: #ffffff !important;
+}
+/* 新增：接取码卡片内两个操作区（资料确认 / 接取码生成）之间的细分割线。 */
+.pickup-divider {
+  height: 2rpx;
+  background: #e6ecf1;
+  margin: 26rpx 0 22rpx;
+}
+/* 新增：第一步「课程资料确认」的独立分段，样式和外层卡片保持统一。 */
+.pickup-info-ready-section {
+  padding: 6rpx 2rpx 2rpx;
+  /* 修复点击无反应：建立定位上下文 + z-index，确保其内的按钮不会被上方
+     collaboration-card 或其他绝对/浮动元素覆盖，触控事件可以落在按钮上。 */
+  position: relative;
+  z-index: 3;
+  /* 修复点击无反应：显式允许 pointer 事件，防止被父级样式继承导致整段不可点。 */
+  pointer-events: auto;
+}
+.pickup-info-ready-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #263238;
+  margin-bottom: 10rpx;
+}
+.pickup-info-ready-desc {
+  font-size: 24rpx;
+  color: #546e7a;
+  line-height: 1.8;
+  margin-bottom: 8rpx;
+}
+.pickup-ready-time {
+  display: inline-block;
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #8a9aa9;
+}
+.pickup-code-meta {
+  margin-top: 22rpx;
+  padding-top: 18rpx;
+  border-top: 2rpx dashed #dde6ee;
+}
+.pickup-meta-row {
+  display: block;
+  font-size: 24rpx;
+  color: #455a64;
+  line-height: 1.8;
+}
+.pickup-code-tip {
+  margin-top: 18rpx;
+  font-size: 22rpx;
+  color: #8a9aa9;
+  line-height: 1.7;
+  padding: 14rpx 16rpx;
+  background: #fafbfc;
+  border-radius: 12rpx;
 }

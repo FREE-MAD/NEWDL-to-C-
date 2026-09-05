@@ -2,6 +2,19 @@
 
 all是比较精简版具体过程以及更改查看各个具体md，每次git提交时先生陈当次提交的改动过程(最开始的改动目标是什么然后呢过程中遇到了什么问题然后以及怎么调整的)(开发故事)以及改动内容然后呢三生成一个单独的MD文件最后再提取精炼汇合到all。md
 
+## 2026-09-04
+
+- 详细过程见：`2026-09-04_change_report.md`
+- 本次为集中提交，覆盖 2026-08-22 ~ 2026-09-04 累积改动，四条主线：
+  - 课程协作与接取：M 码统一为 8 位（首字符 A/B，三字段查重），新增 12 位接取码接单与重置机制；发布改两步（先就绪、再生成接取码）；fulfill_state 生命周期与权限矩阵（编辑态+创建者才可管理，其余只读）；冷启动 404 用 buildId + 前端 500ms 重试兜底
+  - dev/true 分流：NEW_DL_fun 下 8 个云函数 index.js 改为按 envVersion 请求级分流，develop 走 dev_index.js（上传即生效）；true 仅由 sync-dev-to-true.js 手动同步；21 个旧函数归档 _legacy_disabled
+  - 机构管理端：新增"团队协作" tab 与机构创建/编辑（表单分区，生成后不可改字段）、bizRole 角色体系、do_certification 认证页、全局默认分享
+  - 二维码链路：NEWDL_ResponseQRCode 改 HTTP 云函数并支持中间 Logo 合成（pngjs+jpeg-js 避免超包体）；前端改 callHTTPFunction（libVersion 3.15.1）；修复 DIY 二维码后缀写死 .jpg 导致合成失败（魔数校验 + 动态后缀 + 后端诊断日志）
+- 当前需要继续关注的点：
+  - sync-dev-to-true.js 由用户手动执行后才发布 true 版（AI 不执行迁移）
+  - DIY 二维码修复需重新上传 A 侧云函数并重新预览开发版
+  - release 环境扫码落地页路径需发布后验证
+
 ## 2026-08-21
 
 - 详细过程见：`2026-08-21_change_report.md`

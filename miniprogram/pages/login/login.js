@@ -407,12 +407,12 @@ Page({
                     wx.setStorageSync("avatarUrl", avatarUrl);
                     wx.setStorageSync("openid", openid);
                   }
-                  
+
                   wx.showToast({
                     title: isNewUser ? "注册成功" : "登录成功",
                     icon: "success"
                   });
-                  
+
                   // 跳转回首页
                   setTimeout(() => {
                     wx.switchTab({
@@ -441,13 +441,13 @@ Page({
             });
           },
           fail: () => {
-            this.setData({
-              isSubmitting: false
-            });
-            wx.showToast({
-              title: "需要位置授权",
-              icon: "none"
-            });
+          this.setData({
+            isSubmitting: false
+          });
+          wx.showToast({
+            title: "需要位置授权",
+            icon: "none"
+          });
           }
         });
       },

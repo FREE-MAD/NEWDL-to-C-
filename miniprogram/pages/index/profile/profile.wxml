@@ -32,17 +32,41 @@
         <!-- 新增必填提示：当前页保存时真正强校验的是昵称和电话 -->
         <view class="required-tip">带 <text class="required-star">*</text> 的项目为必填</view>
         <!-- 新增基础信息编辑：用于提交自己的基础资料 -->
+        <!-- 性别：男女选项 + 对应的官方默认头像，两者始终同时展示 -->
+        <view class="field-block">
+          <view class="label">性别</view>
+          <view class="option-row">
+            <view
+              wx:for="{{genderOptions}}"
+              wx:key="*this"
+              class="option-chip {{profileForm.gender === item ? 'active' : ''}}"
+              data-field="gender"
+              data-value="{{item}}"
+              bindtap="onOptionSelect"
+            >{{item}}</view>
+          </view>
+          <view class="default-avatar-row">
+            <image wx:if="{{defaultAvatarUrl}}" class="default-avatar-thumb" src="{{defaultAvatarUrl}}" mode="aspectFill" data-url="{{defaultAvatarUrl}}" catchtap="previewImage"></image>
+            <view wx:else class="default-avatar-thumb default-avatar-thumb-empty">?</view>
+            <view class="default-avatar-text">
+              <view class="default-avatar-title">默认教练头像</view>
+              <view class="default-avatar-desc">{{defaultAvatarUrl ? (hasCustomAvatar ? '当前使用自定义照片' : '当前使用此头像') : '请选择性别后自动显示'}}</view>
+            </view>
+          </view>
+        </view>
+        <!-- 照片：自定义上传入口，与上方默认头像并列展示，上传后以自定义照片为准 -->
         <view class="field-block">
           <view class="label">照片</view>
-          <!-- 新增照片上传：基础信息卡顶部直接维护个人照片 -->
           <view class="upload-area photo-upload" data-field="avatarUrl" bindtap="chooseAndUploadImage">
-            <image wx:if="{{profileForm.avatarUrl}}" class="upload-preview avatar-preview" src="{{profileForm.avatarUrl}}" mode="aspectFill" data-url="{{profileForm.avatarUrl}}" catchtap="previewImage"></image>
-            <view wx:else class="upload-placeholder">点击上传照片</view>
+            <image wx:if="{{hasCustomAvatar}}" class="upload-preview avatar-preview" src="{{profileForm.avatarUrl}}" mode="aspectFill" data-url="{{profileForm.avatarUrl}}" catchtap="previewImage"></image>
+            <view wx:else class="upload-placeholder">点击上传自定义照片</view>
           </view>
+          <view wx:if="{{hasCustomAvatar}}" class="avatar-reset" catchtap="resetAvatarToDefault">恢复默认头像</view>
+          <view wx:else class="field-help">未上传照片时，自动使用所选性别的默认教练头像。</view>
         </view>
         <view class="field-block">
           <view class="label">昵称<text class="required-star">*</text></view>
-          <input class="input" placeholder="如:xx教练" value="{{profileForm.nickname}}" data-field="nickname" bindinput="onFieldInput" />
+          <input class="input" placeholder="XX教练" value="{{profileForm.nickname}}" data-field="nickname" bindinput="onFieldInput" />
         </view>
         <view class="field-block">
           <!-- 新增展示对齐：表单页联系方式命名与预览页保持一致 -->
@@ -133,14 +157,15 @@
   </block>
 
   <view class="item-wrapper">
-    <view class="card">
+    <view class="card" bindtap="toggleCard" data-index="skills">
       <view class="left">
         <text class="icon">⭐</text>
         <text class="title">擅长领域</text>
       </view>
+      <view class="{{currentIndex === 'skills' ? 'arrow rotate' : 'arrow'}}">⌄</view>
     </view>
 
-    <view class="expand-box skill-select-box">
+    <view class="expand-box skill-select-box" wx:if="{{currentIndex === 'skills'}}">
       <view class="expand-inner">
         <!-- 新增擅长领域收集：改成可多选标签，让家长一眼能看懂你适合带什么方向 -->
         <view class="label">请选择你擅长带的课程方向（可多选）</view>

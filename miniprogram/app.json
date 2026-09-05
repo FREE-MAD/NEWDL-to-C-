@@ -7,6 +7,7 @@
     "pages/index/about/about",
     "pages/index/publish/publish",
     "pages/index/profile/profile",
+    "pages/index/do_certification/do_certification",
     "pages/index/sport_events/sport_events",
     "pages/task/progress/progress",
     "pages/profile/profile",
@@ -18,7 +19,10 @@
     "pages/index/events/list/list",
     "pages/index/hot/hot",
     "pages/task/progress/progress_specialOperation/progress_specialOperation",
-    "pages/task/progress/progress_specialOperation/progress_classdetailed/progress_classdetailed"
+    "pages/task/progress/progress_specialOperation/progress_classdetailed/progress_classdetailed",
+    "pages/organization/organization",
+    "pages/organization/organization_create/organization_create"
+
   ],
   "window": {
     "navigationBarTextStyle": "black",
@@ -43,6 +47,12 @@
         "text": "主页",
         "iconPath": "images/icons/tab-home.png",
         "selectedIconPath": "images/icons/tab-home-active.png"
+      },
+      {
+        "pagePath":"pages/organization/organization",
+        "text": "团队协作",
+        "iconPath": "images/icons/tab-org.png",
+        "selectedIconPath": "images/icons/tab-org-active.png"
       },
       {
         "pagePath": "pages/task/progress/progress",

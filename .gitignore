@@ -1,0 +1,11 @@
+# IDE / 工具目录，不入库
+.pai/
+.snapshots/
+.trae/
+.vscode/
+
+# 根目录误生成的空文件
+True
+
+# 依赖目录：云端部署时由本地磁盘直接上传，入库只保留 package.json / package-lock.json
+node_modules/

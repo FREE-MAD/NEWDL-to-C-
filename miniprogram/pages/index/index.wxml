@@ -8,6 +8,11 @@
     <!-- 首页欢迎区新样式：补充顶部胶囊按钮和右侧装饰，让首页第一屏更有引导感 -->
     <view class="header-topbar">
       <view class="header-left">
+        <!-- 首页新增业务模式标签：让用户一眼知道自己当前走的是哪条工作流 -->
+        <view class="mode-badges">
+          <view class="mode-badge">{{bizRoleLabel}}</view>
+          <view wx:if="{{orgName}}" class="mode-badge org-name-badge">{{orgName}}</view>
+        </view>
         <view class="hello"> {{welcome}} 👋</view>
         <view class="header-desc">{{headerDesc}}</view>
         <view class="location">
@@ -16,24 +21,6 @@
       </view>
     </view>
 
-    <!-- 首页欢迎区右侧装饰：用简单图形模拟插画感，不影响任何业务逻辑 -->
-    <view class="header-illustration">
-      <text class="header-spark header-spark-left">✦</text>
-      <text class="header-spark header-spark-right">+</text>
-      <view class="header-note-card">
-        <view class="header-note-rings">
-          <view class="header-note-ring"></view>
-          <view class="header-note-ring"></view>
-          <view class="header-note-ring"></view>
-        </view>
-        <view class="header-note-page">
-          <view class="header-note-line"></view>
-          <view class="header-note-line short"></view>
-          <view class="header-note-line"></view>
-        </view>
-        <view class="header-note-pencil"></view>
-      </view>
-    </view>
   </view>
 
  <!-- Header: 选择身份 -->
@@ -54,6 +41,111 @@
 <!-- 四功能区块---c版 -->
 <!-- 首页入口新布局：第1项作为核心按钮，第2/3项合并为教练简历分组 -->
 <view wx:if="{{panelItems.length >= 3}}" class="grid-box">
+  <!-- 首页新增快捷入口：补一个"低价办证"卡片，方便用户直接进入办证页 -->
+  <view class="grid-item visible certification-entry" bindtap="goToDoCertification">
+    <view class="certification-entry-main">
+      <view class="icon red certification-entry-icon">
+        <text class="grid-icon-symbol">证</text>
+      </view>
+      <view class="certification-entry-copy">
+        <view class="grid-title">低价办证</view>
+        <view class="grid-sub">点击进入办证页面，查看办理说明</view>
+      </view>
+      <view class="certification-entry-arrow">立即查看 ></view>
+    </view>
+    <!-- 首页新增办证轮播：直接轮播云存储海报，让用户进入前先看到实际宣传图 -->
+    <swiper
+      class="certification-swiper"
+      indicator-dots="{{true}}"
+      autoplay="{{true}}"
+      circular="{{true}}"
+      interval="2800"
+      duration="450"
+    >
+      <swiper-item wx:for="{{certificationBanners}}" wx:key="image">
+        <view class="certification-swiper-item" bindtap="goToDoCertification">
+          <!-- 首页办证卡片改为轮播云存储海报：用户直接看图，更容易一眼理解入口内容 -->
+          <image
+            class="certification-swiper-image"
+            src="{{item.image}}"
+            mode="aspectFill"
+          />
+        </view>
+      </swiper-item>
+    </swiper>
+  </view>
+
+  <!-- 首页新增：教练接取课程入口卡片。
+       - 任何登录/未登录用户都能看到入口；
+       - 点击标题展开 12 位接取码输入框，支持粘贴 + 一键清空；
+       - 未登录（访客）点击提交会引导去完善教练资料；
+       - 成功接取后在下方显示课程信息，提供直接「进入课程管理」按钮。 -->
+  <view class="pickup-entry-card visible">
+    <view class="pickup-entry-head" bindtap="togglePickupPanel">
+      <view class="pickup-entry-left">
+        <view class="icon green pickup-entry-icon">
+          <text class="grid-icon-symbol">接</text>
+        </view>
+        <view class="pickup-entry-copy">
+          <view class="grid-title pickup-entry-title">接取课程</view>
+          <view class="grid-sub">拿到 12 位完整接取码，在这里输入即可开始带课</view>
+        </view>
+      </view>
+      <view class="pickup-entry-arrow">{{showPickupPanel ? '收起 ∧' : '展开 ∨'}}</view>
+    </view>
+
+    <view wx:if="{{showPickupPanel}}" class="pickup-entry-body">
+      <view class="pickup-entry-hint">
+        完整接取码 = 前 8 位班级码 + 后 4 位确认码，共 12 位英数字；复制过来直接粘贴就行，无需区分大小写。
+      </view>
+      <view class="pickup-entry-input-row">
+        <input
+          class="pickup-entry-input"
+          placeholder="请输入或粘贴 12 位完整接取码"
+          placeholder-class="pickup-entry-input-placeholder"
+          value="{{pickupCodeInput}}"
+          bindinput="onPickupCodeInput"
+          maxlength="12"
+          confirm-type="done"
+          bindconfirm="submitPickupCode"
+        />
+        <view class="pickup-entry-quick-btns">
+          <button class="pickup-entry-mini" catchtap="pastePickupCode">粘贴</button>
+          <button class="pickup-entry-mini" catchtap="clearPickupCode">清空</button>
+        </view>
+      </view>
+      <view class="pickup-entry-char-hint">
+        已输入 <text class="pickup-entry-char-num">{{pickupCodeInput.length}}</text> / 12 位
+      </view>
+
+      <button
+        class="pickup-entry-submit {{pickupCodeInput.length === 12 ? '' : 'pickup-entry-submit-disabled'}}"
+        bindtap="submitPickupCode"
+        loading="{{isSubmittingPickup}}"
+        disabled="{{isSubmittingPickup}}"
+      >立即接取这门课程</button>
+
+      <!-- 接取成功摘要：展示课程名、地点、教练名并直接跳转进课程管理 -->
+      <view wx:if="{{pickupLastResult && pickupLastResult.ok}}" class="pickup-entry-result pickup-entry-result-ok">
+        <view class="pickup-result-title">🎉 {{pickupLastResult.msg}}{{pickupLastResult.alreadyAssigned ? '（已接取过）' : ''}}</view>
+        <view wx:if="{{pickupLastResult.title}}" class="pickup-result-row">课程：{{pickupLastResult.title}}</view>
+        <view wx:if="{{pickupLastResult.location}}" class="pickup-result-row">地点：{{pickupLastResult.location}}</view>
+        <view wx:if="{{pickupLastResult.coachName}}" class="pickup-result-row">执行教练：{{pickupLastResult.coachName}}</view>
+        <view wx:if="{{pickupLastResult.pickupFinalCode}}" class="pickup-result-row">确认码：{{pickupLastResult.pickupFinalCode}}</view>
+        <view class="pickup-result-actions">
+          <button class="pickup-result-btn" bindtap="goToPickedUpCourse">进入课程开始管理</button>
+          <button class="pickup-result-btn pickup-result-btn-sub" catchtap="togglePickupPanel">先收起面板</button>
+        </view>
+      </view>
+
+      <!-- 接取失败摘要：直接把原因显示在面板下，减少用户反复点 toast -->
+      <view wx:if="{{pickupLastResult && !pickupLastResult.ok}}" class="pickup-entry-result pickup-entry-result-fail">
+        <view class="pickup-result-title pickup-result-title-fail">⚠ 接取未通过</view>
+        <view class="pickup-result-row">原因：{{pickupLastResult.msg}}</view>
+      </view>
+    </view>
+  </view>
+
   <view
     class="primary-panel visible"
     bindtap="onPanelTap"
@@ -74,38 +166,33 @@
 
     <!-- 首页主入口详细说明：直接解释为什么要创建班级，以及创建后可以继续做什么 -->
     <view class="primary-detail-list">
-      <view class="primary-detail-item">
-        <view class="primary-detail-icon">?</view>
+      <view
+        wx:for="{{primaryGuideList}}"
+        wx:for-item="guide"
+        wx:key="label"
+        class="primary-detail-item"
+      >
+        <view class="primary-detail-icon">{{index === 0 ? '?' : '+'}}</view>
         <view class="primary-detail-copy">
-          <view class="primary-detail-label">为什么要创建班级</view>
-          <view class="primary-detail-value">
-            把孩子信息、课程安排和上课记录放在一起，之后带课更方便。
-          </view>
-        </view>
-      </view>
-      <view class="primary-detail-item">
-        <view class="primary-detail-icon">+</view>
-        <view class="primary-detail-copy">
-          <view class="primary-detail-label">创建后可以做什么</view>
-          <view class="primary-detail-value">
-            安排课程 → 记录每次上课 → 查看训练情况 → 完成结课
-          </view>
+          <view class="primary-detail-label">{{guide.label}}</view>
+          <view class="primary-detail-value">{{guide.value}}</view>
         </view>
       </view>
     </view>
 
     <view class="panel-arrow">
-      <text>去创建班级</text>
+      <text>{{primaryActionText}}</text>
       <text class="panel-arrow-icon">›</text>
     </view>
 
         <!-- 首页主入口补充兜底跳转：给想直接去课程管理的用户一个单独小箭头入口 -->
         <view class="primary-manage-shortcut" catchtap="goToCourseManage">
-          <text class="primary-manage-shortcut-text">已有班级？去课程管理</text>
+          <text class="primary-manage-shortcut-text">{{primaryShortcutText}}</text>
       <text class="primary-manage-shortcut-arrow">›</text>
         </view>
   </view>
 
+  <!-- 教练简历分组固定内容：文案和入口都取最初的访客口径，不随业务角色变化 -->
   <view class="resume-group visible" animation="{{animations[1]}}">
     <view class="resume-group-head">
       <view class="resume-group-title">教练简历</view>
@@ -115,15 +202,15 @@
     <view
       class="resume-item"
       bindtap="onPanelTap"
-      data-action="{{panelItems[1].action}}"
+      data-action="{{resumeItems[0].action}}"
     >
       <view class="resume-item-left">
-        <view class="icon {{panelItems[1].color}} resume-icon">
+        <view class="icon {{resumeItems[0].color}} resume-icon">
           <text class="resume-icon-symbol">资</text>
         </view>
         <view class="resume-copy">
-          <view class="grid-title">{{panelItems[1].title}}</view>
-          <view class="grid-sub">{{panelItems[1].sub}}</view>
+          <view class="grid-title">{{resumeItems[0].title}}</view>
+          <view class="grid-sub">{{resumeItems[0].sub}}</view>
         </view>
       </view>
       <view class="resume-suffix">去完善</view>
@@ -132,15 +219,15 @@
     <view
       class="resume-item"
       bindtap="onPanelTap"
-      data-action="{{panelItems[2].action}}"
+      data-action="{{resumeItems[1].action}}"
     >
       <view class="resume-item-left">
-        <view class="icon {{panelItems[2].color}} resume-icon">
+        <view class="icon {{resumeItems[1].color}} resume-icon">
           <text class="resume-icon-symbol">预</text>
         </view>
         <view class="resume-copy">
-          <view class="grid-title">{{panelItems[2].title}}</view>
-          <view class="grid-sub">{{panelItems[2].sub}}</view>
+          <view class="grid-title">{{resumeItems[1].title}}</view>
+          <view class="grid-sub">{{resumeItems[1].sub}}</view>
         </view>
       </view>
       <view class="resume-suffix">去查看</view>

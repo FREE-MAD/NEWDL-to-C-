@@ -1,14 +1,19 @@
 <view class="page">
   <view class="header">
   <view class="header-info">
-    <view class="city">保持微笑</view>
+    <!-- 课程管理页新增模式标签：先告诉用户自己当前正在看哪条业务线 -->
+    <view class="mode-line">
+      <text class="mode-pill">{{bizRoleLabel}}</text>
+      <text wx:if="{{orgName}}" class="mode-pill mode-org-pill">{{orgName}}</text>
+    </view>
+    <view class="city">{{bizRole === 'org_coach' ? '专注执行课程' : '把课程安排看得更清楚'}}</view>
 
     <view class="stats">
       
     </view>
 
     <view class="edit-btn">
-      记录心情
+      {{bizRole === 'org_coach' ? '查看待执行课程' : '查看课程进度'}}
       <text class="edit-icon">✎</text>
     </view>
   </view>
@@ -40,21 +45,9 @@
   </view>
   <!-- 课程管理说明内容：展开时完整显示，5 秒后切到折叠态而不是直接移除 -->
   <view class="flow-tip-body">
-    <view class="flow-guide-row">
-          <text class="flow-guide-label">这里展示什么</text>
-          <text class="flow-guide-value">这里展示您已经创建的全部班级。</text>
-    </view>
-    <view class="flow-guide-row">
-          <text class="flow-guide-label">班级展示</text>
-          <text class="flow-guide-value">进入班级展示页面，用于查看班级信息及课程内容。该页面主要功能是分享给家长，供家长查看。</text>
-    </view>
-    <view class="flow-guide-row">
-          <text class="flow-guide-label">班级管理</text>
-          <text class="flow-guide-value">进入班级管理页面，用于进行课程管理、每日总结等班级相关操作。</text>
-        </view>
-        <view class="flow-guide-row">
-          <text class="flow-guide-label">怎么选</text>
-          <text class="flow-guide-value">您可以根据当前需要，直接选择对应班级的“班级展示”或“班级管理”。</text>
+    <view class="flow-guide-row" wx:for="{{flowGuideRows}}" wx:key="label">
+      <text class="flow-guide-label">{{item.label}}</text>
+      <text class="flow-guide-value">{{item.value}}</text>
     </view>
   </view>
 </view>
@@ -84,17 +77,26 @@
       <text>进度 {{item.progressText}}</text>
     </view>
 
+    <view class="meta meta-secondary" wx:if="{{item.courseOwnerText || item.courseTagText}}">
+      <text wx:if="{{item.courseOwnerText}}">{{bizRole === 'org_admin' ? '执行人' : '归属'}}：{{item.courseOwnerText}}</text>
+      <text wx:if="{{item.courseTagText}}">课程码：{{item.courseTagText}}</text>
+    </view>
+
     <!-- Desc -->
     <view class="desc">{{item.description}}</view>
 
     <!-- Action -->
+    <!-- 新增：按权限隔离按钮显示
+         - canManageClass=true（只有「待编辑」Tab + 课程创建者本人） → 显示“查看详情 + 进入管理”双按钮
+         - 其他所有阶段/身份（待接取、进行中、已完成、非本人）→ 只能查看，隐藏进入管理按钮；查看按钮文案也改为“查看详情”，明确这是只读浏览。
+    -->
     <view class="action-row">
       <button
         class="{{item.canManageClass ? 'secondary' : 'primary'}}"
         bindtap="onViewDetail"
         data-id="{{item.id}}"
       >
-              班级展示
+              {{item.canManageClass ? viewActionText : '查看详情'}}
       </button>
       <button
         wx:if="{{item.canManageClass}}"
@@ -102,7 +104,7 @@
         bindtap="onManageClass"
         data-id="{{item.id}}"
       >
-              班级管理
+              {{manageActionText}}
       </button>
     </view>
 

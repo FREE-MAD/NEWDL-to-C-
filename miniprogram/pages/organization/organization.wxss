@@ -1,0 +1,600 @@
+/* pages/organization/organization.wxss */
+.organization-page {
+  box-sizing: border-box;
+  padding: 32rpx 24rpx 40rpx;
+  background: #f5f7fb;
+}
+
+.entry-section,
+.result-card,
+.brand-swiper-section,
+.philosophy-section,
+.coach-section,
+.reserve-section {
+  margin-bottom: 24rpx;
+}
+
+/* 新增机构展示总容器：统一包裹结果卡片和机构门面，后续方便整体调布局 */
+.organization_show {
+  display: block;
+}
+
+/* 新增：教练团队嵌套到品牌轮播卡片内部时，取消外层间距避免出现双倍留白 */
+/* 新增调整：教练团队已拆为独立区块并改竖直方向排布，原嵌套间距样式改为竖直列表样式，卡片逐行堆叠占满整行 */
+.coach-list-vertical {
+  display: block;
+}
+
+.coach-list-vertical .coach-card {
+  display: block;
+  width: 100%;
+  min-height: auto;
+  margin-right: 0;
+}
+
+.coach-list-vertical .coach-card + .coach-card {
+  margin-top: 20rpx;
+}
+
+.entry-hero {
+  padding: 34rpx 28rpx;
+  border-radius: 32rpx;
+  background: linear-gradient(135deg, #153ea8 0%, #1457ff 52%, #45a4ff 100%);
+  box-shadow: 0 18rpx 40rpx rgba(20, 87, 255, 0.2);
+  color: #ffffff;
+}
+
+.entry-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.entry-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 22rpx;
+  font-weight: 600;
+}
+
+.entry-badge-soft {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.entry-title {
+  margin-top: 24rpx;
+  font-size: 44rpx;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.entry-desc {
+  margin-top: 16rpx;
+  font-size: 28rpx;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.entry-hint {
+  margin-top: 16rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 24rpx;
+  line-height: 1.8;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.entry-action-list {
+  margin-top: 20rpx;
+}
+
+.entry-action-card {
+  padding: 28rpx 24rpx;
+  border-radius: 28rpx;
+  background: #ffffff;
+  box-shadow: 0 10rpx 30rpx rgba(16, 24, 40, 0.06);
+  transition: box-shadow 0.12s ease, background-color 0.12s ease;
+}
+
+.entry-action-card-active {
+  background: #f8fbff;
+  box-shadow: 0 12rpx 32rpx rgba(20, 87, 255, 0.12);
+}
+
+.entry-action-card + .entry-action-card {
+  margin-top: 18rpx;
+}
+
+.entry-action-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #111827;
+}
+
+.entry-action-desc {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  line-height: 1.8;
+  color: #4b5563;
+}
+
+.entry-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 196rpx;
+  height: 68rpx;
+  margin-top: 20rpx;
+  padding: 0 28rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, #1457ff 0%, #2896ff 100%);
+  color: #ffffff;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.result-card {
+  padding: 30rpx 24rpx;
+  border-radius: 28rpx;
+  background: #ffffff;
+  box-shadow: 0 10rpx 30rpx rgba(16, 24, 40, 0.06);
+}
+
+.result-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #111827;
+}
+
+.result-row,
+.result-desc {
+  margin-top: 14rpx;
+  font-size: 26rpx;
+  line-height: 1.75;
+  color: #667085;
+}
+
+/* 新增：机构邀请码可复制行样式，整行可点击并显示复制按钮 */
+.result-row-copyable {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 16rpx 20rpx;
+  margin-top: 16rpx;
+  border-radius: 20rpx;
+  background: #f4f8ff;
+  border: 1rpx solid #dbe8ff;
+}
+
+.result-row-copyable:active {
+  background: #e8f0ff;
+}
+
+/* 新增：机构邀请码文本高亮，突出显示方便识别 */
+.invitation-code-text {
+  margin-left: 4rpx;
+  margin-right: 16rpx;
+  font-size: 30rpx;
+  font-weight: 700;
+  letter-spacing: 2rpx;
+  color: #1457ff;
+}
+
+/* 新增：复制按钮样式，提供明确的点击反馈 */
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  padding: 10rpx 28rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, #1457ff 0%, #2896ff 100%);
+  color: #ffffff;
+  font-size: 24rpx;
+  font-weight: 600;
+  line-height: 1.4;
+  box-shadow: 0 6rpx 16rpx rgba(20, 87, 255, 0.2);
+}
+
+.module-head {
+  margin-bottom: 20rpx;
+}
+
+.module-title {
+  font-size: 36rpx;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #1f2937;
+}
+
+.module-subtitle {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #6b7280;
+}
+
+.brand-swiper {
+  height: 360rpx;
+}
+
+.brand-slide-card {
+  position: relative;
+  box-sizing: border-box;
+  height: 360rpx;
+  border-radius: 32rpx;
+  background: linear-gradient(135deg, #1457ff 0%, #0aa7ff 100%);
+  color: #ffffff;
+  box-shadow: 0 16rpx 40rpx rgba(20, 87, 255, 0.18);
+  overflow: hidden;
+}
+
+.brand-slide-image {
+  width: 100%;
+  height: 100%;
+}
+
+.brand-slide-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #1457ff 0%, #0aa7ff 100%);
+}
+
+.brand-slide-empty-title {
+  padding: 20rpx 28rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  font-size: 30rpx;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 2rpx;
+}
+
+.brand-slide-mask {
+  box-sizing: border-box;
+  height: 100%;
+  padding: 38rpx 30rpx 72rpx;
+}
+
+.brand-slide-mask-image {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.12) 0%, rgba(15, 23, 42, 0.62) 100%);
+}
+
+.brand-slide-badge {
+  display: inline-block;
+  min-width: 144rpx;
+  height: 52rpx;
+  padding: 0 18rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 24rpx;
+  font-weight: 600;
+  line-height: 52rpx;
+  text-align: center;
+}
+
+.brand-slide-title {
+  margin-top: 28rpx;
+  font-size: 44rpx;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.brand-slide-subtitle {
+  margin-top: 18rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.brand-slide-desc {
+  margin-top: 18rpx;
+  font-size: 24rpx;
+  line-height: 1.8;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.philosophy-card,
+.reserve-section {
+  padding: 28rpx 24rpx;
+  border-radius: 28rpx;
+  background: #ffffff;
+  box-shadow: 0 10rpx 30rpx rgba(16, 24, 40, 0.06);
+}
+
+.philosophy-card + .philosophy-card {
+  margin-top: 18rpx;
+}
+
+.philosophy-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #111827;
+}
+
+.philosophy-desc {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  line-height: 1.8;
+  color: #4b5563;
+}
+
+.coach-card {
+  box-sizing: border-box;
+  display: inline-block;
+  width: 320rpx;
+  min-height: 360rpx;
+  margin-right: 20rpx;
+  padding: 28rpx 24rpx;
+  border-radius: 28rpx;
+  background: #ffffff;
+  box-shadow: 0 10rpx 30rpx rgba(16, 24, 40, 0.08);
+  vertical-align: top;
+}
+
+.coach-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1457ff 0%, #5aa7ff 100%);
+  color: #ffffff;
+  font-size: 34rpx;
+  font-weight: 700;
+}
+
+.coach-name {
+  margin-top: 24rpx;
+  font-size: 30rpx;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #111827;
+}
+
+.coach-role {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #1457ff;
+}
+
+.coach-tag {
+  display: inline-block;
+  margin-top: 16rpx;
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+  background: #eef4ff;
+  color: #1457ff;
+  font-size: 22rpx;
+  line-height: 1.4;
+}
+
+.coach-intro {
+  margin-top: 18rpx;
+  font-size: 24rpx;
+  line-height: 1.8;
+  color: #4b5563;
+  white-space: normal;
+}
+
+.reserve-section {
+  border: 2rpx dashed #cfe0ff;
+  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+}
+
+.hero-section {
+  padding: 40rpx 28rpx 32rpx;
+  border-radius: 32rpx;
+  background: linear-gradient(135deg, #1457ff 0%, #0aa7ff 100%);
+  color: #ffffff;
+  box-shadow: 0 16rpx 40rpx rgba(20, 87, 255, 0.18);
+}
+
+.hero-badge {
+  display: inline-block;
+  min-width: 132rpx;
+  height: 52rpx;
+  padding: 0 20rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 24rpx;
+  font-weight: 600;
+  line-height: 52rpx;
+  text-align: center;
+}
+
+.hero-title {
+  margin-top: 24rpx;
+  font-size: 52rpx;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.hero-slogan {
+  margin-top: 20rpx;
+  font-size: 34rpx;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.hero-intro,
+.hero-sub-intro {
+  margin-top: 18rpx;
+  font-size: 26rpx;
+  line-height: 1.8;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.hero-stats {
+  display: flex;
+  margin-top: 32rpx;
+}
+
+.stat-card {
+  flex: 1;
+  padding: 24rpx 16rpx;
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, 0.14);
+  text-align: center;
+}
+
+.stat-card + .stat-card {
+  margin-left: 20rpx;
+}
+
+.stat-value {
+  font-size: 34rpx;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.stat-label {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.section-card,
+.contact-card {
+  margin-top: 24rpx;
+  padding: 28rpx 24rpx;
+  border-radius: 28rpx;
+  background: #ffffff;
+  box-shadow: 0 10rpx 30rpx rgba(16, 24, 40, 0.06);
+}
+
+.highlight-card {
+  background: linear-gradient(180deg, #ffffff 0%, #f4f8ff 100%);
+}
+
+.section-head {
+  margin-bottom: 24rpx;
+}
+
+.section-title,
+.contact-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1.4;
+}
+
+.section-subtitle,
+.contact-desc {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #6b7280;
+}
+
+.service-grid,
+.advantage-grid {
+  display: block;
+}
+
+.service-card {
+  padding: 24rpx;
+  border-radius: 24rpx;
+  background: #f8fbff;
+  border: 1rpx solid #e5efff;
+}
+
+.service-card + .service-card,
+.advantage-item + .advantage-item {
+  margin-top: 20rpx;
+}
+
+.service-title,
+.process-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.4;
+}
+
+.service-desc,
+.process-desc,
+.list-text,
+.advantage-item {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  line-height: 1.8;
+  color: #4b5563;
+}
+
+.list-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 18rpx 0;
+  border-bottom: 1rpx solid #f0f2f5;
+}
+
+.list-dot {
+  width: 14rpx;
+  height: 14rpx;
+  margin-top: 12rpx;
+  border-radius: 50%;
+  background: #1457ff;
+  flex-shrink: 0;
+  margin-right: 16rpx;
+}
+
+.process-row {
+  display: flex;
+  padding: 22rpx 0;
+  border-bottom: 1rpx solid #f0f2f5;
+}
+
+.process-step {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 92rpx;
+  height: 92rpx;
+  border-radius: 24rpx;
+  background: #ebf3ff;
+  color: #1457ff;
+  font-size: 28rpx;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-right: 20rpx;
+}
+
+.process-content {
+  flex: 1;
+}
+
+.advantage-item {
+  margin-top: 0;
+  padding: 22rpx 20rpx;
+  border-radius: 22rpx;
+  background: rgba(20, 87, 255, 0.06);
+  color: #1f3f93;
+}
+
+.contact-tag {
+  display: inline-block;
+  min-height: 56rpx;
+  margin-top: 16rpx;
+  margin-right: 16rpx;
+  padding: 0 20rpx;
+  border-radius: 999rpx;
+  background: #eef4ff;
+  color: #1457ff;
+  font-size: 24rpx;
+  line-height: 56rpx;
+}
