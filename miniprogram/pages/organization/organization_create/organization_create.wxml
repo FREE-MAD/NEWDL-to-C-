@@ -31,9 +31,12 @@
     </view>
   </view>
 
+  <!-- 新增 tab 组件显隐控制（2026-09-20）：hidden 属性在自定义组件上不稳定，
+       改用 class 控制 display，保留组件实例避免切换 tab 丢失表单输入。
+       A(create) 对应 baseinformation，B(join) 对应 coachaddorganization，互斥显示 -->
   <organization-create-baseinformation
     id="baseinformation"
-    hidden="{{currentTab !== 'create'}}"
+    class="org-tab-comp {{currentTab === 'create' ? 'org-tab-show' : 'org-tab-hide'}}"
     auth-ready="{{authReady}}"
     profile="{{profile}}"
     initial-mode="{{initialMode}}"
@@ -41,7 +44,7 @@
 
   <organization-create-coachaddorganization
     id="coachaddorganization"
-    hidden="{{currentTab !== 'join'}}"
+    class="org-tab-comp {{currentTab === 'join' ? 'org-tab-show' : 'org-tab-hide'}}"
     auth-ready="{{authReady}}"
     profile="{{profile}}"
   ></organization-create-coachaddorganization>

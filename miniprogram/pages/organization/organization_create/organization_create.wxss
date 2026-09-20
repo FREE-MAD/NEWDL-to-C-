@@ -1,4 +1,12 @@
 /* pages/organization/organization_create/organization_create.wxss */
+
+/* 新增 tab 组件显隐控制（2026-09-20）：hidden 属性在自定义组件上不稳定，
+   改用 class 控制 display，保留组件实例避免切换 tab 丢失表单输入。
+   .org-tab-hide 作用在组件宿主节点上（页面 WXSS 可样式化组件标签） */
+.org-tab-hide {
+  display: none;
+}
+
 .organization-create-page {
   min-height: 100vh;
   padding: 24rpx;
