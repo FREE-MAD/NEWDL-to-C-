@@ -1,0 +1,498 @@
+/* ============================================================
+ * 业务积木：表单提交 - profile_coachbaseinformation 模块样式
+ * 完整还原原 profile 页面样式，仅作用于本组件内部（组件样式隔离）
+ * ============================================================ */
+
+.page {
+  background: #f5f6fa;
+  min-height: 100%;
+}
+
+/* 顶部背景 */
+.header {
+  width: 100%;
+  height: 320rpx;
+  background: linear-gradient(150deg, #6f4aff, #140043);
+  border-bottom-left-radius: 40rpx;
+  border-bottom-right-radius: 40rpx;
+  padding: 40rpx;
+  box-sizing: border-box;
+}
+
+.header-info {
+  margin-top: 80rpx;
+  color: #fff;
+}
+
+.city {
+  font-size: 28rpx;
+  margin-bottom: 30rpx;
+  opacity: 0.9;
+}
+
+.stats {
+  font-size: 26rpx;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 16rpx;
+  margin-bottom: 30rpx;
+  letter-spacing: 1rpx;
+}
+
+.profile-name {
+  font-size: 44rpx;
+  font-weight: 600;
+}
+
+.stat-item text {
+  font-size: 26rpx;
+  margin-left: 10rpx;
+  opacity: 0.8;
+}
+
+.edit-btn {
+  margin-top: 20rpx;
+  align-self: flex-start;
+  font-size: 28rpx;
+  padding: 10rpx 26rpx;
+  border-radius: 50rpx;
+  background: rgba(255,255,255,0.2);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.edit-icon {
+  font-size: 30rpx;
+}
+
+/* ==========================================s */
+.section {
+  padding: 30rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 30rpx;   /* 卡片之间自然留白 */
+}
+.item-wrapper {
+  background: #ffffff;
+  border-radius: 30rpx;
+  overflow: hidden;         /* 关键！让展开区域不会“突出来” */
+  box-shadow: 0 10rpx 30rpx rgba(0,0,0,0.05);
+  margin-bottom: 36rpx;     /* 卡片之间自然间距 */
+}
+/* 单个卡片 */
+.card {
+  background: #ffffff;
+  border-radius: 26rpx;
+  padding: 36rpx 32rpx;
+
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  /* 关键：更柔和的阴影，让卡片分离 */
+  box-shadow: 0 12rpx 28rpx rgba(0, 0, 0, 0.06);
+
+  /* 让视觉更轻盈 */
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  transition: all 0.2s ease; /* 动画过渡：时间 + 曲线 */
+}
+
+/* 点击轻微缩放反馈 */
+.card:active {
+  transform: scale(0.98);
+  box-shadow: 0 6rpx 18rpx rgba(0, 0, 0, 0.1);
+}
+
+/* 左侧图标 + 文本 */
+.left {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.icon {
+  font-size: 40rpx;
+  color: #ff9100;
+}
+
+.title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #1a1446;
+}
+
+/* 右侧箭头 / 加号 */
+.arrow {
+  width: 46rpx;
+  height: 46rpx;
+  border-radius: 50%;
+  background: #ffe9d6;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  font-size: 30rpx;
+  color: #ff9100;
+
+  transition: transform 0.25s ease;
+}
+
+.rotate {
+  transform: rotate(180deg);
+}
+/* ==========================================e */
+/* 里面样式===============s */
+/* 展开区域外层：柔和下滑出现 */
+.expand-box {
+  padding: 0 32rpx 32rpx 32rpx;
+  animation: slideDown 0.25s ease forwards;
+}
+
+.base-box {
+  padding-top: 0;
+}
+
+.skill-select-box {
+  padding-top: 0;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 展开内容内层卡片 */
+.expand-inner {
+  background: #fafbff;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  box-shadow: 0 8rpx 22rpx rgba(0, 0, 0, 0.05);
+
+  display: flex;
+  flex-direction: column;
+  gap: 28rpx;
+}
+
+/* 文字标签 */
+.label {
+  font-size: 30rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.required-tip {
+  font-size: 24rpx;
+  color: #8a8fa3;
+}
+
+.required-star {
+  color: #ff4d4f;
+  margin-left: 6rpx;
+}
+
+.field-block {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+/* 新增字段辅助说明：补充说明该字段的自动行为（如默认头像） */
+.field-help {
+  font-size: 24rpx;
+  color: #8a8fa3;
+  line-height: 1.5;
+}
+
+/* 新增默认头像展示：性别下方常驻展示官方默认头像，与自定义上传并列 */
+.default-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 16rpx;
+  border-radius: 20rpx;
+  background: #f7f8fd;
+  border: 2rpx solid #eceefa;
+}
+
+.default-avatar-thumb {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 50%;
+  background: #e5e7f0;
+  flex-shrink: 0;
+}
+
+.default-avatar-thumb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36rpx;
+  color: #a8adc2;
+}
+
+.default-avatar-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.default-avatar-title {
+  font-size: 26rpx;
+  font-weight: 500;
+  color: #333;
+}
+
+.default-avatar-desc {
+  font-size: 24rpx;
+  color: #8a8fa3;
+}
+
+/* 新增恢复默认头像：上传自定义照片后可一键回退 */
+.avatar-reset {
+  align-self: flex-start;
+  font-size: 24rpx;
+  color: #4a6cf7;
+  padding: 8rpx 0;
+}
+
+.multi-block-card {
+  padding: 24rpx;
+  border-radius: 20rpx;
+  background: #ffffff;
+  border: 2rpx solid #eceefa;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.multi-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.multi-block-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1a1446;
+}
+
+.option-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.option-chip {
+  min-width: 140rpx;
+  height: 68rpx;
+  padding: 0 28rpx;
+  border-radius: 999rpx;
+  background: #ffffff;
+  border: 2rpx solid #e5e7f0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26rpx;
+  color: #4a4f66;
+}
+
+.option-chip.active {
+  background: #6f4aff;
+  border-color: #6f4aff;
+  color: #ffffff;
+}
+
+.skill-group {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.skill-group-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1a1446;
+}
+
+.skill-scroll-view {
+  white-space: nowrap;
+}
+
+.skill-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 176rpx;
+  height: 72rpx;
+  margin-right: 16rpx;
+  padding: 0 28rpx;
+  border-radius: 999rpx;
+  background: #ffffff;
+  border: 2rpx solid #e5e7f0;
+  box-sizing: border-box;
+  font-size: 26rpx;
+  color: #4a4f66;
+  white-space: nowrap;
+}
+
+.skill-chip.active {
+  background: linear-gradient(150deg, #6f4aff, #4d2cff);
+  border-color: #6f4aff;
+  color: #ffffff;
+}
+
+.skill-scroll-spacer {
+  display: inline-block;
+  width: 8rpx;
+  height: 1rpx;
+}
+
+.skill-selected-text {
+  min-height: 88rpx;
+  padding: 24rpx;
+  border-radius: 20rpx;
+  background: #ffffff;
+  border: 2rpx solid #eceefa;
+  box-sizing: border-box;
+  font-size: 28rpx;
+  color: #4a4f66;
+  line-height: 1.6;
+}
+
+.field-action-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.field-action-btn {
+  height: 64rpx;
+  line-height: 64rpx;
+  padding: 0 28rpx;
+  border-radius: 999rpx;
+  background: #6f4aff;
+  color: #ffffff;
+  font-size: 24rpx;
+  margin: 0;
+}
+
+.field-action-btn::after {
+  border: none;
+}
+
+.danger-action-btn {
+  background: #ff6b6b;
+}
+
+.input {
+  width: 100%;
+  height: 88rpx;
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 0 24rpx;
+  border: 2rpx solid #e5e7f0;
+  box-sizing: border-box;
+  font-size: 28rpx;
+  color: #333;
+}
+
+/* 文本框 */
+.textarea {
+  width: 100%;
+  min-height: 200rpx;
+  background: #fff;
+
+  border-radius: 20rpx;
+  padding: 24rpx;
+
+  border: 2rpx solid #e5e7f0;
+  box-sizing: border-box;
+
+  font-size: 28rpx;
+  color: #333;
+
+  line-height: 1.6;
+
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.textarea:focus {
+  border-color: #6f4aff;
+  box-shadow: 0 0 12rpx rgba(111, 74, 255, 0.25);
+}
+
+/* 上传材料区域可扩展 */
+.upload-area {
+  background: #ffffff;
+  border: 2rpx dashed #d0d2e0;
+
+  border-radius: 20rpx;
+  padding: 40rpx;
+
+  text-align: center;
+
+  color: #666;
+  font-size: 28rpx;
+
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.photo-upload {
+  padding: 24rpx;
+}
+
+.upload-area:active {
+  border-color: #6f4aff;
+  background-color: #f5f0ff;
+}
+
+.upload-placeholder {
+  color: #666;
+  font-size: 28rpx;
+}
+
+.upload-preview {
+  width: 100%;
+  height: 320rpx;
+  border-radius: 20rpx;
+  display: block;
+}
+
+.avatar-preview {
+  height: 420rpx;
+}
+
+.bottom-bar {
+  padding: 24rpx 30rpx 40rpx;
+  background: rgba(245, 246, 250, 0.98);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.bottom-action-btn {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  border-radius: 44rpx;
+  background: linear-gradient(150deg, #6f4aff, #140043);
+  color: #fff;
+  font-size: 30rpx;
+  border: none;
+}
+
+.bottom-action-btn::after {
+  border: none;
+}
