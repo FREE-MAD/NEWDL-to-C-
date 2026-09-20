@@ -1,32 +1,6 @@
 <!--pages/organization/organization_create/organization_create.wxml-->
-<!--拆分说明（2026-09-20）：本组件承载 B 教练加入分支，原 wx:if="{{currentTab === 'join'}}" 包装层已去掉（组件即该 tab）-->
-<view class="organization-create-page">
-  <view class="hero-card">
-    <view class="hero-badge">机构创建与加入</view>
-    <view class="hero-title">默认先做自由教练，机构身份从这里正式进入</view>
-    <view class="hero-desc">创建机构成功后自动成为机构管理层；填写邀请码加入成功后才成为机构执行教练。</view>
-  </view>
-
-  <view class="auth-card">
-    <view class="auth-title">认证校验</view>
-    <view class="auth-status {{authReady ? 'auth-status-ready' : 'auth-status-blocked'}}">{{authStatusText}}</view>
-    <view class="auth-tip">{{authTipText}}</view>
-    <view wx:if="{{!authReady}}" class="auth-action" bindtap="goToProfileCertification">去完成教练认证</view>
-  </view>
-
-  <view class="tab-bar">
-    <view
-      wx:for="{{tabList}}"
-      wx:key="key"
-      class="tab-item {{myTab === item.key ? 'active' : ''}}"
-      data-tab="{{item.key}}"
-      bindtap="onTabTap"
-    >
-      {{item.label}}
-    </view>
-  </view>
-
-  <view class="form-card">
+<!--拆分说明（2026-09-20）：本组件承载 B 教练加入分支，hero/auth/tab-bar 已归外壳管理，本组件只渲染表单-->
+<view class="form-card">
     <view class="section-title">B 教练加入</view>
     <view class="section-desc">必须先完成教练认证，再填写机构邀请码。校验通过后，才成为机构执行教练。</view>
 
@@ -43,11 +17,12 @@
       <view class="create-section-desc">头像与称呼来自你的教练资料，如需修改请到资料填写页；机构身份只保存在机构资料内，不影响个人资料。</view>
 
       <!-- 头像 + 称呼只读展示区 -->
+      <!-- 拆分说明（2026-09-20）：profileBrief 已移除，头像/称呼直接取自外壳下传的 profile property -->
       <view class="profile-brief">
-        <image wx:if="{{profileBrief.avatarUrl}}" class="profile-brief-avatar" src="{{profileBrief.avatarUrl}}" mode="aspectFill" />
+        <image wx:if="{{profile.avatarUrl}}" class="profile-brief-avatar" src="{{profile.avatarUrl}}" mode="aspectFill" />
         <view wx:else class="profile-brief-avatar profile-brief-avatar-empty">未上传</view>
         <view class="profile-brief-main">
-          <view class="profile-brief-nickname">{{profileBrief.nickname || '未设置称呼'}}</view>
+          <view class="profile-brief-nickname">{{profile.nickname || '未设置称呼'}}</view>
           <view class="profile-brief-tip">头像与称呼取自教练资料</view>
         </view>
         <view class="profile-brief-action" bindtap="goToProfileEdit">去资料页修改</view>
@@ -99,4 +74,3 @@
   </view>
 
   <!-- 新增结果卡片位置调整：提交成功结果统一放到机构首页入口区展示，这里不再重复渲染 -->
-</view>

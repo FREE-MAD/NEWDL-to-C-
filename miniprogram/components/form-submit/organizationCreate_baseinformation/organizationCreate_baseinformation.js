@@ -42,35 +42,44 @@ const DEFAULT_COACHING_PHILOSOPHY = '用代码提升体育服务效率，让专�
 Component({
   // 新增组件外部入参：initialMode 由宿主页面 onLoad 解析 mode=edit 后传入，
   // 标记本组件以编辑态进入（机构管理层修改机构资料）
+  // 拆分说明（2026-09-20）：authReady 和 profile 由外壳 refreshCertificationState 加载后下传，
+  // 组件不再自己调 getProfile；profile.nickname/phone 用于联系人/联系电话自动回填
   properties: {
-    initialMode: { type: String, value: '' }
+    initialMode: { type: String, value: '' },
+    authReady: { type: Boolean, value: false },
+    profile: { type: Object, value: { avatarUrl: '', nickname: '', phone: '' } }
+  },
+
+  // 新增 profile 观察器：外壳加载教练资料后下传 profile，组件据此自动回填
+  // 联系人（contact_name）和联系电话（contact_phone），逻辑与原 refreshCertificationState 一致：
+  // 存在未保存编辑时不覆盖，空值时才走昵称/手机号兜底
+  observers: {
+    'profile': function(profile) {
+      if (!profile || this._hasUnsavedFormEdits) {
+        return
+      }
+      const updates = {}
+      const nickname = String(profile.nickname || '').trim()
+      const phone = String(profile.phone || '').trim()
+      if (!String(this.data.createForm.contact_name || '').trim() && nickname) {
+        updates['createForm.contact_name'] = nickname
+      }
+      if (!String(this.data.createForm.contact_phone || '').trim() && phone) {
+        updates['createForm.contact_phone'] = phone
+      }
+      if (Object.keys(updates).length) {
+        this.setData(updates)
+      }
+    }
   },
 
   /**
    * 组件的初始数据
    */
   data: {
-    // 新增本组件归属 tab：tab-bar 高亮依据，固定为 'create'
-    myTab: TAB_CREATE,
-    tabList: [
-      { key: TAB_CREATE, label: 'A创建机构' },
-      { key: 'join', label: 'B教练加入' }
-    ],
     isEditMode: false,
     currentOrganizationId: '',
     currentInvitationCode: '',
-    isAuthLoading: false,
-    authReady: false,
-    authStatusText: '正在检查教练认证状态',
-    authTipText: '创建机构和教练加入都必须先完成教练资料认证。',
-    securityReview: {
-      status: '',
-      reason: '',
-      message: '',
-      checkType: '',
-      failedTextIndex: -1,
-      failedImageIndex: -1
-    },
     createForm: {
       organization_name: '',
       invite_prefix: '',
@@ -95,12 +104,8 @@ Component({
       coaching_philosophy: '', // 教练理念
       brand_swiper_images: []
     },
-    // 新增我的资料摘要：头像与称呼从教练资料（NEWDL_mine_user.getProfile）拉取，
-    // 本页只展示不编辑，需要改就跳资料填写页
-    profileBrief: {
-      avatarUrl: '',
-      nickname: ''
-    },
+    // 拆分说明（2026-09-20）：profileBrief 已移除——头像/称呼展示在 coachaddorganization 组件，
+    // 本组件只需 profile.nickname/phone 做联系人/联系电话回填（通过 property 下传 + observer 自动填）
     inviteCodePreview: '',
     isSubmitting: false,
     submitResultCard: null,
@@ -141,7 +146,8 @@ Component({
       if (String(this.data.initialMode || '').trim() === 'edit') {
         this.setData({ isEditMode: true })
       }
-      this.refreshCertificationState()
+      // 拆分说明（2026-09-20）：refreshCertificationState 已上移到外壳，组件不再自己调 getProfile；
+      // 联系人/联系电话回填改由 profile property observer 自动处理
       this.refreshCurrentOrganizationCard()
     }
   },
@@ -149,85 +155,15 @@ Component({
   // 新增页面级生命周期：组件作为页面直接子节点时，页面 onShow 会透传到此处
   pageLifetimes: {
     show() {
-      this.refreshCertificationState()
+      // 拆分说明（2026-09-20）：认证状态由外壳 onShow → refreshCertificationState 统一刷新，
+      // 组件只回查机构资料（createForm / qrcode）
       this.refreshCurrentOrganizationCard()
     }
   },
 
   methods: {
-    // 新增标签切换：机构创建和教练加入都放在一个页面里，通过顶部 Tab 切换
-    // 拆分说明（2026-09-20）：本组件只负责触发 switchTab 事件交由宿主页面切换组件，
-    // 点击自己所属 tab（create）时不做事，点击 join 时上抛事件
-    onTabTap(e) {
-      const tab = e.currentTarget.dataset.tab
-      if (!tab || tab === this.data.myTab) {
-        return
-      }
-      this.triggerEvent('switchTab', { tab })
-    },
-
-    // 新增资料认证状态刷新：创建机构和教练加入都必须先完成教练资料认证
-    refreshCertificationState() {
-      const app = getApp()
-      this.setData({
-        isAuthLoading: true,
-        authStatusText: '正在检查教练认证状态'
-      })
-
-      return wx.cloud.callFunction({
-        name: 'NEWDL_mine_user',
-        data: {
-          action: 'getProfile',
-          envVersion: app.globalData.miniEnvVersion || 'develop'
-        }
-      }).then((res) => {
-        const result = res && res.result ? res.result : {}
-        const profile = result.profile || {}
-        const securityReview = result.securityReview || {}
-        const approved = String((securityReview && securityReview.status) || '').trim() === 'approved'
-
-        // 新增资料摘要回填：头像 / 称呼直接取自教练资料，本页只读展示，
-        // 需要修改时由「去资料页修改」按钮跳资料填写页，不在这里编辑
-        const nextProfileBrief = {
-          avatarUrl: String(profile.avatarUrl || '').trim(),
-          nickname: String(profile.nickname || '').trim()
-        }
-
-        // 新增身份选项带称呼前缀：预设四项展示成「称呼+身份」（如「张三主教 / 张三副教练」），
-        // 其他（自填）不加前缀；称呼拉取失败时回退纯文本选项，落库值始终是枚举 key 不受影响
-        // 调整（2026-09-05）：选项改回固定文案，不再用称呼合成（见 buildStaffRoleOptions 调整说明）
-        // 拆分说明（2026-09-20）：staffRoleOptions 已随机构身份逻辑下沉到 coachaddorganization 组件，本组件不再设置
-
-        this.setData({
-          securityReview,
-          authReady: approved,
-          authStatusText: approved ? '已完成教练认证，可以继续操作' : '未完成教练认证，暂时不能提交',
-          authTipText: approved
-            ? '你现在可以创建机构，或者填写邀请码加入机构。'
-            : '请先完成教练资料填写并等待审核通过，再回来创建机构或加入机构。',
-          profileBrief: nextProfileBrief,
-          // 调整（2026-09-06）：存在未保存编辑时不再自动回填联系人/联系电话，
-          // 避免上传图片返回（onShow 回查）把用户刚清空/未填的填空强行走昵称/手机号兜底
-          'createForm.contact_name': this._hasUnsavedFormEdits
-            ? this.data.createForm.contact_name
-            : (this.data.createForm.contact_name || profile.nickname || ''),
-          'createForm.contact_phone': this._hasUnsavedFormEdits
-            ? this.data.createForm.contact_phone
-            : (this.data.createForm.contact_phone || profile.phone || '')
-        })
-        this.updateInviteCodePreview()
-      }).catch(() => {
-        this.setData({
-          authReady: false,
-          authStatusText: '认证状态获取失败，请稍后重试',
-          authTipText: '当前无法确认你的教练认证状态，暂时先不要提交。'
-        })
-      }).finally(() => {
-        this.setData({
-          isAuthLoading: false
-        })
-      })
-    },
+    // 拆分说明（2026-09-20）：onTabTap 和 refreshCertificationState 已上移到外壳，
+    // tab-bar 不再由本组件渲染，认证状态通过 authReady property 下传
 
     // 新增进页机构回查：当前页仍保留机构资料回查，结果卡片展示改由机构首页承接
     // 拆分说明（2026-09-20）：本组件只回查 create 相关字段（isEditMode / createForm / qrcode），
@@ -1302,13 +1238,12 @@ Component({
     },
 
     // 新增下拉刷新入口（2026-09-20）：供宿主页面 onPullDownRefresh 调用，
-    // 清除未保存编辑标记后整包回查认证状态与机构卡片
+    // 清除未保存编辑标记后整包回查机构卡片
+    // 拆分说明（2026-09-20）：认证状态已由外壳 onPullDownRefresh → refreshCertificationState 统一刷新，
+    // 本组件下拉刷新只回查机构资料
     refreshForPullDown() {
       this._hasUnsavedFormEdits = false
-      return Promise.all([
-        this.refreshCertificationState(),
-        this.refreshCurrentOrganizationCard()
-      ])
+      return this.refreshCurrentOrganizationCard()
     }
   }
 })
