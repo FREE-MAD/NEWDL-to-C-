@@ -1,0 +1,102 @@
+<!--pages/organization/organization_create/organization_create.wxml-->
+<!--拆分说明（2026-09-20）：本组件承载 B 教练加入分支，原 wx:if="{{currentTab === 'join'}}" 包装层已去掉（组件即该 tab）-->
+<view class="organization-create-page">
+  <view class="hero-card">
+    <view class="hero-badge">机构创建与加入</view>
+    <view class="hero-title">默认先做自由教练，机构身份从这里正式进入</view>
+    <view class="hero-desc">创建机构成功后自动成为机构管理层；填写邀请码加入成功后才成为机构执行教练。</view>
+  </view>
+
+  <view class="auth-card">
+    <view class="auth-title">认证校验</view>
+    <view class="auth-status {{authReady ? 'auth-status-ready' : 'auth-status-blocked'}}">{{authStatusText}}</view>
+    <view class="auth-tip">{{authTipText}}</view>
+    <view wx:if="{{!authReady}}" class="auth-action" bindtap="goToProfileCertification">去完成教练认证</view>
+  </view>
+
+  <view class="tab-bar">
+    <view
+      wx:for="{{tabList}}"
+      wx:key="key"
+      class="tab-item {{myTab === item.key ? 'active' : ''}}"
+      data-tab="{{item.key}}"
+      bindtap="onTabTap"
+    >
+      {{item.label}}
+    </view>
+  </view>
+
+  <view class="form-card">
+    <view class="section-title">B 教练加入</view>
+    <view class="section-desc">必须先完成教练认证，再填写机构邀请码。校验通过后，才成为机构执行教练。</view>
+
+    <!-- 新增我的资料与机构身份区块（2026-09-05，B 教练加入侧）：
+         1) 头像、称呼从教练资料（NEWDL_mine_user.getProfile）拉取，这里只展示不编辑；
+         2) 需要改头像 / 称呼时，点「去资料页修改」跳资料填写页（/pages/index/profile/profile）；
+         3) 机构身份（主教 / 副教练 / 指导 / 训练分析 / 其他自填）为本页新收集项，
+            随加入一起写入 NDLdev_organization 的 coach_list 成员项 staff_role，不写入 NDLdev_users。 -->
+    <view class="create-section identity-section">
+      <view class="create-section-head">
+        <view class="create-section-title">我的资料与机构身份</view>
+        <view class="create-section-key">MyProfileAndStaffRole</view>
+      </view>
+      <view class="create-section-desc">头像与称呼来自你的教练资料，如需修改请到资料填写页；机构身份只保存在机构资料内，不影响个人资料。</view>
+
+      <!-- 头像 + 称呼只读展示区 -->
+      <view class="profile-brief">
+        <image wx:if="{{profileBrief.avatarUrl}}" class="profile-brief-avatar" src="{{profileBrief.avatarUrl}}" mode="aspectFill" />
+        <view wx:else class="profile-brief-avatar profile-brief-avatar-empty">未上传</view>
+        <view class="profile-brief-main">
+          <view class="profile-brief-nickname">{{profileBrief.nickname || '未设置称呼'}}</view>
+          <view class="profile-brief-tip">头像与称呼取自教练资料</view>
+        </view>
+        <view class="profile-brief-action" bindtap="goToProfileEdit">去资料页修改</view>
+      </view>
+
+      <!-- 机构身份选择：预设四项 + 其他（自填），选「其他」时才展开输入框 -->
+      <!-- 调整（2026-09-05）：选项固定文案（不再用称呼合成），「其他（自填）」移除；输入框常驻显示，
+           点击选项把文案回填到输入框，由用户再次编辑，最终提交输入框文本 -->
+      <view class="form-item">
+        <view class="form-label">我的机构身份</view>
+        <view class="form-help">点击身份选项会自动填入下方输入框，可直接修改；身份仅保存在机构资料中（NDLdev_organization），不写入个人资料。</view>
+        <view class="staff-role-list">
+          <view
+            wx:for="{{staffRoleOptions}}"
+            wx:key="key"
+            class="staff-role-item {{staffForm.staff_role_custom === item.label ? 'active' : ''}}"
+            data-key="{{item.key}}"
+            bindtap="onStaffRoleTap"
+          >{{item.label}}</view>
+        </view>
+        <!-- 调整（2026-09-05）：输入框常驻显示（不再只限「其他自填」时出现），选项文案回填到这里由用户再次操作 -->
+        <input
+          class="form-input staff-role-custom-input"
+          placeholder="点击上方身份自动填入，或直接输入"
+          value="{{staffForm.staff_role_custom}}"
+          maxlength="20"
+          bindinput="onStaffRoleCustomInput"
+        />
+      </view>
+
+      <!-- 已加入机构后单独更新身份；未加入时身份随邀请码一起提交 -->
+      <view wx:if="{{hasJoinedOrganization}}" class="submit-button {{isSubmitting ? 'disabled' : ''}}" bindtap="onSaveStaffRole">
+        {{isSubmitting ? '提交中...' : '保存我的机构身份'}}
+      </view>
+    </view>
+
+    <view class="form-item">
+      <view class="form-label">机构邀请码</view>
+      <!-- 调整（2026-09-05）：邀请码已改为完全自定义（不再固定 16 位），占位文案同步去掉「16 位」 -->
+      <input class="form-input" placeholder="请输入机构邀请码" value="{{joinForm.invitation_code}}" bindinput="onJoinInput" />
+      <view class="preview-box">当前输入：{{joinCodePreview || '请输入机构邀请码'}}</view>
+    </view>
+
+    <!-- 未加入：填邀请码加入，身份随加入一起入库；已加入：直接拦掉，避免重复提交被云函数拒绝 -->
+    <view wx:if="{{!hasJoinedOrganization}}" class="submit-button {{(!authReady || isSubmitting) ? 'disabled' : ''}}" bindtap="onJoinOrganization">
+      {{isSubmitting ? '提交中...' : '校验邀请码并加入机构'}}
+    </view>
+    <view wx:else class="section-locked-tip">你已加入机构，如需修改身份请用上方「保存我的机构身份」。</view>
+  </view>
+
+  <!-- 新增结果卡片位置调整：提交成功结果统一放到机构首页入口区展示，这里不再重复渲染 -->
+</view>

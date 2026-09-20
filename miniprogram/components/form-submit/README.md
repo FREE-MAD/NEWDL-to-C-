@@ -22,6 +22,8 @@ miniprogram/components/form-submit/
 | 归属页面 | 子文件夹 | 功能 | 提交链路 |
 |---|---|---|---|
 | `pages/index/profile/profile` | [`profile_coachbaseinformation/`](./profile_coachbaseinformation) | 教练基础资料填写（性别/默认头像/照片/昵称/联系方式/工作经验/带过学员/教育背景/相关证书/荣誉展示/擅长领域/关于我） | NEWDL_mine_user（getProfile / updateProfile / submitProfileSecurityReview） |
+| `pages/organization/organization_create` | [`organizationCreate_baseinformation/`](./organizationCreate_baseinformation) | A 创建机构（机构名称/自定义邀请码/DIY二维码图片/联系人/联系电话/品牌副标题/机构地址/机构简介/核心服务/服务区域/适合谁/教练理念/首页轮播图 + 机构入口二维码生成） | ForOrganizationDo（createOrganization / updateOrganization）+ NEWDL_ResponseQRCode（HTTP 云函数 generateOrganizationQrcode / getOrganizationQrcode） |
+| `pages/organization/organization_create` | [`organizationCreate_coachaddorganization/`](./organizationCreate_coachaddorganization) | B 教练加入（我的资料展示/机构身份选择/邀请码加入） | ForOrganizationDo（joinOrganization / updateOrganization） |
 
 ## 组件行为（profile_coachbaseinformation）
 
@@ -55,8 +57,6 @@ miniprogram/components/form-submit/
 | 归属页面 | 建议子文件夹 | 说明 |
 |---|---|---|
 | `pages/task/publish/publish` | `publish_courseinfo` | 课程信息发布表单 |
-| `pages/organization/organization_create` | `organization_create_step1` | 创建机构第一步 |
-| `pages/organization/organization_create` | `organization_create_step2` | 创建机构第二步 |
 
 ## 原则
 

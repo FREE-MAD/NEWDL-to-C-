@@ -1,4 +1,7 @@
 {
   "navigationBarTitleText": "机构创建与加入",
-  "usingComponents": {}
+  "usingComponents": {
+    "organization-create-baseinformation": "/components/form-submit/organizationCreate_baseinformation/organizationCreate_baseinformation",
+    "organization-create-coachaddorganization": "/components/form-submit/organizationCreate_coachaddorganization/organizationCreate_coachaddorganization"
+  }
 }
