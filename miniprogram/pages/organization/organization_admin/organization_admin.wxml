@@ -1,0 +1,92 @@
+<!--pages/organization/organization_admin/organization_admin.wxml-->
+<!--团队管理（2026-09-21 新建）：仅机构创建者 / 管理层可用。
+    ① 待确认申请 —— 教练提交加入（邀请码 + 身份：管理 / 执行）后进 pending_list，这里同意 / 拒绝；
+    ② 团队成员 —— admin_list（管理层）+ coach_list（执行教练）。-->
+<view class="org-admin-page">
+  <view class="admin-hero">
+    <view class="admin-badge">团队管理</view>
+    <view class="admin-title">{{organizationName || '当前团队'}}</view>
+    <view class="admin-desc">教练提交加入申请后先进入待确认列表，你同意后对方才会正式成为团队成员。</view>
+    <view wx:if="{{invitationCode}}" class="admin-invite-row" bindtap="onCopyInvitationCode">
+      <text class="admin-invite-label">团队邀请码</text>
+      <text class="admin-invite-code">{{invitationCode}}</text>
+      <text class="admin-invite-copy">复制</text>
+    </view>
+  </view>
+
+  <!-- 加载中 / 无权限：只展示状态提示，不渲染两个列表 -->
+  <view wx:if="{{pageState !== 'ready'}}" class="admin-state-card">
+    <view class="admin-state-text">{{pageStateTip}}</view>
+    <view class="admin-state-action" bindtap="backToOrganizationEntry">回机构首页</view>
+  </view>
+
+  <block wx:else>
+    <!-- 1. 待确认加入申请：同意后按申请身份写入管理层 / 执行教练 -->
+    <view class="admin-section">
+      <view class="admin-section-head">
+        <view class="admin-section-title">待确认申请</view>
+        <view class="admin-section-count">{{pendingApplyList.length}}</view>
+      </view>
+      <view class="admin-section-desc">同意后对方立即成为团队成员；拒绝后对方可以修改信息重新提交。</view>
+
+      <view wx:if="{{!pendingApplyList.length}}" class="admin-empty">当前没有待确认的加入申请。</view>
+
+      <view
+        wx:for="{{pendingApplyList}}"
+        wx:key="openid"
+        class="apply-card"
+      >
+        <image wx:if="{{item.avatarUrl}}" class="apply-avatar" src="{{item.avatarUrl}}" mode="aspectFill" />
+        <view wx:else class="apply-avatar apply-avatar-empty">未上传</view>
+
+        <view class="apply-main">
+          <view class="apply-name">{{item.nickname}}</view>
+          <view class="apply-meta">申请身份：{{item.joinRoleLabel}}</view>
+          <view wx:if="{{item.phone}}" class="apply-meta">联系电话：{{item.phone}}</view>
+          <view wx:if="{{item.appliedAtText}}" class="apply-meta">提交时间：{{item.appliedAtText}}</view>
+        </view>
+
+        <view class="apply-actions">
+          <view
+            class="apply-btn apply-btn-reject {{reviewingOpenid === item.openid ? 'disabled' : ''}}"
+            data-openid="{{item.openid}}"
+            bindtap="onRejectApply"
+          >拒绝</view>
+          <view
+            class="apply-btn apply-btn-approve {{reviewingOpenid === item.openid ? 'disabled' : ''}}"
+            data-openid="{{item.openid}}"
+            data-role="{{item.joinRole}}"
+            bindtap="onApproveApply"
+          >{{reviewingOpenid === item.openid ? '处理中' : '同意加入'}}</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 2. 团队成员：管理层在前，执行教练在后 -->
+    <view class="admin-section">
+      <view class="admin-section-head">
+        <view class="admin-section-title">团队成员</view>
+        <view class="admin-section-count">{{memberList.length}}</view>
+      </view>
+      <view class="admin-section-desc">管理层可修改团队资料与处理加入申请；执行教练负责带课与填写反馈。</view>
+
+      <view wx:if="{{!memberList.length}}" class="admin-empty">当前还没有团队成员。</view>
+
+      <view
+        wx:for="{{memberList}}"
+        wx:key="openid"
+        class="member-item"
+      >
+        <image wx:if="{{item.avatarUrl}}" class="member-avatar" src="{{item.avatarUrl}}" mode="aspectFill" />
+        <view wx:else class="member-avatar member-avatar-empty">{{item.avatarText}}</view>
+
+        <view class="member-main">
+          <view class="member-name">{{item.nickname}}</view>
+          <view class="member-role {{item.memberRole === 'admin' ? 'member-role-admin' : ''}}">{{item.roleLabel}}</view>
+          <view wx:if="{{item.phone}}" class="member-meta">联系电话：{{item.phone}}</view>
+          <view wx:if="{{item.joinedAtText}}" class="member-meta">加入时间：{{item.joinedAtText}}</view>
+        </view>
+      </view>
+    </view>
+  </block>
+</view>

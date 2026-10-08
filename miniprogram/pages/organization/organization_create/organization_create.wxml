@@ -9,7 +9,7 @@
   <view class="hero-card">
     <view class="hero-badge">机构创建与加入</view>
     <view class="hero-title">默认先做自由教练，机构身份从这里正式进入</view>
-    <view class="hero-desc">创建机构成功后自动成为机构管理层；填写邀请码加入成功后才成为机构执行教练。</view>
+    <view class="hero-desc">创建机构成功后自动成为机构管理层；填写邀请码并选择加入身份（管理 / 执行）后提交，需机构创建者确认同意才正式成为团队成员。</view>
   </view>
 
   <view class="auth-card">

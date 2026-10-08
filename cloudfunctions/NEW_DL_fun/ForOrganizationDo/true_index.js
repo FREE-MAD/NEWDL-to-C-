@@ -1,6 +1,13 @@
+
+
+
+
 const cloud = require('wx-server-sdk')
 const crypto = require('crypto')
 const path = require('path')
+// 新增（2026-09-06）：云函数间触发机构展示同步改走公网 HTTPS POST（详见下方 postToSelfHttp 说明），
+// 需要 Node 内置 https 模块；wx-server-sdk 自带的 cloud.callFunction 不能调 HTTP 型云函数。
+const https = require('https')
 
 cloud.init({ env: 'cloud1-6gh7jgl8c5b16a83' })
 
@@ -33,11 +40,15 @@ function logRuntimeEnvInfo(extra = {}) {
 }
 
 // 新增邀请码前缀标准化：前几位只允许英文或数字，并统一转为大写
+// 调整（2026-09-05）：邀请码改为完全自定义，本函数现在负责标准化「完整邀请码」，
+// 长度上限从 8 位放宽到 16 位（与前端输入过滤、加入侧 normalizeInvitationCode 截断长度保持一致）
 function normalizeInvitePrefix(prefix = '') {
-  return String(prefix || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 8)
+  return String(prefix || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 16)
 }
 
 // 新增邀请码标准化：教练加入机构时统一收口成 16 位大写英数字符
+// 调整（2026-09-05）：邀请码改为完全自定义（1-16 位均可），本函数保留英数过滤 + 大写 + 最长 16 位截断不变，
+// 仅不再要求必须凑满 16 位
 function normalizeInvitationCode(code = '') {
   return String(code || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 16)
 }
@@ -71,6 +82,8 @@ function buildHexString(length = 0) {
 }
 
 // 新增机构邀请码生成：前缀由用户决定，后续位数由系统用 16 进制随机串补足到 16 位
+// 调整（2026-09-05）：邀请码改为完全自定义后本函数不再被调用（保留函数与注释按约定不删除），
+// 创建机构改用下方 ensureUniqueCustomInvitationCode 对用户输入的完整邀请码做唯一性校验
 async function buildUniqueInvitationCode(invitePrefix = '', organizationCollectionName = '') {
   const safePrefix = normalizeInvitePrefix(invitePrefix)
   const remainLength = Math.max(16 - safePrefix.length, 0)
@@ -87,6 +100,19 @@ async function buildUniqueInvitationCode(invitePrefix = '', organizationCollecti
   }
 
   throw new Error('邀请码生成失败，请稍后重试')
+}
+
+// 新增（2026-09-05）完全自定义邀请码唯一性校验：用户输入什么就落什么（不做任何补齐），
+// 唯一要求即「全局唯一」—— 按完整邀请码精确查重，已被占用直接报错让机构换一个；
+// 抛错由外层 main 统一捕获转 fail 返回，前端展示 message
+async function ensureUniqueCustomInvitationCode(invitationCode = '', organizationCollectionName = '') {
+  const existed = await db.collection(organizationCollectionName).where({
+    'organization_basic.invitation_code': invitationCode
+  }).limit(1).get()
+
+  if (Array.isArray(existed.data) && existed.data.length) {
+    throw new Error('该邀请码已被其他机构使用，请更换一个')
+  }
 }
 
 function buildOrganizationId() {
@@ -110,7 +136,7 @@ function ensureCertifiedCoach(userDoc = {}) {
   }
 }
 
-function buildMemberItem(userDoc = {}, openid = '', memberRole = 'coach') {
+function buildMemberItem(userDoc = {}, openid = '', memberRole = 'coach', staffRole = '') {
   return {
     openid,
     user_id: String(userDoc._id || '').trim(),
@@ -118,8 +144,174 @@ function buildMemberItem(userDoc = {}, openid = '', memberRole = 'coach') {
     avatarUrl: String(userDoc.avatarUrl || '').trim(),
     phone: normalizePhone(userDoc.phone || ''),
     member_role: memberRole,
+    // 新增机构成员身份（主教 / 副教练 / 指导 / 训练分析 / 自填文本），随成员项一起入库
+    staff_role: staffRole,
     joined_at: new Date(),
     status: 'active'
+  }
+}
+
+// ===== 新增机构成员身份（staff_role）处理（2026-09-05） =====
+// 身份是「人在机构里」的属性，只归属机构：入库 NDLdev_organization 的
+// organization_member.admin_list / coach_list 成员项，不写入 NDLdev_users。
+const STAFF_ROLE_PRESET_LIST = ['head_coach', 'assistant_coach', 'instructor', 'training_analyst']
+const STAFF_ROLE_CUSTOM = 'custom'
+
+// 新增身份标准化：预设枚举原样落库；custom 取用户自填文本；不认识的选项统一丢弃返回空串
+function normalizeStaffRole(staffRole = '', staffRoleCustom = '') {
+  const safeStaffRole = String(staffRole || '').trim()
+  const safeCustom = String(staffRoleCustom || '').trim().slice(0, 20)
+  if (safeStaffRole === STAFF_ROLE_CUSTOM) {
+    return safeCustom || ''
+  }
+  return STAFF_ROLE_PRESET_LIST.indexOf(safeStaffRole) >= 0 ? safeStaffRole : ''
+}
+
+// 新增成员身份写入：只改当前用户在机构成员列表里的那一条，其余成员原样保留
+function applyStaffRoleToMemberList(organizationMember = {}, openid = '', staffRole = '') {
+  const adminList = Array.isArray(organizationMember.admin_list) ? organizationMember.admin_list : []
+  const coachList = Array.isArray(organizationMember.coach_list) ? organizationMember.coach_list : []
+  const isSameMember = (item) => String((item && item.openid) || '').trim() === openid
+  const matchedAdmin = adminList.some(isSameMember)
+  const matchedCoach = !matchedAdmin && coachList.some(isSameMember)
+
+  return {
+    admin_list: matchedAdmin
+      ? adminList.map((item) => (isSameMember(item) ? { ...item, staff_role: staffRole } : item))
+      : adminList,
+    coach_list: matchedCoach
+      ? coachList.map((item) => (isSameMember(item) ? { ...item, staff_role: staffRole } : item))
+      : coachList,
+    changed: matchedAdmin || matchedCoach
+  }
+}
+
+// 新增成员身份读取：从成员列表里取当前用户已保存的 staff_role，随返回体带回前端回填
+function readStaffRoleFromMemberList(organizationMember = {}, openid = '') {
+  const adminList = Array.isArray(organizationMember.admin_list) ? organizationMember.admin_list : []
+  const coachList = Array.isArray(organizationMember.coach_list) ? organizationMember.coach_list : []
+  const memberItem = adminList.concat(coachList).find(
+    (item) => String((item && item.openid) || '').trim() === openid
+  )
+  return String((memberItem && memberItem.staff_role) || '').trim()
+}
+
+// 新增（A 侧机构展示信息同步，2026-09-05）：机构资料 / 成员变更后静默顺推 B 侧展示信息。
+// 链路：ForOrganizationDo --HTTPS POST--> 本环境 NEWDL_ResponseQRCode(syncOrganizationShow)
+//       --HTTP--> B 侧 DLforP_entry_qrcode(sync_org_show) --> B 集合 dev_forPshowC。
+// 调整（2026-09-06）：第一段从 cloud.callFunction 改为公网 HTTPS POST 直连 —— NEWDL_ResponseQRCode
+// 部署为 HTTP 型云函数（scf_bootstrap + 监听 9000 端口），云函数间 cloud.callFunction 调它与
+// 小程序端 wx.cloud.callFunction 调它走的是同一道函数类型网关，都会被拒（-501001 FunctionType
+// parameter is invalid）；旧写法失败后被下方 catch 静默吞掉，导致「保存区块二 / 教练加入 / 保存身份」
+// 三个自动推送点全部推不出去，B 库停在二维码生成时推的那条只有机构名 + Logo 的半成品上。
+// 新写法与「B 侧云函数 HTTPS 直连 A 侧 twowaybinding」完全同款（见 B 侧 twowaybinding_1_DLforP 的 A_HTTP_BASE_URL）。
+// 收口在 NEWDL_ResponseQRCode 的原因不变：B 侧 HTTP 地址、payload 组装、临时链接换取等能力都在那边，不重复实现。
+// 静默约定：任何失败只打日志，不影响机构创建 / 编辑 / 教练加入主流程（下次任一触发点会幂等补推）。
+
+// 新增（2026-09-06）：本环境 HTTP 云函数 NEWDL_ResponseQRCode 的公网访问地址。
+// 域名与 B→A 调用 twowaybinding 的域名一致（同一个 A 云环境 cloud1-6gh7jgl8c5b16a83），访问路径即函数名；
+// 该地址不区分 develop / release——同一云环境同一函数，请求体里的 envVersion 决定 HTTP 函数内部分流到 dev/true 模块。
+const A_SELF_QRCODE_HTTP_BASE_URL = 'https://cloud1-6gh7jgl8c5b16a83-1398046944.ap-shanghai.app.tcloudbase.com/NEWDL_ResponseQRCode'
+// 同步超时（毫秒）：syncOrganizationShow 内部要先换 A 侧临时链接、再 HTTP 转发 B 侧（B 侧还要下载转存图片），留足 20 秒。
+const SYNC_SHOW_HTTP_TIMEOUT_MS = 20000
+
+// 新增（2026-09-06）：HTTPS POST JSON 调本环境 HTTP 云函数的最小封装，写法对齐 NEWDL_ResponseQRCode 的 postToBHttp。
+// 返回 { success, statusCode, data }：HTTP 状态 <400 且业务体 status === 'success' 才算成功；
+// 网络错误 / 超时直接 reject，由调用方静默 catch（同步失败不阻断机构操作主流程）。
+function postToSelfHttp(action = '', payload = {}) {
+  const body = JSON.stringify({ ...payload, action })
+  const requestUrl = `${A_SELF_QRCODE_HTTP_BASE_URL}?action=${encodeURIComponent(action)}`
+
+  return new Promise((resolve, reject) => {
+    let urlObj
+    try {
+      urlObj = new URL(requestUrl)
+    } catch (err) {
+      reject(new Error('A 侧二维码服务地址格式非法'))
+      return
+    }
+
+    const req = https.request(
+      {
+        hostname: urlObj.hostname,
+        path: `${urlObj.pathname}${urlObj.search}`,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Content-Length': Buffer.byteLength(body)
+        }
+      },
+      (response) => {
+        let rawText = ''
+        response.on('data', (chunk) => {
+          rawText += chunk
+        })
+        response.on('end', () => {
+          let parsed = null
+          try {
+            parsed = rawText ? JSON.parse(rawText) : {}
+          } catch (error) {
+            parsed = { status: 'fail', message: 'A 侧 HTTP 函数返回的不是 JSON' }
+          }
+          // HTTP 函数业务返回体用 status: 'success' | 'fail'（与旧 callFunction 时代 result.status 口径一致）。
+          resolve({
+            success: (response.statusCode || 0) < 400 && !!parsed && parsed.status === 'success',
+            statusCode: response.statusCode || 0,
+            data: parsed || {}
+          })
+        })
+      }
+    )
+
+    req.on('error', (err) => {
+      reject(err)
+    })
+    req.setTimeout(SYNC_SHOW_HTTP_TIMEOUT_MS, () => {
+      req.destroy(new Error('调用 A 侧二维码服务超时'))
+    })
+    req.write(body)
+    req.end()
+  })
+}
+
+async function pushOrgShowToB(organizationDoc = {}, remark = '') {
+  try {
+    const organizationId = String((((organizationDoc || {}).organization_basic || {}).organization_id) || '').trim()
+    if (!organizationId) {
+      console.warn('[ForOrganizationDo][WARN] pushOrgShowToB.no_orgid', { remark })
+      return
+    }
+    // 调整（2026-09-06）：cloud.callFunction 改 HTTPS POST 直连（原因见本函数上方链路注释）。
+    const httpRes = await postToSelfHttp('syncOrganizationShow', {
+      // 显式带 organizationId：NEWDL_ResponseQRCode 侧按 ID 直查机构文档，
+      // 避免 joinOrganization（教练身份）触发时被 admin 校验误拦；HTTP 通道没有微信身份上下文，也必须显式传。
+      organizationId,
+      // 透传 envVersion：HTTP 函数内按它分流 develop→dev 模块 / release→true 模块。
+      envVersion: CURRENT_ENV_VERSION
+    })
+    console.log('[ForOrganizationDo][INFO] pushOrgShowToB.done', {
+      remark,
+      organizationId,
+      httpStatus: httpRes.statusCode,
+      resultStatus: httpRes.data ? httpRes.data.status : '',
+      resultMessage: httpRes.data ? String(httpRes.data.message || '').slice(0, 160) : '',
+      // 图片转存失败数量：B 侧图片没转成功但文字已落库时大于 0，下次推送会幂等重试。
+      failedImageCount: httpRes.data ? httpRes.data.failedImageCount : ''
+    })
+    if (!httpRes.success) {
+      // 业务失败（HTTP 通了但 syncOrganizationShow 返回 fail）：打 warn 便于对账，不抛错、不阻断主流程。
+      console.warn('[ForOrganizationDo][WARN] pushOrgShowToB.business_fail', {
+        remark,
+        organizationId,
+        httpStatus: httpRes.statusCode,
+        resultMessage: httpRes.data ? String(httpRes.data.message || '').slice(0, 200) : ''
+      })
+    }
+  } catch (err) {
+    console.error('[ForOrganizationDo][ERROR] pushOrgShowToB.fail', {
+      remark,
+      message: err && err.message ? err.message : String(err)
+    })
   }
 }
 
@@ -212,6 +404,14 @@ async function createOrganization(event = {}, openid = '', usersCollectionName =
   const city = String(organizationBasicInput.city || '').trim()
   const address = String(organizationBasicInput.address || '').trim()
   const intro = String(organizationBasicInput.intro || '').trim()
+  // 新增（2026-09-05）：品牌副标题 slogan，展示在机构首页 Hero 区机构名称下方（os-hero-subtitle）；
+  // 随区块二一起收集提交并同步推 B（映射为 dev_forPshowC.show_basic.brand_slogan）
+  const slogan = String(organizationBasicInput.slogan || '').trim()
+  // 新增（2026-09-05）：机构展示页区块三（基本信息）四项展示字段，随区块二一起收集提交并同步推 B
+  const coreServices = String(organizationBasicInput.core_services || '').trim()
+  const serviceArea = String(organizationBasicInput.service_area || '').trim()
+  const targetAudience = String(organizationBasicInput.target_audience || '').trim()
+  const coachingPhilosophy = String(organizationBasicInput.coaching_philosophy || '').trim()
   const brandSwiperImages = normalizeFileIdList(organizationBasicInput.brand_swiper_images, 5)
 
   // 新增（诊断日志 - DIY 字段落库核对 1/3）：创建机构时前端到底传了哪些键、diy_qrcode_image 是什么形式、是否以 cloud:// 开头。
@@ -233,8 +433,9 @@ async function createOrganization(event = {}, openid = '', usersCollectionName =
   if (!organizationName) {
     return { status: 'fail', message: '请填写机构名称' }
   }
+  // 调整（2026-09-05）：invitePrefix 现在承载「完整自定义邀请码」，提示文案同步更新
   if (!invitePrefix) {
-    return { status: 'fail', message: '请填写邀请码前缀' }
+    return { status: 'fail', message: '请填写自定义邀请码' }
   }
   // 新增 DIY 二维码图片必填校验：与前端区块一必填保持一致
   if (!diyQrcodeImage) {
@@ -252,7 +453,10 @@ async function createOrganization(event = {}, openid = '', usersCollectionName =
   }
 
   const organizationId = buildOrganizationId()
-  const invitationCode = await buildUniqueInvitationCode(invitePrefix, organizationCollectionName)
+  // 调整（2026-09-05）：邀请码完全自定义 —— 不再随机补齐 16 位，用户输入（已标准化为英数大写）直接作为最终邀请码，
+  // 落库前用 ensureUniqueCustomInvitationCode 校验全局唯一，重复则整体报错不打库
+  const invitationCode = invitePrefix
+  await ensureUniqueCustomInvitationCode(invitationCode, organizationCollectionName)
   const adminItem = buildMemberItem(userDoc, openid, 'admin')
   const now = new Date()
   const organizationDoc = {
@@ -269,6 +473,13 @@ async function createOrganization(event = {}, openid = '', usersCollectionName =
       city,
       address,
       intro,
+      // 新增（2026-09-05）：品牌副标题 slogan，随机构文档落库（创建阶段表单未收集，先落空串，区块二保存时补齐）
+      slogan,
+      // 新增（2026-09-05）：区块三四项展示字段随机构文档一并落库（创建阶段表单未收集，先落空串，区块二保存时补齐）
+      core_services: coreServices,
+      service_area: serviceArea,
+      target_audience: targetAudience,
+      coaching_philosophy: coachingPhilosophy,
       brand_swiper_images: brandSwiperImages,
       owner_openid: openid,
       owner_user_id: String(userDoc._id || '').trim(),
@@ -332,8 +543,12 @@ async function updateOrganization(event = {}, openid = '', usersCollectionName =
   const userDoc = await getCurrentUserDoc(openid, usersCollectionName)
   ensureCertifiedCoach(userDoc)
 
+  // 新增（2026-09-05）：不带 organization_basic 时表示只更新机构成员身份（staff_role），
+  // 此时放宽到「机构成员本人」—— 执行教练也能更新自己在机构里的身份；
+  // 一旦携带 organization_basic（要改机构资料），仍然必须是机构管理层
+  const hasBasicInput = !!(event.organization_basic && typeof event.organization_basic === 'object')
   const currentOrganizationProfile = getCurrentOrganizationProfile(userDoc)
-  if (String(currentOrganizationProfile.memberRole || '').trim() !== 'admin') {
+  if (hasBasicInput && String(currentOrganizationProfile.memberRole || '').trim() !== 'admin') {
     return {
       status: 'fail',
       message: '只有机构管理层可以修改机构资料'
@@ -346,15 +561,21 @@ async function updateOrganization(event = {}, openid = '', usersCollectionName =
   const adminList = Array.isArray(organizationMember.admin_list) ? organizationMember.admin_list : []
   const isCurrentUserAdmin = adminList.some((item) => String(item.openid || '').trim() === openid)
 
-  if (!isCurrentUserAdmin) {
+  if (hasBasicInput && !isCurrentUserAdmin) {
     return {
       status: 'fail',
       message: '当前账号不是该机构管理层，不能修改机构资料'
     }
   }
 
-  const organizationBasicInput = event.organization_basic || {}
+  // 单独保存身份（staff_role）时前端不传 organization_basic，
+  // 此时回退成 DB 现有值，basic 原样写回不覆盖，也不触发机构名称 / 联系电话校验
+  const organizationBasicInput = hasBasicInput ? event.organization_basic : organizationBasic
   const organizationName = String(organizationBasicInput.organization_name || '').trim()
+  // 新增机构成员身份收集：主教 / 副教练 / 指导 / 训练分析 / 自填，
+  // 只写入 NDLdev_organization 的成员项 staff_role，不写入 NDLdev_users
+  const staffRoleRaw = String(event.staff_role || '').trim()
+  const staffRole = normalizeStaffRole(staffRoleRaw, event.staff_role_custom)
   // 新增 DIY 二维码图片「空值一次性补传」：DIY 功能上线前创建的老机构文档里没有该字段，
   // 而区块一约定生成后不可修改，导致老机构永远无法补传 Logo、入口二维码永远合成不了。
   // 折中方案：仅当旧值为空且本次传了非空值时才写入（首次补传）；已有值仍不在覆盖名单里，不可修改。
@@ -365,6 +586,14 @@ async function updateOrganization(event = {}, openid = '', usersCollectionName =
   const city = String(organizationBasicInput.city || '').trim()
   const address = String(organizationBasicInput.address || '').trim()
   const intro = String(organizationBasicInput.intro || '').trim()
+  // 新增（2026-09-05）：品牌副标题 slogan，展示在机构首页 Hero 区机构名称下方（os-hero-subtitle）；
+  // 随区块二一起收集提交并同步推 B（映射为 dev_forPshowC.show_basic.brand_slogan）
+  const slogan = String(organizationBasicInput.slogan || '').trim()
+  // 新增（2026-09-05）：机构展示页区块三（基本信息）四项展示字段，随区块二一起收集提交并同步推 B
+  const coreServices = String(organizationBasicInput.core_services || '').trim()
+  const serviceArea = String(organizationBasicInput.service_area || '').trim()
+  const targetAudience = String(organizationBasicInput.target_audience || '').trim()
+  const coachingPhilosophy = String(organizationBasicInput.coaching_philosophy || '').trim()
   const brandSwiperImages = normalizeFileIdList(organizationBasicInput.brand_swiper_images, 5)
 
   // 新增（诊断日志 - DIY 空值一次性补传核对 1/3）：老机构文档「键根本不存在」的情况下，
@@ -387,10 +616,18 @@ async function updateOrganization(event = {}, openid = '', usersCollectionName =
       : (patchEligible ? '满足补传条件：将写入 diy_qrcode_image' : '未触发（双方均空）'),
   })
 
-  if (!organizationName) {
+  // 新增身份校验：选了「其他（自填）」却没填内容时直接拒绝，避免把无意义的 custom 存进机构资料
+  if (staffRoleRaw === STAFF_ROLE_CUSTOM && !staffRole) {
+    return { status: 'fail', message: '请填写自定义机构身份' }
+  }
+  // 新增空提交拦截：既没有机构资料也没有身份要改，直接返回，避免向 DB 发空 update
+  if (!hasBasicInput && !staffRole) {
+    return { status: 'fail', message: '没有需要更新的内容' }
+  }
+  if (hasBasicInput && !organizationName) {
     return { status: 'fail', message: '请填写机构名称' }
   }
-  if (!isValidPhone(contactPhone)) {
+  if (hasBasicInput && !isValidPhone(contactPhone)) {
     return { status: 'fail', message: '请填写正确的机构联系电话' }
   }
 
@@ -400,20 +637,44 @@ async function updateOrganization(event = {}, openid = '', usersCollectionName =
   // invitation_prefix / invitation_code / diy_qrcode_image 均不在覆盖名单里，生成后天然不可修改。
   // 补充（2026-09-04）：diy_qrcode_image 例外 —— 旧值为空时允许一次性补传（见上方 existingDiyQrcodeImage 逻辑），
   // 仅用于修复 DIY 功能上线前创建的老机构无 Logo 问题；已补传过（旧值非空）依旧不可修改。
-  const nextOrganizationBasic = {
-    ...organizationBasic,
-    organization_name: organizationName,
-    // 新增：空值一次性补传 DIY 二维码图片 —— 旧值为空且本次传入非空时才落库；
-    // 旧值已有时保持 ...organizationBasic 原值展开，天然不可修改（与区块一约定一致）。
-    ...(existingDiyQrcodeImage ? {} : (incomingDiyQrcodeImage ? { diy_qrcode_image: incomingDiyQrcodeImage } : {})),
-    contact_name: contactName,
-    contact_phone: contactPhone,
-    city,
-    address,
-    intro,
-    brand_swiper_images: brandSwiperImages,
-    updated_at: new Date()
-  }
+  const nextOrganizationBasic = hasBasicInput
+    ? {
+      ...organizationBasic,
+      organization_name: organizationName,
+      // 新增：空值一次性补传 DIY 二维码图片 —— 旧值为空且本次传入非空时才落库；
+      // 旧值已有时保持 ...organizationBasic 原值展开，天然不可修改（与区块一约定一致）。
+      ...(existingDiyQrcodeImage ? {} : (incomingDiyQrcodeImage ? { diy_qrcode_image: incomingDiyQrcodeImage } : {})),
+      contact_name: contactName,
+      contact_phone: contactPhone,
+      city,
+      address,
+      intro,
+      // 新增（2026-09-05）：品牌副标题 slogan 进入覆盖白名单，随区块二保存一起落库并同步推 B
+      slogan,
+      // 新增（2026-09-05）：区块三四项展示字段进入覆盖白名单，随区块二保存一起落库并同步推 B
+      core_services: coreServices,
+      service_area: serviceArea,
+      target_audience: targetAudience,
+      coaching_philosophy: coachingPhilosophy,
+      brand_swiper_images: brandSwiperImages,
+      updated_at: new Date()
+    }
+    : { ...organizationBasic }
+
+  // 新增成员身份写入（2026-09-05）：只把当前用户那一条成员项打上 staff_role，其余成员原样保留；
+  // 当前用户不在成员列表里时 changed 为 false，成员结构保持不动
+  const nextOrganizationMember = staffRole
+    ? applyStaffRoleToMemberList(organizationMember, openid, staffRole)
+    : organizationMember
+  const staffRoleChanged = !!(staffRole && nextOrganizationMember.changed)
+  console.log('[ForOrganizationDo][INFO] updateOrganization.staff_role', {
+    organizationId: String((organizationDoc.organization_basic || {}).organization_id || '').trim(),
+    docId: organizationDoc._id,
+    incomingStaffRole: staffRoleRaw,
+    normalizedStaffRole: staffRole,
+    staffRoleChanged,
+    hasBasicInput
+  })
 
   // 新增（诊断日志 - DIY 空值一次性补传核对 2/3）：组装后写 DB 前核对 nextOrganizationBasic 里是否真的带了 diy_qrcode_image，
   // 与 NEWDL_ResponseQRCode diy_logo.read_db 的 orgBasicTopKeys 对账，看字段是否真的已落库。
@@ -432,10 +693,28 @@ async function updateOrganization(event = {}, openid = '', usersCollectionName =
 
   // 新增：捕获 DB update 返回值，取 stats.updated（实际更新的文档数），
   // 若为 0 说明 update 条件没匹配到文档（docId 失效/被删），此时字段自然没有落库。
-  const updateRes = await db.collection(organizationCollectionName).doc(organizationDoc._id).update({
-    data: {
-      organization_basic: nextOrganizationBasic
+  // 新增兜底：只改身份但当前用户不在机构成员列表里时无从写入，直接返回提示，
+  // 避免组装出空 updateData 再向 DB 发空 update 报错
+  if (!hasBasicInput && !staffRoleChanged) {
+    console.warn('[ForOrganizationDo][WARN] updateOrganization.staff_role_member_not_found', {
+      organizationId: String((organizationDoc.organization_basic || {}).organization_id || '').trim(),
+      docId: organizationDoc._id,
+      incomingStaffRole: staffRoleRaw
+    })
+    return { status: 'fail', message: '未找到你在该机构的成员记录，无法保存身份' }
+  }
+
+  // 新增：身份变更时把 organization_member 一起写回；只改身份时（hasBasicInput=false）
+  // 不带 organization_basic，避免把未改动的机构资料重复覆盖一遍
+  const updateData = hasBasicInput ? { organization_basic: nextOrganizationBasic } : {}
+  if (staffRoleChanged) {
+    updateData.organization_member = {
+      admin_list: nextOrganizationMember.admin_list,
+      coach_list: nextOrganizationMember.coach_list
     }
+  }
+  const updateRes = await db.collection(organizationCollectionName).doc(organizationDoc._id).update({
+    data: updateData
   })
 
   // 新增（诊断日志 - DIY 空值一次性补传核对 3/3）：DB update 成功后再次确认，避免出现「云函数 update 返回 OK 但字段实际没写进去」的情况。
@@ -451,18 +730,31 @@ async function updateOrganization(event = {}, openid = '', usersCollectionName =
 
   const nextOrganizationDoc = {
     ...organizationDoc,
-    organization_basic: nextOrganizationBasic
+    organization_basic: nextOrganizationBasic,
+    organization_member: {
+      admin_list: nextOrganizationMember.admin_list,
+      coach_list: nextOrganizationMember.coach_list
+    }
   }
 
-  await updateUserOrganizationProfile(usersCollectionName, userDoc, nextOrganizationDoc, 'admin')
+  // 只更新身份时不刷 users 的机构归属信息：避免把 joinedAt / biz_role 一起改动，
+  // 身份只落在 organization 文档里，users 文档保持不动
+  if (hasBasicInput) {
+    await updateUserOrganizationProfile(usersCollectionName, userDoc, nextOrganizationDoc, 'admin')
+  }
+
+  // 新增（A 侧机构展示信息同步）：编辑保存成功后顺推 B 侧展示信息（名称/简介/地址/轮播图等可能已变更）。
+  await pushOrgShowToB(nextOrganizationDoc, 'updateOrganization')
 
   return {
     status: 'success',
-    message: '机构信息修改成功',
+    message: hasBasicInput ? '机构信息修改成功' : '机构身份已更新',
     organizationId: String(nextOrganizationBasic.organization_id || '').trim(),
     organizationName: String(nextOrganizationBasic.organization_name || '').trim(),
     invitationCode: String(nextOrganizationBasic.invitation_code || '').trim(),
     memberRole: 'admin',
+    // 新增身份回传：取成员项里当前用户最终落库的 staff_role，前端据此刷新身份选择区
+    staffRole: readStaffRoleFromMemberList(nextOrganizationDoc.organization_member, openid),
     joinedAt: new Date()
   }
 }
@@ -480,10 +772,24 @@ async function joinOrganization(event = {}, openid = '', usersCollectionName = '
   }
 
   const invitationCode = normalizeInvitationCode(event.invitation_code)
-  if (invitationCode.length !== 16) {
+  // 调整（2026-09-05）：邀请码已改为完全自定义（不再固定 16 位），这里只做非空校验；
+  // 是否有效由下方按完整邀请码精确匹配机构文档决定
+  if (!invitationCode) {
     return {
       status: 'fail',
-      message: '机构邀请码必须是 16 位'
+      message: '请填写机构邀请码'
+    }
+  }
+
+  // 新增机构成员身份收集（2026-09-05，B 教练加入侧）：教练加入时一起收集
+  // 「主教 / 副教练 / 指导 / 训练分析 / 自填」，写入该机构 coach_list 成员项的 staff_role
+  const staffRoleRaw = String(event.staff_role || '').trim()
+  const staffRole = normalizeStaffRole(staffRoleRaw, event.staff_role_custom)
+  // 选了「其他（自填）」却没填内容时直接拒绝，避免把无意义的 custom 存进机构资料
+  if (staffRoleRaw === STAFF_ROLE_CUSTOM && !staffRole) {
+    return {
+      status: 'fail',
+      message: '请填写自定义机构身份'
     }
   }
 
@@ -526,19 +832,38 @@ async function joinOrganization(event = {}, openid = '', usersCollectionName = '
   }
 
   if (alreadyCoach) {
+    // 新增身份更新：已经在机构里的教练再次提交时（多半是回来改身份），
+    // 只更新 coach_list 里自己那一条的 staff_role，机构资料与其他成员不动
+    const nextOrganizationMember = staffRole
+      ? applyStaffRoleToMemberList(organizationMember, openid, staffRole)
+      : organizationMember
+
+    if (staffRole && nextOrganizationMember.changed) {
+      await db.collection(organizationCollectionName).doc(organizationDoc._id).update({
+        data: {
+          organization_member: {
+            admin_list: nextOrganizationMember.admin_list,
+            coach_list: nextOrganizationMember.coach_list
+          }
+        }
+      })
+    }
+
     await updateUserOrganizationProfile(usersCollectionName, userDoc, organizationDoc, 'coach')
     return {
       status: 'success',
-      message: '你已经加入该机构',
+      message: staffRole ? '你的机构身份已更新' : '你已经加入该机构',
       organizationId: String((((organizationDoc || {}).organization_basic || {}).organization_id) || '').trim(),
       organizationName: String((((organizationDoc || {}).organization_basic || {}).organization_name) || '').trim(),
       invitationCode,
       memberRole: 'coach',
+      staffRole: readStaffRoleFromMemberList(nextOrganizationMember, openid),
       joinedAt: new Date()
     }
   }
 
-  const nextCoachList = coachList.concat(buildMemberItem(userDoc, openid, 'coach'))
+  // 新增：教练身份（staff_role）随新成员项一起入库 coach_list
+  const nextCoachList = coachList.concat(buildMemberItem(userDoc, openid, 'coach', staffRole))
   const nextOrganizationDoc = {
     ...organizationDoc,
     organization_basic: {
@@ -560,6 +885,10 @@ async function joinOrganization(event = {}, openid = '', usersCollectionName = '
 
   await updateUserOrganizationProfile(usersCollectionName, userDoc, nextOrganizationDoc, 'coach')
 
+  // 新增（A 侧机构展示信息同步）：新教练加入成功后顺推 B 侧展示信息（成员列表发生变化）。
+  // alreadyCoach 分支（重复加入）成员无变化，不重复推送。
+  await pushOrgShowToB(nextOrganizationDoc, 'joinOrganization')
+
   return {
     status: 'success',
     message: '邀请码校验通过，你已成为机构执行教练',
@@ -567,6 +896,8 @@ async function joinOrganization(event = {}, openid = '', usersCollectionName = '
     organizationName: String((((organizationDoc || {}).organization_basic || {}).organization_name) || '').trim(),
     invitationCode,
     memberRole: 'coach',
+    // 新增身份回传：取成员项里当前教练最终落库的 staff_role，前端据此刷新身份选择区
+    staffRole: readStaffRoleFromMemberList(nextOrganizationDoc.organization_member, openid),
     joinedAt: new Date()
   }
 }

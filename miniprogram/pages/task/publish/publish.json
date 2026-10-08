@@ -1,3 +1,7 @@
 {
-  "usingComponents": {}
+  "usingComponents": {
+    "publish-classcreate": "/components/form-submit/publish_classcreate/publish_classcreate",
+    "publish-dailysummary": "/components/form-submit/publish_dailysummary/publish_dailysummary",
+    "publish-classoff": "/components/form-submit/publish_classoff/publish_classoff"
+  }
 }

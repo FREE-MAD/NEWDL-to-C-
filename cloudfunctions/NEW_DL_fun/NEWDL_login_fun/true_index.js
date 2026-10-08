@@ -3,7 +3,9 @@ cloud.init({ env: 'cloud1-6gh7jgl8c5b16a83' });
 const db = cloud.database();
 const _ = db.command;
 const ORDER_COLLECTION_BASE = 'execution_orders';
-const CURRENT_RUNTIME_SOURCE = 'dev_index.js';
+// 调整（2026-09-05）：runtimeSource 改为按实际入口文件名动态取值，同步覆盖到 true_index.js 后日志自动显示 true_index.js，
+// 修复「dev 覆盖 true 的日志环境区分」问题（原硬编码 'dev_index.js' 同步后误导排障）。
+const CURRENT_RUNTIME_SOURCE = __filename.split(/[\\/]/).pop();
 // 新增集合前缀规则：develop 使用 NDLdev_，trial/release 使用 NDLreal_
 let CURRENT_ENV_VERSION = 'develop';
 

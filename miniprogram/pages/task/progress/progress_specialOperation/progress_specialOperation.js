@@ -229,7 +229,8 @@ Page({
 
     if (wx.showShareMenu) {
       wx.showShareMenu({
-        menus: ['shareAppMessage']
+        // 2026-09-07 调整：补 'shareTimeline' 与全局 ensureGlobalShareMenu 一致，确保本页右上角也显示“分享到朋友圈”
+        menus: ['shareAppMessage', 'shareTimeline']
       });
     }
 

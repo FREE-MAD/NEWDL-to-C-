@@ -13,20 +13,25 @@ page {
   background-color: var(--bg-color);
   font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Segoe UI, Arial, Roboto, 'PingFang SC', 'miui', 'Hiragino Sans GB', 'Microsoft Yahei', sans-serif;
   height: 100vh;
-  overflow: hidden;
   box-sizing: border-box;
 }
 
-/* 页面容器 */
+/* 页面容器：不用 flex，让内容自然流动，页面自身滚动 */
 .page-container {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
   width: 100%;
 }
 
 .status-bar-placeholder {
   width: 100%;
+  background-color: #fff;
+  flex-shrink: 0;
+}
+
+/* 共享信息区：跨 tab 展示流转状态与课程基本信息 */
+.shared-info-bar {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 16rpx 24rpx;
   background-color: #fff;
   flex-shrink: 0;
 }
@@ -89,18 +94,19 @@ page {
   background: var(--primary-color);
 }
 
-/* 主滚动区 */
+/* 主内容区：普通 view，页面自身滚动 */
 .main-scroll {
-  flex: 1;
   background-color: var(--bg-color);
-  height: 0;
   width: 100%;
 }
 
 /* Banner */
 .banner-box {
   padding: 24rpx 32rpx;
-  margin: 24rpx 32rpx 0;
+  /* 【2026-09-14 七次调整】banner-box 迁入 content-section（自身已有 32rpx 左右 padding）后，
+     去掉横向 margin（原先在 scroll-view 顶层时需要），与流转页签内协作单卡/操作台卡/接取码卡保持同宽；
+     注：上次同宽修复因同文件并行编辑被覆盖丢失，本次为重新应用 */
+  margin: 24rpx 0 0;
   border: 2rpx solid #d9e7ff;
   border-radius: 24rpx;
   background: #ffffff;
@@ -236,7 +242,9 @@ page {
 
 /* 新增 publish 角色说明卡：把当前是谁、可做什么、不可做什么直接写在页面上，减少混权误操作 */
 .publish-role-card {
-  margin: 24rpx 32rpx 0;
+  /* 【2026-09-14 四次调整】迁入 content-section（自身已有 32rpx 左右 padding）后，
+     去掉横向 margin（原先在 scroll-view 顶层时需要），与流转页签内其他卡片保持同宽 */
+  margin: 24rpx 0 0;
   padding: 24rpx 26rpx;
   border-radius: 20rpx;
   background: #ffffff;
@@ -268,6 +276,84 @@ page {
   font-size: 24rpx;
   line-height: 1.6;
   color: #31455a;
+}
+
+/* 【2026-09-15 新增】操作台流转进度条：三步（编辑课程信息 → 等待教练接单 → 教练执行课程）。
+   圆点 + 连接线横向排布；当前步骤高亮蓝色，已完成步骤绿色对勾，连接线随推进点亮。 */
+.flow-progress {
+  display: flex;
+  align-items: flex-start;
+  margin-top: 24rpx;
+  padding: 4rpx 4rpx 8rpx;
+}
+
+.flow-progress-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* 固定步宽，避免文字长度差异挤压连接线 */
+  width: 148rpx;
+  flex-shrink: 0;
+}
+
+.flow-progress-dot {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #90a4ae;
+  background: #eceff1;
+  border: 2rpx solid #cfd8dc;
+}
+
+/* 当前进行中的步骤：蓝色高亮圆点 */
+.flow-progress-step.active .flow-progress-dot {
+  color: #ffffff;
+  background: linear-gradient(135deg, #1976d2, #42a5f5);
+  border-color: #1976d2;
+}
+
+/* 已完成的步骤：绿色对勾圆点 */
+.flow-progress-step.done .flow-progress-dot {
+  color: #2e7d32;
+  background: #e8f5e9;
+  border-color: #a5d6a7;
+}
+
+.flow-progress-label {
+  margin-top: 10rpx;
+  font-size: 20rpx;
+  line-height: 1.4;
+  color: #90a4ae;
+  white-space: nowrap;
+}
+
+.flow-progress-step.active .flow-progress-label {
+  color: #1565c0;
+  font-weight: 600;
+}
+
+.flow-progress-step.done .flow-progress-label {
+  color: #2e7d32;
+}
+
+/* 步骤间连接线：margin-top 使线体对齐圆点竖直中心（圆点 44rpx 中心 22rpx - 线半高 3rpx） */
+.flow-progress-line {
+  flex: 1;
+  height: 6rpx;
+  margin: 19rpx 6rpx 0;
+  border-radius: 3rpx;
+  background: #e3e8ee;
+}
+
+/* 已走过的连接线：渐变绿色点亮 */
+.flow-progress-line.done {
+  background: linear-gradient(90deg, #66bb6a, #a5d6a7);
 }
 
 /* 内容淡入动画 */
@@ -740,6 +826,22 @@ page {
 .form-container {
   padding-bottom: 20rpx;
 }
+/* 【2026-09-16 锁课·锁填写不锁查看】只读态：整体灰底，强化"不可编辑"的视觉感知 */
+.form-container.form-readonly .section-card {
+  background: #f5f6f8;
+}
+.form-container.form-readonly .form-input,
+.form-container.form-readonly .form-textarea,
+.form-container.form-readonly .detail-edit-textarea,
+.form-container.form-readonly .unit-value-input {
+  color: #6b7280;
+  background: #eef0f3;
+}
+.form-container.form-readonly .choice-chip.active {
+  background: #e8eef8;
+  border-color: #c7d3e8;
+  color: #4a5568;
+}
 
 .create-group-card {
   border: 2rpx solid #e8eef8;
@@ -980,7 +1082,7 @@ page {
 .manage-lesson-actions,
 .modal-footer {
   display: flex;
-  gap: 16rpx;
+  gap: 12rpx;
   flex-wrap: wrap;
 }
 
@@ -1009,8 +1111,13 @@ page {
 }
 
 .create-submit {
-  flex: 1;
-  width: auto;
+  flex: 0 0 auto;
+  width: auto !important;
+  min-width: 190rpx;
+  padding: 0 28rpx;
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: visible;
 }
 
 .btn-secondary,
@@ -1023,15 +1130,20 @@ page {
 }
 
 .btn-secondary {
-  width: 220rpx;
+  flex: 0 0 auto;
+  width: auto !important;
+  min-width: 170rpx;
   height: 96rpx;
   line-height: 96rpx;
-  flex-shrink: 0;
+  padding: 0 28rpx;
+  box-sizing: border-box;
+  white-space: nowrap;
 }
 
 /* 新增创建页底部操作区真机适配：给底部手势区域留出安全距离，避免按钮贴边太紧 */
 .create-actions {
   align-items: center;
+  justify-content: center;
   padding-bottom: 8rpx;
   padding-bottom: calc(8rpx + constant(safe-area-inset-bottom));
   padding-bottom: calc(8rpx + env(safe-area-inset-bottom));
@@ -1476,6 +1588,38 @@ page {
   height: calc(140rpx + env(safe-area-inset-bottom));
 }
 
+/* 【2026-09-15 调整】「已完成班级创建，允许教练接单」按钮位于【创建班课程】页签内底部，跟随内容滚动 */
+.publish-ready-section {
+  margin-top: 24rpx;
+  padding: 0 8rpx;
+}
+
+.publish-ready-btn {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  border-radius: 44rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+  border: none;
+}
+
+/* 未确认时：主按钮蓝色渐变 */
+.publish-ready-btn-primary {
+  background: linear-gradient(135deg, #1976d2, #42a5f5);
+  color: #fff;
+}
+
+/* 已确认允许接单后：绿色完成态 */
+.publish-ready-btn-done {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.publish-ready-btn[disabled] {
+  opacity: 0.6;
+}
+
 /* 弹窗样式 */
 .modal-mask {
   position: fixed;
@@ -1638,24 +1782,15 @@ page {
   flex-wrap: wrap;
   gap: 16rpx;
   margin-top: 8rpx;
-  /* 修复点击无反应：给动作容器建立定位上下文 + 更高 z-index，
-     防止被协作卡片或 scroll-view 内部的伪透明层吞掉触控事件。 */
-  position: relative;
-  z-index: 2;
 }
 .pickup-btn {
   flex: 1 1 auto;
   min-width: 40%;
   border-radius: 14rpx;
   font-size: 26rpx;
-  /* 修复点击无反应：原来 padding: 0 14rpx 导致按钮垂直方向没有触控余量，
-     手指很难精准点中（视觉字高只有 ~47rpx ≈ 23px），统一改为上下 20rpx，
-     保证最小触控高度在 80rpx ≈ 40px，符合移动端可点击区域下限。 */
-  padding: 20rpx 20rpx;
-  line-height: 1.5;
+  padding: 0 14rpx;
+  line-height: 1.8;
   border: none;
-  /* 修复点击无反应：显式允许 pointer 事件，防止父级/全局样式意外禁用。 */
-  pointer-events: auto;
 }
 .pickup-btn::after {
   border: none;
@@ -1671,56 +1806,6 @@ page {
 .pickup-btn-sub {
   background: #eef3f8;
   color: #455a64;
-}
-/* 新增：第一步「完成课程信息编辑，允许教练接单」的醒目标题级按钮：
-   用高饱和绿色背景 + 白色字体，强调它是生成 12 位接取码前的强制前置动作。 */
-.pickup-btn-strong {
-  background: #00a870;
-  color: #fff;
-  font-weight: 600;
-}
-/* 新增：还没 mark_ready 前，生成 12 位接取码的按钮用灰色禁用态，提醒先做上一步。 */
-.pickup-btn-disabled {
-  background: #c9d3dc !important;
-  color: #ffffff !important;
-}
-/* 新增：接取码卡片内两个操作区（资料确认 / 接取码生成）之间的细分割线。 */
-.pickup-divider {
-  height: 2rpx;
-  background: #e6ecf1;
-  margin: 26rpx 0 22rpx;
-}
-/* 新增：第一步「课程资料确认」的独立分段，样式和外层卡片保持统一。 */
-.pickup-info-ready-section {
-  padding: 6rpx 2rpx 2rpx;
-  /* 修复点击无反应：建立定位上下文 + z-index，确保其内的按钮不会被上方
-     collaboration-card 或其他绝对/浮动元素覆盖，触控事件可以落在按钮上。 */
-  position: relative;
-  z-index: 3;
-  /* 修复点击无反应：显式允许 pointer 事件，防止被父级样式继承导致整段不可点。 */
-  pointer-events: auto;
-}
-.pickup-info-ready-title {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12rpx;
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #263238;
-  margin-bottom: 10rpx;
-}
-.pickup-info-ready-desc {
-  font-size: 24rpx;
-  color: #546e7a;
-  line-height: 1.8;
-  margin-bottom: 8rpx;
-}
-.pickup-ready-time {
-  display: inline-block;
-  margin-top: 6rpx;
-  font-size: 22rpx;
-  color: #8a9aa9;
 }
 .pickup-code-meta {
   margin-top: 22rpx;
@@ -1741,4 +1826,56 @@ page {
   padding: 14rpx 16rpx;
   background: #fafbfc;
   border-radius: 12rpx;
+}
+
+/* 补全：第一步「确认课程资料完整」区块样式。
+   之前 WXML 用了这些 class 但 WXSS 缺失，导致标题/描述/时间戳无排版，
+   文字紧贴上一区块、状态标签换行错乱、分隔线不可见，整体「飘」。
+   此处对齐 .pickup-code-title / .pickup-code-subtitle 的视觉规范补齐。 */
+.pickup-divider {
+  height: 2rpx;
+  background: linear-gradient(90deg, rgba(25, 118, 210, 0) 0%, rgba(25, 118, 210, 0.2) 50%, rgba(25, 118, 210, 0) 100%);
+  margin: 22rpx 0 18rpx;
+}
+.pickup-info-ready-section {
+  padding: 4rpx 4rpx 8rpx;
+}
+.pickup-info-ready-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1c2b3a;
+}
+.pickup-info-ready-desc {
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #5c6b7a;
+  margin: 12rpx 0 16rpx;
+}
+.pickup-ready-time {
+  font-size: 22rpx;
+  color: #8a9aa9;
+  margin-left: 4rpx;
+}
+/* 【2026-09-16 锁课】mark_ready 后资料锁定提示：绿色对勾 + 说明文案，引导用户进入下一步 */
+.pickup-info-confirmed-tip {
+  display: flex;
+  align-items: center;
+  font-size: 26rpx;
+  color: #2e9e5b;
+  background: #eaf7f0;
+  border: 1rpx solid #b8e5cc;
+  border-radius: 12rpx;
+  padding: 20rpx 24rpx;
+  margin-top: 16rpx;
+  line-height: 1.5;
+}
+.pickup-info-confirmed-icon {
+  font-size: 32rpx;
+  font-weight: bold;
+  margin-right: 12rpx;
+  flex-shrink: 0;
 }

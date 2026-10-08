@@ -1,0 +1,280 @@
+<!-- ============================================================
+  publish_classcreate 组件：创建班课程 tab
+  所属页面：pages/task/publish/publish
+  说明：原 publish 页面 selectedTab === 'create' 分支整体迁移为本组件。
+       接收 order / orderId / isEditMode / canEditCourseInfo / canDeleteCourse
+            / hasGeneratedPickupCode / confirmPublishLoading / collaborationTrace，
+       【2026-09-21 新流程】接取码不再随发布自动生成：hasGeneratedPickupCode 只用来表示
+       「是否已生成 pl 接取码」，由宿主页按 pickup_full_code / 当前后缀是否为 pl 判定；
+       未生成时显示「完成创建，允许接单」，点了才走 confirm_generate_pickup_code 生成。
+       内部维护 form / classTypes / currentClass 等表单状态。
+       发布/更新成功后 triggerEvent('submitted', { orderId })，
+       「完成创建允许接单」成功后 triggerEvent('publish-ready')，
+       删课成功后 triggerEvent('course-deleted')。
+  拆分说明（2026-09-20）：publish 页面按表单提交职责拆为 classcreate / dailysummary / classoff 三个组件。
+  ============================================================ -->
+<view class="section-header">
+  <text class="section-title">创建班课程</text>
+  <!-- 【2026-09-16 锁课·锁填写不锁查看】副标题根据是否可编辑切换文案 -->
+  <text class="section-subtitle" wx:if="{{canEditCourseInfo}}">按五类分组填写课程信息，结构清晰。</text>
+  <text class="section-subtitle" wx:else>课程资料已锁定（已确认允许教练接单），当前为只读查看。</text>
+</view>
+
+<view class="form-container {{!canEditCourseInfo ? 'form-readonly' : ''}}">
+  <!-- 新增课程目标分组：课程类型选择和课程定位相关字段统一收口 -->
+  <view class="section-card create-group-card">
+    <view class="section-card-title">第一类：课程目标</view>
+    <!-- 压缩分组副标题：保留核心动作 -->
+    <view class="group-subtitle">选课程方向，再填标题、介绍和价格。</view>
+
+    <scroll-view class="class-scroll-view" scroll-x="true" enable-flex="true">
+      <block wx:for="{{classTypes}}" wx:key="id">
+        <view class="class-card {{currentClassId === item.id ? 'active' : ''}}"
+              bindtap="onSelectClass"
+              data-id="{{item.id}}">
+
+          <!-- 卡片主体内容 -->
+          <view class="class-card-main">
+            <view class="class-icon">{{item.name[0]}}</view>
+            <view class="class-info">
+              <text class="class-title">{{item.name}}</text>
+              <text class="class-desc">{{item.brief}}</text>
+            </view>
+            <view class="class-check" wx:if="{{currentClassId === item.id}}">
+              <icon type="success_no_circle" size="20" color="#1976d2"/>
+            </view>
+          </view>
+
+          <!-- 展开的子项区域 (默认显示) -->
+          <view class="class-sub-area">
+            <view class="sub-tags-wrapper">
+              <block wx:if="{{item.subItems && item.subItems.length}}">
+                <view class="sub-tag {{selectedSubName === sub && currentClassId === item.id ? 'selected' : ''}}"
+                      wx:for="{{item.subItems}}"
+                      wx:for-item="sub"
+                      wx:key="*this"
+                      catchtap="onSelectSubItem"
+                      data-parent-id="{{item.id}}"
+                      data-name="{{sub}}">
+                  {{sub}}
+                </view>
+              </block>
+              <block wx:else>
+                <view class="sub-tag selected">默认项目</view>
+              </block>
+            </view>
+          </view>
+        </view>
+      </block>
+      <!-- 尾部占位，确保最后一个卡片能完全划出并有间距 -->
+      <view class="scroll-spacer"></view>
+    </scroll-view>
+
+    <!-- 选中课程的详细介绍卡片 -->
+    <view class="course-detail-card group-inner-card" wx:if="{{currentClass}}">
+      <view class="detail-header">
+        <text class="detail-title">课程计划</text>
+        <text class="detail-tag">{{currentClass.name}} · {{canEditCourseInfo ? '可编辑' : '只读'}}</text>
+      </view>
+      <view class="detail-content">
+        <!-- 新增课程计划可编辑输入：默认带出模板内容，允许继续手动润色 -->
+        <textarea
+          class="detail-edit-textarea"
+          placeholder="可以在默认课程计划基础上继续补充、更改"
+          placeholder-class="input-placeholder"
+          value="{{form.course_plan}}"
+          data-field="course_plan"
+          bindinput="onInput"
+          disabled="{{!canEditCourseInfo}}"
+          auto-height
+        ></textarea>
+      </view>
+      <scroll-view class="detail-imgs" scroll-x="true">
+        <image class="detail-img" wx:for="{{currentClass.images}}" wx:key="*this" src="{{item}}" mode="aspectFill"></image>
+      </scroll-view>
+    </view>
+
+    <view class="form-group">
+      <view class="form-label">课程标题</view>
+      <input class="form-input" placeholder="例如 少儿体能启蒙班" placeholder-class="input-placeholder" value="{{form.title}}" data-field="title" bindinput="onInput" disabled="{{!canEditCourseInfo}}"/>
+    </view>
+
+    <!-- 按当前需求先注释课程介绍输入框：课程介绍节点暂时保留注释方便后续恢复 -->
+    <!--
+    <view class="form-group">
+      <view class="form-label">课程介绍</view>
+      <textarea class="form-textarea" placeholder="填写班级介绍、适合人群、训练目标..." placeholder-class="input-placeholder" value="{{form.description}}" data-field="description" bindinput="onInput" auto-height></textarea>
+    </view>
+    -->
+
+  </view>
+
+  <!-- 课节管理分组 -->
+  <view class="section-card create-group-card">
+    <view class="section-card-title">第二类：课节管理</view>
+    <view class="group-subtitle">新班级默认生成 10 节课；「半途接入」指前面已在线下上过几节，现从中间接入系统。</view>
+    <view class="manage-actions" wx:if="{{orderId && canAdjustLessonPlan}}">
+      <button class="manage-btn {{lessonPlanLocked ? 'ghost disabled' : ''}}" bindtap="openSetTotalModal" disabled="{{lessonPlanLocked}}">设置总课时</button>
+      <button class="manage-btn {{lessonPlanLocked ? 'ghost disabled' : ''}}" bindtap="openSyncModal" disabled="{{lessonPlanLocked}}">半途接入</button>
+    </view>
+    <view class="sync-note operation-guide-note" wx:if="{{orderId && !canAdjustLessonPlan}}">当前阶段课表结构由管理层控制；执行教练仅可查看课节并记录总结。</view>
+  </view>
+
+  <!-- 课程基本信息分组 -->
+  <view class="section-card create-group-card">
+    <view class="section-card-title">第三类：课程基本信息</view>
+    <view class="group-subtitle">填写电话、地址、时间等基础信息。</view>
+
+    <view class="form-group">
+      <view class="form-label">课程人数</view>
+      <radio-group class="choice-row" bindchange="onCourseSizeModeChange">
+        <label class="choice-chip {{form.course_size_mode === '1对1' ? 'active' : ''}}">
+          <radio value="1对1" checked="{{form.course_size_mode === '1对1'}}" color="#1976d2" disabled="{{!canEditCourseInfo}}" />
+          <text>1对1</text>
+        </label>
+        <label class="choice-chip {{form.course_size_mode === '1对多' ? 'active' : ''}}">
+          <radio value="1对多" checked="{{form.course_size_mode === '1对多'}}" color="#1976d2" disabled="{{!canEditCourseInfo}}" />
+          <text>1对多</text>
+        </label>
+      </radio-group>
+    </view>
+
+    <view class="form-group">
+      <view class="form-label">上课时间</view>
+      <input class="form-input" placeholder="例如 每周二、四 19:00-20:00" placeholder-class="input-placeholder" value="{{form.frequency}}" data-field="frequency" bindinput="onInput" disabled="{{!canEditCourseInfo}}"/>
+    </view>
+
+    <view class="form-group">
+      <view class="form-label required">任务位置</view>
+      <view class="form-input-box" bindtap="chooseLocation">
+         <text class="{{form.location ? 'input-val' : 'input-placeholder'}}">{{form.location || '点击选择上课地点'}}</text>
+         <text class="input-icon">📍</text>
+      </view>
+    </view>
+    <view class="form-group no-margin">
+      <view class="form-label required">联系方式</view>
+      <input class="form-input" type="number" maxlength="11" placeholder="请输入11位手机号" placeholder-class="input-placeholder" value="{{form.contact}}" data-field="contact" bindinput="onInput" disabled="{{!canEditCourseInfo}}"/>
+    </view>
+
+    <!-- 安全与规范确认：临时注释，保留节点方便后续恢复 -->
+    <!--
+    <view class="agreement-card">
+      <view class="form-label required">安全与规范</view>
+      <view class="agreement-row">
+        <view class="agreement-text">
+          <text class="agreement-title">我已确认课程安排、安全要求与沟通规范</text>
+          <text class="agreement-desc">未勾选时不能发布或保存课程。</text>
+        </view>
+        <checkbox-group bindchange="onSafetyConfirmedChange">
+          <checkbox value="agreed" checked="{{form.safety_confirmed}}" color="#1976d2" />
+        </checkbox-group>
+      </view>
+    </view>
+    -->
+  </view>
+
+  <!-- 孩子信息块 -->
+  <view class="section-card create-group-card">
+    <view class="section-card-title">第四类：孩子信息</view>
+    <view class="group-subtitle">记录孩子基础信息，便于教练判断课程安排；当前已添加 {{form.child_profiles.length || 0}} 个孩子。</view>
+
+    <block wx:for="{{form.child_profiles}}" wx:key="index">
+      <view class="child-profile-card">
+        <view class="child-profile-head">
+          <text class="child-profile-title">孩子{{index + 1}}</text>
+          <text class="child-profile-remove" data-index="{{index}}" bindtap="removeChildProfile" wx:if="{{canEditCourseInfo}}">删除这个孩子</text>
+        </view>
+
+        <view class="form-group">
+          <view class="form-label">孩子昵称</view>
+          <input class="form-input" placeholder="请输入孩子昵称" placeholder-class="input-placeholder" value="{{item.nickname}}" data-index="{{index}}" data-field="nickname" bindinput="onChildProfileInput" disabled="{{!canEditCourseInfo}}"/>
+        </view>
+
+        <view class="form-group">
+          <view class="form-label">年龄</view>
+          <input class="form-input" type="number" placeholder="请输入孩子年龄" placeholder-class="input-placeholder" value="{{item.age}}" data-index="{{index}}" data-field="age" bindinput="onChildProfileInput" disabled="{{!canEditCourseInfo}}"/>
+        </view>
+
+        <view class="form-group">
+          <view class="form-label">性别</view>
+          <radio-group class="choice-row" data-index="{{index}}" bindchange="onChildGenderChange">
+            <label class="choice-chip {{item.gender === '男' ? 'active' : ''}}">
+              <radio value="男" checked="{{item.gender === '男'}}" color="#1976d2" disabled="{{!canEditCourseInfo}}" />
+              <text>男</text>
+            </label>
+            <label class="choice-chip {{item.gender === '女' ? 'active' : ''}}">
+              <radio value="女" checked="{{item.gender === '女'}}" color="#1976d2" disabled="{{!canEditCourseInfo}}" />
+              <text>女</text>
+            </label>
+          </radio-group>
+        </view>
+
+        <view class="form-group">
+          <view class="form-label">身高</view>
+          <view class="form-input-with-unit">
+            <input class="unit-value-input" type="digit" placeholder="请输入身高，例如 135" placeholder-class="input-placeholder" value="{{item.height}}" data-index="{{index}}" data-field="height" bindinput="onChildProfileInput" disabled="{{!canEditCourseInfo}}"/>
+            <text class="input-unit">cm</text>
+          </view>
+        </view>
+
+        <view class="form-group no-margin">
+          <view class="form-label">体重</view>
+          <view class="form-input-with-unit">
+            <input class="unit-value-input" type="digit" placeholder="请输入体重，例如 32.5" placeholder-class="input-placeholder" value="{{item.weight}}" data-index="{{index}}" data-field="weight" bindinput="onChildProfileInput" disabled="{{!canEditCourseInfo}}"/>
+            <text class="input-unit">kg</text>
+          </view>
+        </view>
+      </view>
+    </block>
+
+    <view class="empty-state" wx:if="{{!form.child_profiles || form.child_profiles.length === 0}}">
+      <text>当前还没有添加孩子，点下面按钮开始录入。</text>
+    </view>
+
+    <view class="child-profile-add" bindtap="addChildProfile" wx:if="{{canEditCourseInfo}}">+ 再添加一个孩子</view>
+  </view>
+
+  <!-- 教练内部信息块 -->
+  <view class="section-card private-form-card create-group-card">
+    <view class="section-card-title">第五类：教练内部信息</view>
+    <view class="group-subtitle">仅供内部记录，不在展示层显示。</view>
+    <view class="form-group">
+      <view class="form-label">客单价(一节)</view>
+      <picker range="{{priceOptions}}" bindchange="onPricePresetChange">
+        <view class="form-input-box">
+          <text class="{{form.price_interval ? 'input-val' : 'input-placeholder'}}">{{form.price_interval || '请选择课程价格'}}</text>
+          <text class="input-icon">💰</text>
+        </view>
+      </picker>
+    </view>
+    <view class="form-group">
+      <view class="form-label">课程备注</view>
+      <textarea
+        class="form-textarea"
+        placeholder="填写特殊要求、内部提醒、家长沟通注意事项"
+        placeholder-class="input-placeholder"
+        value="{{form.coach_private_note}}"
+        data-field="coach_private_note"
+        bindinput="onInput"
+        disabled="{{!canEditCourseInfo}}"
+        auto-height
+      ></textarea>
+    </view>
+  </view>
+
+  <view class="create-actions">
+    <button class="btn-secondary" bindtap="handleDeleteCourse" disabled="{{!canDeleteCourse}}" style="width: 222rpx; display: block; box-sizing: border-box; left: -60rpx; top: 4rpx; position: relative">删除课程</button>
+    <button wx:if="{{isEditMode}}"
+            class="btn-submit create-submit"
+            bindtap="onConfirmPublishReady"
+            disabled="{{hasGeneratedPickupCode || confirmPublishLoading}}">{{hasGeneratedPickupCode ? '已完成创建' : '完成创建，允许接单'}}</button>
+    <!-- 【2026-09-21 新流程·接取需管理确认】旧条件 (!isEditMode || hasGeneratedPickupCode)：
+         编辑态下只有「已生成接取码」才显示保存按钮。新流程 publish 不再自动生成接取码，
+         于是待编辑阶段（还没点「完成创建，允许接单」）连「更新信息并保存」都看不到 —— 资料改完存不下来。
+         改成看 canEditCourseInfo：待编辑/待接取且是管理者就显示（与按钮自身的 disabled 口径一致）。 -->
+    <button wx:if="{{!isEditMode || canEditCourseInfo}}"
+            class="btn-submit create-submit"
+            bindtap="onSubmit"
+            disabled="{{!canEditCourseInfo}}" style="position: relative; left: -419rpx; top: 152rpx; width: 453rpx; display: block; box-sizing: border-box">{{isEditMode ? '更新信息并保存' : '发布课程'}}</button>
+  </view>
+</view>

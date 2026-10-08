@@ -25,23 +25,39 @@
       </block>
     </view>
 
-    <!-- 新增套餐选择内容：先把用户最关心的套餐和价格放在第一个 tab -->
+    <!-- 套餐选择内容：改为直接轮播 do_certification_adv 目录下的所有广告图片 -->
     <view wx:if="{{activeTab === 'package'}}" class="certification-tab-panel">
-      <view class="certification-tag">套餐说明</view>
-      <view class="certification-heading">先选适合你的套餐</view>
-      <view class="certification-desc">
-        如果你现在还不知道怎么开始，先看套餐差异，先选清楚适合自己的办理节奏。
+      <view class="certification-tag">广告轮播</view>
+      <view class="certification-heading">办证服务介绍</view>
+
+      <!-- 有图片时展示轮播：swiper 自动播放、循环、带指示点 -->
+      <!-- 弹性高度：swiper 高度由 JS 按当前图片真实宽高比动态计算（长图完整展示，切换时高度跟随变化） -->
+      <block wx:if="{{advImageList.length > 0}}">
+        <swiper
+          class="adv-swiper"
+          style="height: {{swiperHeight}}px"
+          indicator-dots="{{true}}"
+          indicator-color="rgba(255,255,255,0.5)"
+          indicator-active-color="#ef4444"
+          autoplay="{{true}}"
+          interval="4000"
+          duration="500"
+          circular="{{true}}"
+          bindchange="onSwiperChange"
+        >
+          <swiper-item wx:for="{{advImageList}}" wx:key="*this">
+            <image class="adv-image" src="{{item}}" mode="widthFix" />
+          </swiper-item>
+        </swiper>
+      </block>
+
+      <!-- 目录下暂无图片时的空状态提示 -->
+      <view wx:elif="{{!advLoading}}" class="adv-empty">
+        暂无广告图片，请在云存储 do_certification_adv 目录下上传图片
       </view>
 
-      <block wx:for="{{packageList}}" wx:key="title">
-        <view class="package-card">
-          <view class="package-card-top">
-            <view class="package-title">{{item.title}}</view>
-            <view class="package-price">{{item.price}}</view>
-          </view>
-          <view class="package-desc">{{item.desc}}</view>
-        </view>
-      </block>
+      <!-- 数据加载中 -->
+      <view wx:else class="adv-empty">加载中...</view>
     </view>
 
     <!-- 新增具体操作内容：第二个 tab 负责讲清楚进入后第一步要做什么 -->

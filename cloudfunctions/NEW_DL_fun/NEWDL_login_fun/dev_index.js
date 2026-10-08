@@ -1,29 +1,28 @@
-const cloud = require('wx-server-sdk');
-cloud.init({ env: 'cloud1-6gh7jgl8c5b16a83' });
-const db = cloud.database();
+// 调整（2026-10-08）：cloud.init / 集合名 / 运行日志 / 内容安全统一走公共层 _shared（源在 NEW_DL_fun/_shared/，副本只读）。
+const { initRuntime, dbHandle, runInContext, currentIsDev } = require('./_shared/runtime');
+const { normalizeCollectionName, prefix } = require('./_shared/collections');
+const { make: makeLogger } = require('./_shared/logger');
+const {
+  isSecurityCheckPassed,
+  isSecurityViolationError,
+  isOpenAPIPermissionError,
+  permissionError,
+  callMsgSecCheck
+} = require('./_shared/security');
+const db = dbHandle();
 const _ = db.command;
 const ORDER_COLLECTION_BASE = 'execution_orders';
-const CURRENT_RUNTIME_SOURCE = 'dev_index.js';
-// 新增集合前缀规则：develop 使用 NDLdev_，trial/release 使用 NDLreal_
-let CURRENT_ENV_VERSION = 'develop';
-
+const FUNCTION_NAME = 'NEWDL_login_fun';
+// 集合前缀规则已下沉到 _shared/collections.js（develop → NDLdev_，trial/release → NDLreal_）。
+// 调整（2026-10-08）：环境不再存模块级变量 —— 改由 _shared/runtime.js 的请求上下文提供。
+// main 里用 runInContext(ctx, ...) 包裹后，任意深度的调用都能通过 currentIsDev() 读到本次请求的
+// envVersion，并发请求互不干扰（AsyncLocalStorage 可用时；不可用则退化为现状，见 runtime.js 注释）。
 function getCollectionPrefix() {
-  return CURRENT_ENV_VERSION === 'develop' ? 'NDLdev_' : 'NDLreal_';
+  return prefix(currentIsDev());
 }
 
 function getCollectionName(baseName) {
-  return `${getCollectionPrefix()}${baseName}`;
-}
-
-// 新增运行环境日志：用于快速判断当前登录云函数这次按什么环境、什么源码文件在执行
-function logRuntimeEnvInfo(extra = {}) {
-  console.log('[runtime_env]', {
-    functionName: 'NEWDL_login_fun',
-    runtimeSource: CURRENT_RUNTIME_SOURCE,
-    envVersion: CURRENT_ENV_VERSION,
-    collectionPrefix: getCollectionPrefix(),
-    ...extra
-  });
+  return normalizeCollectionName(baseName, currentIsDev());
 }
 
 // 新增教练资料痕迹判断：有自己的展示资料，就自动归入 C
@@ -146,42 +145,8 @@ function normalizeRole(role) {
   return safeRole === 'C' || safeRole === 'V' ? safeRole : 'V';
 }
 
-// 新增内容安全结果判断：兼容 openapi 新旧返回结构，统一按 suggest 是否为 pass 判断
-function isSecurityCheckPassed(checkResult) {
-  const errorCode = Number(
-    checkResult && (checkResult.errCode || checkResult.errcode || 0)
-  );
-  if (errorCode === 0) {
-    return true;
-  }
-
-  const suggest = checkResult && checkResult.result && checkResult.result.suggest
-    ? checkResult.result.suggest
-    : checkResult && checkResult.suggest;
-  return suggest === 'pass';
-}
-
-// 新增内容违规错误识别：微信安全接口命中违规内容时，统一拦截为通用提示
-function isSecurityViolationError(error) {
-  if (!error) {
-    return false;
-  }
-
-  const errorCode = Number(error.errCode || error.errcode || error.code || 0);
-  const errorMessage = String(error.errMsg || error.errmsg || error.message || '');
-  return errorCode === 87014 || /risky|block|违规|违法|敏感/.test(errorMessage);
-}
-
-// 新增权限缺失识别：登录函数如果缺少云调用权限，统一输出可读日志方便排查
-function isOpenAPIPermissionError(error) {
-  if (!error) {
-    return false;
-  }
-
-  const errorCode = Number(error.errCode || error.errcode || error.code || 0);
-  const errorMessage = String(error.errMsg || error.errmsg || error.message || '');
-  return errorCode === -604101 || /has no permission to call this api/i.test(errorMessage);
-}
+// 注：isSecurityCheckPassed / isSecurityViolationError / isOpenAPIPermissionError 三个判定
+// 已下沉到 _shared/security.js（本文件顶部 require），原实现与 NEWDL_mine_user 逐字重复。
 
 // 新增登录文本安全检测：登录/补库写入昵称前，统一做资料场景文本审核
 async function checkNicknameSecurity(content = '', openid = '') {
@@ -192,7 +157,7 @@ async function checkNicknameSecurity(content = '', openid = '') {
 
   // 新增直接云调用：昵称审核改为在首层业务云函数内直接调用，避免二次云函数转发导致权限不生效
   try {
-    const result = await cloud.openapi.security.msgSecCheck({
+    const result = await callMsgSecCheck({
       content: text,
       version: 2,
       scene: 1,
@@ -204,7 +169,7 @@ async function checkNicknameSecurity(content = '', openid = '') {
       return false;
     }
     if (isOpenAPIPermissionError(error)) {
-      throw new Error('NEWDL_login_fun 缺少 OpenAPI 权限，请重新上传云函数并确认 config.json 已生效');
+      throw permissionError(FUNCTION_NAME);
     }
     throw error;
   }
@@ -212,18 +177,22 @@ async function checkNicknameSecurity(content = '', openid = '') {
 
 exports.main = async (event, context) => {
   const { nickname, phone, role, forceNewUser, address, latitude, longitude, avatarUrl, phoneCode, firstLoginFrom } = event || {};
-  // 新增环境版本识别：由前端透传 develop/trial/release
-  CURRENT_ENV_VERSION = event.envVersion || 'develop';
+  // 公共层：一次 initRuntime 拿到本次请求的 env / db / openid / traceId
+  const ctx = initRuntime(event || {});
+  // 请求上下文包裹（2026-10-08）：把后续整条 await 链绑定到本次请求的 env，
+  // 深层 helper 里的 getCollectionName 通过 currentIsDev() 读到的就是本次请求的环境。
+  // 注：包裹块内的缩进沿用了包裹前的层次，未整体重排 —— 为的是把 diff 压到最小、便于逐行核对。
+  return await runInContext(ctx, async () => {
   // 新增启动轻量登录标记：静默补库时跳过重操作，首屏先保证能快速建档
   const isBootstrapLogin = isBootstrapLoginRequest(event || {});
-  const { OPENID } = cloud.getWXContext();
+  const OPENID = ctx.openid;
   // 新增用户集合切换：开发版和正式版读取不同 users 集合
   const usersCollection = getCollectionName('users');
 
   if (!OPENID) return { status: 'fail', message: '未获取到 openid' };
   // MVP: P 侧身份已下线，云端兜底拒绝旧版本前端提交
   if (role === 'P') return { status: 'fail', message: 'P侧身份已下线，请使用教练端' };
-  logRuntimeEnvInfo({
+  makeLogger(ctx).runtimeEnv({
     incomingRole: String(role || '').trim(),
     isBootstrapLogin,
     hasOpenid: !!OPENID
@@ -236,7 +205,8 @@ exports.main = async (event, context) => {
   let finalPhone = normalizePhone(phone);
   if (!finalPhone && phoneCode) {
     try {
-      const phoneRes = await cloud.openapi.phonenumber.getPhoneNumber({
+      // 用公共层已 init 的 cloud 实例（ctx.cloud），本文件不再直接 require('wx-server-sdk')
+      const phoneRes = await ctx.cloud.openapi.phonenumber.getPhoneNumber({
         code: phoneCode
       });
       if (phoneRes && phoneRes.phone_info && phoneRes.phone_info.phoneNumber) {
@@ -403,4 +373,5 @@ exports.main = async (event, context) => {
       err
     };
   }
+  }); // ← runInContext 包裹结束
 };

@@ -1,10 +1,7 @@
 <view class="page">
 <!-- 常驻状态====== -->
-  <!-- 提示信息 -->
-  <view wx:if="{{formSuccess}}" class="form-tip"> {{formSuccess}}</view>
-
   <!-- 常驻状态（仅在登录后显示） -->
-  <view class="header {{headerState}}">
+  <view class="header collapsed">
     <!-- 首页欢迎区新样式：补充顶部胶囊按钮和右侧装饰，让首页第一屏更有引导感 -->
     <view class="header-topbar">
       <view class="header-left">
@@ -15,32 +12,13 @@
         </view>
         <view class="hello"> {{welcome}} 👋</view>
         <view class="header-desc">{{headerDesc}}</view>
-        <view class="location">
-          <!-- 📍 北京市朝阳区 -->
-        </view>
       </view>
     </view>
 
   </view>
 
- <!-- Header: 选择身份 -->
- <!-- <view class="header {{headerCollapsed ? 'collapsed' : ''}}">
-    <view class="header-left">
-      <view class="hello">Hi Navin! 👋</view>
-      <view class="location" wx:if="{{headerCollapsed}}">📍 Chinnabasinagar-Ward-11</view>
-    </view>
-     身份选择区
-    <view class="role-selection" wx:if="{{!headerCollapsed}}">
-      <button bindtap="chooseRole" data-role="R">我是R</button>
-      <button bindtap="chooseRole" data-role="P">我是P</button>
-    </view>
-  </view> -->
-
-<!-- 四功能区块---a版 -->
-<!-- 四功能区块---b版 -->
-<!-- 四功能区块---c版 -->
 <!-- 首页入口新布局：第1项作为核心按钮，第2/3项合并为教练简历分组 -->
-<view wx:if="{{panelItems.length >= 3}}" class="grid-box">
+<view wx:if="{{panelItems.length >= 3}}" class="grid-box" style="width: 689rpx;">
   <!-- 首页新增快捷入口：补一个"低价办证"卡片，方便用户直接进入办证页 -->
   <view class="grid-item visible certification-entry" bindtap="goToDoCertification">
     <view class="certification-entry-main">
@@ -77,9 +55,11 @@
 
   <!-- 首页新增：教练接取课程入口卡片。
        - 任何登录/未登录用户都能看到入口；
-       - 点击标题展开 12 位接取码输入框，支持粘贴 + 一键清空；
+       - 点击标题展开接取码输入框，支持粘贴 + 一键清空；
        - 未登录（访客）点击提交会引导去完善教练资料；
        - 成功接取后在下方显示课程信息，提供直接「进入课程管理」按钮。 -->
+  <!-- 【2026-09-16 新增·新码制】接取码改为 10 位（8 课程码 + 2 位状态后缀 pl/ip/dl，如 ABCD1234pl）；
+       旧 12 位随机码兼容仍保留（maxlength=12 兼容 10/12 两种长度），文案更新为新码格式。 -->
   <view class="pickup-entry-card visible">
     <view class="pickup-entry-head" bindtap="togglePickupPanel">
       <view class="pickup-entry-left">
@@ -88,38 +68,42 @@
         </view>
         <view class="pickup-entry-copy">
           <view class="grid-title pickup-entry-title">接取课程</view>
-          <view class="grid-sub">拿到 12 位完整接取码，在这里输入即可开始带课</view>
+          <view class="grid-sub">拿到接取码（课程码+pl，10 位），在这里输入即可开始带课</view>
         </view>
       </view>
-      <view class="pickup-entry-arrow">{{showPickupPanel ? '收起 ∧' : '展开 ∨'}}</view>
+      <view class="pickup-entry-arrow">{{showPickupPanel ? ' ∧' : ' ∨'}}</view>
     </view>
 
     <view wx:if="{{showPickupPanel}}" class="pickup-entry-body">
       <view class="pickup-entry-hint">
-        完整接取码 = 前 8 位班级码 + 后 4 位确认码，共 12 位英数字；复制过来直接粘贴就行，无需区分大小写。
+        新码 = 课程码(8 位) + 状态后缀 pl(2 位)，共 10 位英数字，如 ABCD1234pl；旧 12 位随机码仍可输入；无需区分大小写。
       </view>
       <view class="pickup-entry-input-row">
-        <input
-          class="pickup-entry-input"
-          placeholder="请输入或粘贴 12 位完整接取码"
-          placeholder-class="pickup-entry-input-placeholder"
-          value="{{pickupCodeInput}}"
-          bindinput="onPickupCodeInput"
-          maxlength="12"
-          confirm-type="done"
-          bindconfirm="submitPickupCode"
-        />
+        <!-- 输入框外层容器：负责在 flex 布局中占满剩余宽度，
+             小程序原生 input 直接设 flex:1 不可靠，需包一层 view -->
+        <view class="pickup-entry-input-wrap">
+          <input
+            class="pickup-entry-input"
+            placeholder="请输入或粘贴接取码（课程码+pl，10 位）"
+            placeholder-class="pickup-entry-input-placeholder"
+            value="{{pickupCodeInput}}"
+            bindinput="onPickupCodeInput"
+            maxlength="12"
+            confirm-type="done"
+            bindconfirm="submitPickupCode"
+          />
+        </view>
         <view class="pickup-entry-quick-btns">
           <button class="pickup-entry-mini" catchtap="pastePickupCode">粘贴</button>
           <button class="pickup-entry-mini" catchtap="clearPickupCode">清空</button>
         </view>
       </view>
       <view class="pickup-entry-char-hint">
-        已输入 <text class="pickup-entry-char-num">{{pickupCodeInput.length}}</text> / 12 位
+        已输入 <text class="pickup-entry-char-num">{{pickupCodeInput.length}}</text> / 10 位（旧码 12 位）
       </view>
 
       <button
-        class="pickup-entry-submit {{pickupCodeInput.length === 12 ? '' : 'pickup-entry-submit-disabled'}}"
+        class="pickup-entry-submit {{(pickupCodeInput.length === 10 || pickupCodeInput.length === 12) ? '' : 'pickup-entry-submit-disabled'}}"
         bindtap="submitPickupCode"
         loading="{{isSubmittingPickup}}"
         disabled="{{isSubmittingPickup}}"
@@ -132,7 +116,12 @@
         <view wx:if="{{pickupLastResult.location}}" class="pickup-result-row">地点：{{pickupLastResult.location}}</view>
         <view wx:if="{{pickupLastResult.coachName}}" class="pickup-result-row">执行教练：{{pickupLastResult.coachName}}</view>
         <view wx:if="{{pickupLastResult.pickupFinalCode}}" class="pickup-result-row">确认码：{{pickupLastResult.pickupFinalCode}}</view>
-        <view class="pickup-result-actions">
+        <!-- 【2026-09-21 新流程】pending = 绑定申请已提交、等待管理者确认，此时没有 orderId，
+             隐藏「进入课程管理」按钮，避免点下去只弹「缺少课程ID」。 -->
+        <view wx:if="{{pickupLastResult.pending}}" class="pickup-result-row">
+          申请已提交，请等待管理者确认后即可开始带课。
+        </view>
+        <view wx:if="{{!pickupLastResult.pending}}" class="pickup-result-actions">
           <button class="pickup-result-btn" bindtap="goToPickedUpCourse">进入课程开始管理</button>
           <button class="pickup-result-btn pickup-result-btn-sub" catchtap="togglePickupPanel">先收起面板</button>
         </view>
@@ -150,7 +139,6 @@
     class="primary-panel visible"
     bindtap="onPanelTap"
     data-action="{{panelItems[0].action}}"
-    animation="{{animations[0]}}"
   >
     <view class="panel-chip">核心功能</view>
     <view class="panel-main">
@@ -193,7 +181,7 @@
   </view>
 
   <!-- 教练简历分组固定内容：文案和入口都取最初的访客口径，不随业务角色变化 -->
-  <view class="resume-group visible" animation="{{animations[1]}}">
+  <view class="resume-group visible">
     <view class="resume-group-head">
       <view class="resume-group-title">教练简历</view>
       <view class="resume-group-sub">{{resumeGroupSub}}</view>
@@ -231,49 +219,6 @@
         </view>
       </view>
       <view class="resume-suffix">去查看</view>
-    </view>
-  </view>
-</view>
-
-<!-- 兜底布局：当首页入口数量异常时仍保持基础可点击展示 -->
-<view wx:elif="{{panelItems.length > 0}}" class="grid-box">
-  <view
-    wx:for="{{panelItems}}"
-    wx:key="title"
-    bindtap="onPanelTap"
-    data-action="{{item.action}}"
-    class="grid-item visible"
-    animation="{{animations[index]}}"
-  >
-    <view class="icon {{item.color}}"></view>
-    <view class="grid-title">{{item.title}}</view>
-    <view class="grid-sub">{{item.sub}}</view>
-  </view>
-</view>
-
-<!-- 外层循环：三块 -->
-<view wx:if="{{questionnaireSection}}" class="big_view">
-  <view class="section-title" bindtap="onQuestionnaireTap">
-    <text>{{questionnaireSection.title}}</text>
-    <text class="view-all">查看全部 ></text>
-  </view>
-
-  <view
-    wx:for="{{questionnaireSection.posts}}"
-    wx:for-item="post"
-    wx:key="id"
-    class="post-card"
-    bindtap="onQuestionnaireTap"
-  >
-    <view class="post-header">
-      <text class="post-author">{{post.author || '系统'}}</text>
-      <text class="post-time">{{post.displayTime || post.time || ''}}</text>
-    </view>
-    <view class="post-tag">{{post.tag || '问卷'}}</view>
-    <view class="post-text">{{post.text || post.title || '点击查看健康问卷详情'}}</view>
-    <image wx:if="{{post.img}}" class="post-img" src="{{post.img}}" mode="aspectFill"></image>
-    <view class="post-footer">
-      <view class="details">查看详情</view>
     </view>
   </view>
 </view>

@@ -71,6 +71,33 @@
   margin-top: 28rpx;
 }
 
+/* 广告轮播容器：高度由 JS 按图片宽高比动态内联设置（弹性高度），这里只负责外观 */
+.adv-swiper {
+  width: 100%;
+  margin-top: 24rpx;
+  border-radius: 20rpx;
+  overflow: hidden;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.06);
+}
+
+/* 轮播图片：宽度撑满、高度按原图比例弹性伸缩（widthFix），长图完整展示不裁剪 */
+.adv-image {
+  width: 100%;
+  display: block;
+}
+
+/* 空状态 / 加载中提示：居中显示 */
+.adv-empty {
+  margin-top: 24rpx;
+  padding: 60rpx 20rpx;
+  text-align: center;
+  font-size: 26rpx;
+  color: #9aa0b4;
+  background: #fff8f8;
+  border-radius: 20rpx;
+  border: 1rpx dashed #ffe0e0;
+}
+
 .certification-tag {
   display: inline-block;
   padding: 8rpx 18rpx;

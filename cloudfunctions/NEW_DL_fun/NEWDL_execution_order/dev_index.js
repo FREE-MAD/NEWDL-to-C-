@@ -1,16 +1,36 @@
 
-const https = require('https')
 const cloud = require('wx-server-sdk')
-cloud.init({ env: 'cloud1-6gh7jgl8c5b16a83' });
+// 调整（2026-10-08）：cloud.init / 集合名 / 入参归一化 / 运行日志 / 出向 HTTP 统一走公共层 _shared（源在 NEW_DL_fun/_shared/，副本只读）。
+const { initRuntime, dbHandle, runInContext, currentIsDev } = require('./_shared/runtime')
+const { normalizeCollectionName, prefix } = require('./_shared/collections')
+const { normalizeRequestEvent, parseJsonLike } = require('./_shared/request')
+const { make: makeLogger } = require('./_shared/logger')
+const { ENDPOINTS, getJson } = require('./_shared/http')
+// 调整（2026-10-08）：fulfill_state 状态值 / 终态判定 / state_history 后缀统一走公共层（源在 _shared/courseState.js）。
+const courseState = require('./_shared/courseState')
+const {
+  COURSE_STATE,
+  isTerminalState,
+  isClosedState,
+  readCourseState,
+  pickState,
+  terminalBlockedMessage,
+  appendStateSuffix,
+  resolveStateSuffix
+} = courseState
 
-const db = cloud.database()
+const db = dbHandle()
 const _ = db.command
 // 新增集合前缀规则：develop 使用 NDLdev_，trial/release 使用 NDLreal_
 const ORDER_COLLECTION_BASE = 'execution_orders'
 const USER_COLLECTION_BASE = 'users'
 const ORGANIZATION_COLLECTION_BASE = 'organization'
-const CURRENT_RUNTIME_SOURCE = 'dev_index.js'
-let CURRENT_ENV_VERSION = 'develop'
+// 集合前缀规则已下沉到 _shared/collections.js（develop → NDLdev_，trial/release → NDLreal_）。
+// 运行环境来源（dev_index.js / true_index.js）改由 _shared/runtime.js 的 detectRuntimeSource() 从调用栈识别，
+// 同步复制到哪个文件就显示哪个文件名，同样不需要同步脚本特殊保护。
+// 调整（2026-10-08）：CURRENT_ENV_VERSION 已删除 —— 环境改由 _shared/runtime.js 的请求上下文提供。
+// main 里用 runInContext(ctx, ...) 包裹后，任意深度的调用（含下面 19 处 getCollectionName）
+// 都能通过 currentIsDev() 读到本次请求的 envVersion，并发请求互不干扰。
 const ACTION_SYNC_PARENT_BOOKING_TO_A = 'syncParentBookingToA'
 const ACTION_SYNC_COACH_RESULT_TO_B = 'syncCoachResultToB'
 const SOURCE_FROM_A_DIRECT = '在小程序A由教练直接提交'
@@ -19,57 +39,19 @@ const BRIDGE_STATUS_PENDING = 'pending'
 const BRIDGE_STATUS_SYNCED = 'synced'
 const BRIDGE_STATUS_FAILED = 'failed'
 // 新增 A -> B 回抄地址：当前先按和 A 侧同一云环境的 HTTP 路由拼接。
-// 如果 B 侧后续切换了独立路由，只需要改这里，不动业务函数。
-const B_HTTP_BASE_URL = 'https://cloud1-6gh7jgl8c5b16a83-1398046944.ap-shanghai.app.tcloudbase.com/twowaybinding_1_DLforP'
+// 调整（2026-10-08）：地址已下沉到 _shared/http.js 的 ENDPOINTS.bTwowaybinding（域名与自环境二维码服务同源）。
+// 如果 B 侧后续切换了独立路由，只改 ENDPOINTS 一处，不动业务函数。
 
 function getCollectionPrefix() {
-  return CURRENT_ENV_VERSION === 'develop' ? 'NDLdev_' : 'NDLreal_'
+  return prefix(currentIsDev())
 }
 
 function getCollectionName(baseName) {
-  return `${getCollectionPrefix()}${baseName}`
+  return normalizeCollectionName(baseName, currentIsDev())
 }
 
-// 新增运行环境日志：用于快速判断当前云函数这次到底按什么环境、什么源码文件在执行
-function logRuntimeEnvInfo(extra = {}) {
-  console.log('[runtime_env]', {
-    functionName: 'NEWDL_execution_order',
-    runtimeSource: CURRENT_RUNTIME_SOURCE,
-    envVersion: CURRENT_ENV_VERSION,
-    collectionPrefix: getCollectionPrefix(),
-    ...extra
-  })
-}
-
-function normalizeCollectionName(collectionName) {
-  if (!collectionName) return ''
-  if (collectionName.startsWith('NDLdev_') || collectionName.startsWith('NDLreal_')) {
-    return collectionName
-  }
-  return getCollectionName(collectionName)
-}
-
-// 新增 HTTP 查询字符串兼容：B 侧经 GET 中转时，数组和对象会先变成 JSON 字符串，这里统一回收成对象。
-function parseJsonLike(value, fallbackValue) {
-  if (value === null || typeof value === 'undefined' || value === '') {
-    return fallbackValue
-  }
-
-  if (typeof value === 'object') {
-    return value
-  }
-
-  const text = String(value || '').trim()
-  if (!text) {
-    return fallbackValue
-  }
-
-  try {
-    return JSON.parse(text)
-  } catch (error) {
-    return fallbackValue
-  }
-}
+// 注：normalizeCollectionName / parseJsonLike / normalizeRequestEvent 三个通用实现
+// 已下沉到 _shared/collections.js 与 _shared/request.js，本文件顶部统一 require。
 
 // 新增手机号标准化：课程联系方式统一收口成 11 位纯数字，避免空格和分隔符污染订单数据
 function normalizePhone(phone) {
@@ -100,18 +82,55 @@ function normalizeCourseCode(code = '') {
   return String(code || '').replace(/\s+/g, '').trim().toUpperCase()
 }
 
+// 新增（2026-09-21）：机构课程码「混合大小写」形态还原。
+// 背景：机构课程码由 generateOrgSequenceMCode(dev:350) 生成，形如
+// 「机构代码(≤4 位大写) + 数字序号 + 小写来源后缀 b」，例如 SZDX001b —— 只有末位 b 是小写，主体全大写。
+// 而输入侧普遍做了统一转大写（normalizeCourseCode / 前端 index.js 的 toUpperCase），得到 SZDX001B，
+// 与库里真实值 SZDX001b 不一致；原有变体集合只有「全大写 / 全小写」两种，
+// 唯独缺「主体大写 + 末位小写 b」这一种，导致机构课按码查询 100% 落空。
+// 规则与 twowaybinding_1_DLforC 的 normalizeParentCourseCode 保持一致，避免两份副本再次分叉：
+// - 末位已是小写 b：主体转大写、保留小写 b；
+// - 末位是大写 B：先判断是否旧 M 码（B + 7 位 M_CODE_CHARSET 字符，全大写），是则保持大写不动；
+//   否则判定为「被误转大写的新码制后缀」，转回小写 b；
+// - 其他形态：统一转大写。
+function normalizeParentCourseCode(code = '') {
+  const trimmed = String(code || '').replace(/\s+/g, '').trim()
+  if (!trimmed) {
+    return ''
+  }
+  const last = trimmed.slice(-1)
+  if (last === ORG_M_CODE_SOURCE_SUFFIX_FROM_B) {
+    return trimmed.slice(0, -1).toUpperCase() + ORG_M_CODE_SOURCE_SUFFIX_FROM_B
+  }
+  if (last === 'B') {
+    const upperTrimmed = trimmed.toUpperCase()
+    const isLegacyMCode = upperTrimmed.length === 8
+      && new RegExp(`^B[${M_CODE_CHARSET}]{7}$`).test(upperTrimmed)
+    if (isLegacyMCode) {
+      return upperTrimmed
+    }
+    return trimmed.slice(0, -1).toUpperCase() + ORG_M_CODE_SOURCE_SUFFIX_FROM_B
+  }
+  return trimmed.toUpperCase()
+}
+
 // 新增课程码候选值：兼容直接输入原值、去空格值和大小写差异，按最小成本做一次兜底查询。
 function buildCourseCodeVariants(code = '') {
   const rawCode = String(code || '').trim()
   const compactCode = rawCode.replace(/\s+/g, '')
   const upperCode = normalizeCourseCode(code)
   const lowerCode = upperCode.toLowerCase()
+  // 新增（2026-09-21）：机构码「主体大写 + 末位小写 b」混合形态（如 SZDX001b）。
+  // 库里真实值就是这种形态，而入参多半已被转大写，仅有全大写 / 全小写两种变体时命中不了。
+  // 末位非 A/B 时该值与 upperCode 相同，下方 Set 会自动去重，对旧随机码无副作用。
+  const mixedCode = normalizeParentCourseCode(upperCode)
 
   return Array.from(new Set([
     rawCode,
     compactCode,
     upperCode,
-    lowerCode
+    lowerCode,
+    mixedCode
   ].filter(Boolean)))
 }
 
@@ -129,11 +148,79 @@ const M_CODE_PREFIX_FROM_B = 'B'
 // 新增：教练「接取码」辅助常量。完整接取码 = 8 位 M 码（班级码） + 4 位确认码，共 12 位。
 // 教练端输入这 12 位即可认领课程；发布者可重置确认码使旧接取码失效。
 const PICKUP_CONFIRM_CODE_LENGTH = 4
-const PICKUP_FULL_CODE_LENGTH = 12 // = 8(M 码) + 4(确认码)
+const PICKUP_FULL_CODE_LENGTH = 12 // 旧码 = 8(M 码) + 4(确认码)
+// 新增（2026-09-16 二次定版）：机构新码制课程码为 9 位（机构代码 4 + 序号 4 + 来源后缀 a/b），
+// 完整接取码 = 9(课程码) + 4(确认码) = 13 位；认领输入侧双长度兼容（12 / 13）。
+// 修正（2026-09-16 三次定版·终版确认）：机构课程码回归恒长 8 位，完整接取码回归 12 位（8+4）；
+// 该 13 位常量仅保留作历史过渡兼容（此前按 9 位方案生成的测试码），新码不会再产生 13 位接取码。
+const PICKUP_FULL_CODE_LENGTH_ORG = 13
 // 新增：执行教练确认接取后的固定尾码。
 // 这里不改原始 12 位接取码校验规则，只额外生成一组“12 位接取码 + DL”的确认展示码，
 // 方便管理层和执行教练在页面上一眼识别“这门课已经被真人确认接取”。
 const PICKUP_FINAL_CODE_SUFFIX = 'DL'
+
+// 【2026-09-16 新增·课程状态后缀码制】新码制下「教练接取码」= 课程码（8 位 M 码） + 2 位状态后缀，
+// 状态后缀随课程生命周期累积写入 state_history 数组（DB 累积），前端只展示当前最新状态后缀。
+// - pl = Pending Lesson（待接取/待上课，发布点击直接生成）
+// - ip = In Progress（进行中，教练接取后追加）
+// - dl = Done Lesson（已完成，课程结课时追加）
+// 接取码总长 10 位（8 课程码 + 2 状态后缀），替换原 12 位随机码（8 课程码 + 4 随机确认码）。
+// 以下 5 个常量的真值已下沉到 _shared/courseState.js（唯一编辑点）。
+// 这里保留本地名字是为了不动下游几百行引用；值改为从共享层取，避免两份定义分叉。
+const STATE_SUFFIX_PENDING_LESSON = courseState.STATE_SUFFIX.PENDING_LESSON
+const STATE_SUFFIX_IN_PROGRESS = courseState.STATE_SUFFIX.IN_PROGRESS
+const STATE_SUFFIX_DONE_LESSON = courseState.STATE_SUFFIX.DONE_LESSON
+const STATE_SUFFIX_LENGTH = courseState.STATE_SUFFIX_LENGTH
+const STATE_PICKUP_CODE_LENGTH = courseState.STATE_PICKUP_CODE_LENGTH // 8(M 码) + 2(状态后缀)
+const STATE_HISTORY_FIELD = courseState.STATE_HISTORY_FIELD
+
+// 新增：状态后缀合法性枚举（小写）。state_history 仅允许写入这些值。
+const VALID_STATE_SUFFIXES = courseState.VALID_STATE_SUFFIXES
+
+// 新增：构造「课程码 + 状态后缀」形式的接取码。
+// 课程码部分保留原大小写（机构码可能含小写），状态后缀统一小写，方便前端展示与教练端输入校验。
+// 课程码长度非法或状态后缀不在枚举内时返回空串。
+function buildStatePickupCode(courseCode = '', stateSuffix = '') {
+  const safeCourse = String(courseCode || '').replace(/[^a-zA-Z0-9]/g, '')
+  const safeSuffix = String(stateSuffix || '').toLowerCase().replace(/[^a-z]/g, '')
+  if (safeCourse.length !== 8 || safeSuffix.length !== STATE_SUFFIX_LENGTH) {
+    return ''
+  }
+  if (!VALID_STATE_SUFFIXES.includes(safeSuffix)) {
+    return ''
+  }
+  return `${safeCourse}${safeSuffix}`
+}
+
+// 新增：从「课程码 + 状态后缀」接取码中拆出课程码与状态后缀。
+// 仅识别 10 位（8+2）新制码；旧 12 位码不在本函数处理范围（由 splitPickupFullCode 处理）。
+function splitStatePickupCode(rawCode = '') {
+  const cleaned = String(rawCode || '').replace(/[^a-zA-Z0-9]/g, '')
+  if (cleaned.length !== STATE_PICKUP_CODE_LENGTH) {
+    return { courseCode: '', stateSuffix: '' }
+  }
+  const courseCode = cleaned.slice(0, 8)
+  const stateSuffix = cleaned.slice(8).toLowerCase()
+  if (!VALID_STATE_SUFFIXES.includes(stateSuffix)) {
+    return { courseCode: '', stateSuffix: '' }
+  }
+  return { courseCode, stateSuffix }
+}
+
+// 新增：读取订单的 state_history 数组（兜底返回空数组）。
+// 兼容两种存储位置：顶层 state_history / course_flow_info.state_history。
+// 调整（2026-10-08）：实现下沉到 _shared/courseState.js，本文件保留同名包装，调用点零改动。
+function getStateHistory(order = {}) {
+  return courseState.getStateHistory(order)
+}
+
+// 新增：取 state_history 的最新状态后缀（数组末尾元素）。
+// 若 state_history 为空，则按 fulfill_state 兜底映射：
+// awaiting/pending → 'pl'；in_progress → 'ip'；closed/completed/cancelled → 'dl'；其他 → ''。
+// 调整（2026-10-08）：映射表与读取顺序下沉到 _shared/courseState.js 的 resolveStateSuffix。
+function resolveCurrentStateSuffix(order = {}) {
+  return resolveStateSuffix(order)
+}
 
 // 新增：构造符合 8 位「前缀 + 随机位」格式的候选串（不做唯一性校验）
 function buildMCandidate(prefix) {
@@ -195,6 +282,87 @@ async function generateUniqueMCode(collectionName, prefix) {
   return fallback
 }
 
+// 新增（2026-09-16）：机构代码前缀归一化 —— 取机构邀请码前 4 位作为课程码前缀；
+// 超出 4 位取前 4 位，不足 4 位右侧补 0 凑满 4 位（如 XINGYAO → XING、AB → AB00），统一大写。
+// 调整（2026-09-16 二次定版）：不足 4 位改为左侧补 0、机构代码放结尾，并统一转小写
+// （如 XINGYAO → xing、AB → 00ab），配合码尾小写 a/b 后缀组成完整课程码。
+// 与 twowaybinding_1_DLforC 保持同一套规则，避免两条桥接链路码源不一致。
+// 调整（2026-09-16 三次定版·最终版）：机构代码改为大写放开头、不足 4 位不补 0 保持原样
+// （如 XINGYAO → XING、AB → AB），空缺位数由序号动态补足（课程码总长恒 9 位）。
+// 修正（2026-09-16 终版确认）：课程码总长恒 8 位（上一行"9 位"为笔误），机构代码最长 4 位，码尾固定 1 位来源后缀。
+function buildOrgCodePrefix(invitationCode = '') {
+  const rawCode = String(invitationCode || '').trim().toUpperCase()
+  if (!rawCode) {
+    return ''
+  }
+  return rawCode.slice(0, 4)
+}
+
+// 新增（2026-09-16）：机构新码制来源后缀 —— 小写 a/b 放在码尾区分来源：
+// b = 家长从 B 端约课（本函数仅服务 B 约课链路，固定用 b）；a = 教练 A 端直建（预留，暂未接入新码制）。
+// 原系统里该标记是大写 A/B 放在码首，现改为小写放码尾。
+const ORG_M_CODE_SOURCE_SUFFIX_FROM_B = 'b'
+
+// 新增（2026-09-16）：机构序号格式化 —— 从 0001 开始左补 0；
+// 调整（2026-09-16 三次定版·最终版）：课程码总长固定 9 位，序号位数 = 9 - 机构代码位数 - 1(来源后缀)，
+// 机构代码越短序号位数越多（XING→0001 四位、AB→000002 六位）；超出位数上限回绕复用，撞码由唯一性重试兜底。
+// 修正（2026-09-16 终版确认）：课程码总长恒 8 位（上方"9 位"为笔误），序号位数 = 8 - 机构代码位数 - 1，
+// 示例：XING→001 三位、XYAO→011 三位、AB→00002 五位。
+const ORG_M_CODE_TOTAL_LENGTH = 8
+function formatOrgMCodeSeq(seq = 1, orgPrefix = '') {
+  const seqWidth = Math.max(1, ORG_M_CODE_TOTAL_LENGTH - String(orgPrefix || '').length - 1)
+  const safeSeq = Number(seq)
+  const base = Number.isFinite(safeSeq) && safeSeq >= 1 ? Math.floor(safeSeq) : 1
+  const maxSeq = Math.pow(10, seqWidth) - 1
+  return String(((base - 1) % maxSeq) + 1).padStart(seqWidth, '0')
+}
+
+// 新增（2026-09-16）：生成机构口径的唯一课程码 = 机构代码前 4 位 + 4 位序号（该机构第 N 个约课用户，从 0001 叠加）。
+// 序号计数口径：订单 m_code_org_invite 字段等于当前机构邀请码的历史订单数 + 1（只统计新码制订单，
+// 旧「B + 7 位随机」订单不占序号，保证切换后第一个用户从 0001 开始）；
+// 并发/撞码时序号递增重试（最多 10 次），仍冲突则返回空串，由调用方退回原随机码方案，不阻塞建单。
+// 调整（2026-09-16 二次定版）：课程码改为 9 位 —— 机构代码(4) + 序号(4) + 小写来源后缀 b(1)，
+// 如 xing0001b、00ab0001b；12 位接取码体系同步升级为双长度兼容（旧 12 = 8+4 / 新 13 = 9+4）。
+// 修正（2026-09-16 三次定版·终版确认）：课程码回归恒长 8 位 —— 机构代码(≤4 位，大写放开头不补 0)
+// + 序号(动态补位，从 001 起左补 0) + 小写来源后缀 b(1)，如 XING001b、XYAO011b、AB00002b；
+// 完整接取码回归 12 位（8+4），13 位拆分分支仅作历史过渡兼容保留。
+async function generateOrgSequenceMCode(collectionName, invitationCode = '') {
+  const orgPrefix = buildOrgCodePrefix(invitationCode)
+  const safeInviteCode = normalizeInviteCode(invitationCode)
+  if (!collectionName || !orgPrefix || !safeInviteCode) {
+    return ''
+  }
+
+  let seq = 1
+  try {
+    const countRes = await db.collection(collectionName)
+      .where({ m_code_org_invite: safeInviteCode })
+      .count()
+    seq = (Number(countRes && countRes.total) || 0) + 1
+  } catch (err) {
+    console.warn('[m_code] generateOrgSequenceMCode count failed, start from 0001:', err && err.message)
+    seq = 1
+  }
+
+  for (let i = 0; i < M_CODE_GENERATE_MAX_RETRY; i += 1) {
+    // 调整（2026-09-16 二次定版）：码尾追加小写来源后缀 b（家长 B 端约课标记）
+    // 调整（2026-09-16 三次定版·终版确认）：序号位数随机构代码长度动态变化（总长恒 8 位），
+    // 必须传入 orgPrefix 才能算对补位位数，如 XING→001、AB→00002。
+    const candidate = `${orgPrefix}${formatOrgMCodeSeq(seq, orgPrefix)}${ORG_M_CODE_SOURCE_SUFFIX_FROM_B}`
+    const occupied = await isMCodeOccupied(collectionName, candidate)
+    if (!occupied) {
+      return candidate
+    }
+    seq += 1
+  }
+
+  console.warn('[m_code] generateOrgSequenceMCode conflict after max retry', {
+    orgPrefix,
+    inviteCode: safeInviteCode,
+  })
+  return ''
+}
+
 // 新增：构造 4 位「接取确认码」，字符表与 M 码一致（同样规避易混淆字符）。
 // 4 位 × 32 字符 ≈ 100 万组合，暴力撞码概率可控；发布者还可手动重置。
 function buildPickupConfirmCode() {
@@ -210,73 +378,59 @@ function buildPickupConfirmCode() {
   return result
 }
 
-// 新增：完整「12 位接取码」标准化。用户输入时可能带空格、分隔符、大小写不一致，
-// 这里统一去非字母数字、转大写，并严格限制 12 位。不符合时返回空串。
+// 新增：完整「接取码」标准化。用户输入时可能带空格、分隔符、大小写不一致，
+// 这里统一去非字母数字、转大写，并严格限制长度。不符合时返回空串。
+// 调整（2026-09-16 二次定版）：双长度兼容 —— 旧码 12 位（8+4）/ 机构新码 13 位（9+4）。
+// 修正（2026-09-16 三次定版·终版确认）：机构课程码回归 8 位后实际只产生 12 位接取码，
+// 13 位分支仅兼容此前 9 位方案生成的历史测试码。
 function normalizePickupFullCode(rawCode = '') {
   const cleaned = String(rawCode || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
-  if (cleaned.length !== PICKUP_FULL_CODE_LENGTH) {
+  if (cleaned.length !== PICKUP_FULL_CODE_LENGTH && cleaned.length !== PICKUP_FULL_CODE_LENGTH_ORG) {
     return ''
   }
   return cleaned
 }
 
-// 新增：从 12 位完整接取码中拆出「8 位 M 码(班级码)」 + 「4 位确认码」
+// 新增：从完整接取码中拆出「课程码」 + 「4 位确认码」。
+// 调整（2026-09-16 二次定版）：按总长动态拆分 —— 12 位拆 8+4（旧随机码），13 位拆 9+4（机构新码）。
 function splitPickupFullCode(fullCode = '') {
   const safeCode = normalizePickupFullCode(fullCode)
   if (!safeCode) {
     return { courseCode: '', confirmCode: '' }
   }
+  const courseLength = safeCode.length === PICKUP_FULL_CODE_LENGTH_ORG ? 9 : 8
   return {
-    courseCode: safeCode.slice(0, 8),
-    confirmCode: safeCode.slice(8, 12)
+    courseCode: safeCode.slice(0, courseLength),
+    confirmCode: safeCode.slice(courseLength)
   }
 }
 
-// 新增：拼接 12 位完整接取码
+// 新增：拼接完整接取码（课程码 + 4 位确认码）。
+// 调整（2026-09-16 二次定版）：课程码长度兼容 8（旧随机码）/ 9（机构新码）；
+// 课程码部分保留原大小写（机构新码含小写字母，如 xing0001b），确认码仍统一大写，
+// 保证发布页展示的课程码与家长端看到的小写机构码完全一致。
 function buildPickupFullCode(courseCode = '', confirmCode = '') {
-  const safeCourse = normalizeCourseCode(courseCode)
+  const safeCourse = String(courseCode || '').replace(/[^a-zA-Z0-9]/g, '')
   const safeConfirm = String(confirmCode || '').toUpperCase().replace(/[^a-zA-Z0-9]/g, '').slice(0, PICKUP_CONFIRM_CODE_LENGTH)
-  if (safeCourse.length !== 8 || safeConfirm.length !== PICKUP_CONFIRM_CODE_LENGTH) {
+  if ((safeCourse.length !== 8 && safeCourse.length !== 9) || safeConfirm.length !== PICKUP_CONFIRM_CODE_LENGTH) {
     return ''
   }
   return `${safeCourse}${safeConfirm}`
 }
 
 // 新增：执行教练确认接取后的展示码。
-// 规则固定为“12 位完整接取码 + DL”，例如 A1234567ABCDDL。
+// 规则固定为“完整接取码 + DL”，例如 A1234567ABCDDL。
+// 调整（2026-09-16 二次定版）：双长度兼容（12/13）并保留课程码原大小写。
 function buildPickupFinalCode(fullCode = '') {
-  const safeFullCode = normalizePickupFullCode(fullCode)
-  if (!safeFullCode) {
+  const safeFullCode = String(fullCode || '').replace(/[^a-zA-Z0-9]/g, '')
+  if (safeFullCode.length !== PICKUP_FULL_CODE_LENGTH && safeFullCode.length !== PICKUP_FULL_CODE_LENGTH_ORG) {
     return ''
   }
   return `${safeFullCode}${PICKUP_FINAL_CODE_SUFFIX}`
 }
 
-function buildQueryString(payload = {}) {
-  const query = new URLSearchParams()
-
-  Object.keys(payload || {}).forEach((key) => {
-    const value = payload[key]
-
-    if (typeof value === 'undefined') {
-      return
-    }
-
-    if (value === null) {
-      query.append(key, '')
-      return
-    }
-
-    if (typeof value === 'object') {
-      query.append(key, JSON.stringify(value))
-      return
-    }
-
-    query.append(key, String(value))
-  })
-
-  return query.toString()
-}
+// 注：buildQueryString 已下沉到 _shared/http.js（本文件顶部 require 的 getJson 内部使用），
+// 原实现（undefined 跳过 / null → 空串 / 对象 → JSON.stringify）逐行保留。
 
 // 新增来源兜底：A 端直提单如果还没写 source，统一按教练直接提交处理。
 function getOrderSource(order = {}) {
@@ -337,7 +491,7 @@ function buildCoachResultSyncPayload(order = {}, extra = {}) {
     a_result_snapshot: {
       source: getOrderSource(order),
       publish_state: courseFlowInfo.publish_state || order.publish_state || '',
-      fulfill_state: courseFlowInfo.fulfill_state || order.fulfill_state || '',
+      fulfill_state: readCourseState(order, ''),
       progress_total: currentSafeNumber(courseFlowInfo.progress_total || order.progress_total || 0),
       progress_done: currentSafeNumber(courseFlowInfo.progress_done || order.progress_done || 0),
       close_summary: String(courseFlowInfo.close_summary || '').trim(),
@@ -356,39 +510,12 @@ function buildCoachResultSyncPayload(order = {}, extra = {}) {
   }
 }
 
+// 调整（2026-10-08）：HTTPS GET 的具体实现下沉到 _shared/http.js 的 getJson，返回结构不变。
+// 行为差异（有意为之）：原实现没有设置超时，对端不响应会挂到平台超时；现统一为 20 秒后 reject，
+// 调用方 syncCoachResultToBIfNeeded 本就 try/catch 静默处理，失败更快不影响主流程。
 function requestBHttpApi(payload = {}) {
-  const queryString = buildQueryString(payload)
-  const requestUrl = queryString ? `${B_HTTP_BASE_URL}?${queryString}` : B_HTTP_BASE_URL
-
-  return new Promise((resolve, reject) => {
-    https.get(requestUrl, (response) => {
-      let rawText = ''
-
-      response.on('data', (chunk) => {
-        rawText += chunk
-      })
-
-      response.on('end', () => {
-        let parsedBody = rawText
-
-        try {
-          parsedBody = rawText ? JSON.parse(rawText) : {}
-        } catch (error) {
-          parsedBody = {
-            success: false,
-            message: 'B 侧返回的不是 JSON',
-            rawText
-          }
-        }
-
-        resolve({
-          success: (response.statusCode || 0) < 400 && (!parsedBody || parsedBody.success !== false),
-          requestUrl,
-          statusCode: response.statusCode || 0,
-          data: parsedBody
-        })
-      })
-    }).on('error', reject)
+  return getJson(ENDPOINTS.bTwowaybinding, payload, {
+    timeoutMessage: '调用 B 侧 HTTP 服务超时'
   })
 }
 
@@ -499,7 +626,9 @@ function buildGroupedOrderPayload(submitForm = {}) {
       allow_transfer_to_other_coach: courseFlowInfo.allow_transfer_to_other_coach !== undefined ? !!courseFlowInfo.allow_transfer_to_other_coach : !!coachPrivate.allow_transfer_to_other_coach || !!submitForm.allow_transfer_to_other_coach,
       publish_type: courseFlowInfo.publish_type || submitForm.publish_type || '',
       publish_state: courseFlowInfo.publish_state || submitForm.publish_state || '',
-      fulfill_state: courseFlowInfo.fulfill_state || submitForm.fulfill_state || '',
+      // 这里的第一候选是已解析的 course_flow_info、第二候选是入参表单，都是裸值而非订单文档，
+      // 所以用 pickState（两个候选值挑状态）而不是 readCourseState（从订单文档双读）。
+      fulfill_state: pickState(courseFlowInfo.fulfill_state, submitForm.fulfill_state, ''),
       progress_total: courseFlowInfo.progress_total || submitForm.progress_total || 0,
       progress_done: courseFlowInfo.progress_done || submitForm.progress_done || 0,
       schedule: Array.isArray(courseFlowInfo.schedule) ? courseFlowInfo.schedule : (Array.isArray(submitForm.schedule) ? submitForm.schedule : []),
@@ -901,7 +1030,7 @@ function normalizeOrderForClient(order = {}) {
     allow_transfer_to_other_coach: courseFlowInfo.allow_transfer_to_other_coach !== undefined ? !!courseFlowInfo.allow_transfer_to_other_coach : !!order.allow_transfer_to_other_coach,
     publish_type: courseFlowInfo.publish_type || order.publish_type || '',
     publish_state: courseFlowInfo.publish_state || order.publish_state || '',
-    fulfill_state: courseFlowInfo.fulfill_state || order.fulfill_state || '',
+    fulfill_state: readCourseState(order, ''),
     progress_total: courseFlowInfo.progress_total || order.progress_total || 0,
     progress_done: courseFlowInfo.progress_done || order.progress_done || 0,
     schedule: Array.isArray(courseFlowInfo.schedule) ? courseFlowInfo.schedule : (Array.isArray(order.schedule) ? order.schedule : []),
@@ -915,11 +1044,35 @@ function normalizeOrderForClient(order = {}) {
     joinCode: order.joinCode || '',
     courseCode: order.courseCode || '',
     parent_course_code: order.parent_course_code || order.joinCode || order.courseCode || '',
+    // 【2026-09-16 新增·新码制透出】state_history 数组与 currentStateSuffix 末尾元素，
+    // 前端流转卡 / progress 页据此渲染当前态（pl 待接取 / ip 进行中 / dl 已完成）。
+    // 兼容性：state_history 同时从顶层与 course_flow_info 内层读取，避免老数据漏值；
+    // currentStateSuffix 为空时前端可继续用 fulfill_state 兜底（已有逻辑）。
+    state_history: getStateHistory(order),
+    currentStateSuffix: resolveCurrentStateSuffix(order),
+    // 【2026-09-21 新流程·接取需管理确认】显式透出 coach_binding_requests[]（顶层优先、回退 course_flow_info 内层）。
+    // 之前前端能读到全靠 course_flow_info 原样透出兜底，顶层字段恒为空数组；
+    // 一旦以后有人精简 course_flow_info 的透出，前端申请卡片会静默失效，这里补成一等字段。
+    coach_binding_requests: getCoachBindingRequests(order),
     // 新增：教练接取码字段与执行教练信息透出。
     // 管理端用 pickupConfirmCode / pickupFullCode 生成展示卡片给执行教练；
     // 教练端列表用 assignedCoach* 判断归属与显示「待指派 / 已被 XX 接取」。
     pickupConfirmCode: order.pickup_confirm_code || order.pickupConfirmCode || '',
-    pickupFullCode: order.pickup_full_code || order.pickupFullCode || '',
+    // 【2026-09-16 新增·pickupFullCode 新码制优先】新码制下 state_history 已有累积时，
+    // pickupFullCode 改为返回「课程码 + 当前状态后缀」（10 位新制码），替代旧 12 位随机码。
+    // 旧课程（state_history 为空）仍 fallback 到 order.pickup_full_code 旧字段。
+    pickupFullCode: (() => {
+      const history = getStateHistory(order)
+      if (history.length) {
+        const suffix = resolveCurrentStateSuffix(order)
+        if (suffix) {
+          const baseCourse = String(order.courseCode || order.joinCode || order.parent_course_code || '').trim()
+          const built = buildStatePickupCode(baseCourse, suffix)
+          if (built) return built
+        }
+      }
+      return order.pickup_full_code || order.pickupFullCode || ''
+    })(),
     // 新增：执行教练确认接取后的最终确认码；优先读库里已写值，没有时按“12 位接取码 + DL”兜底拼接。
     pickupFinalCode:
       order.pickup_final_code
@@ -953,97 +1106,9 @@ function normalizeOrderForClient(order = {}) {
  * execution_order: 课程执行核心入口
  * 负责：发布、课表初始化、课节记录、结课、取消
  */
-// 新增：健壮的 action/入参解析器。
-// NEWDL_execution_order 既会被「wx.cloud.callFunction 直调」（action 挂 event 顶层），
-// 也可能走 HTTP 云函数 / SCF 网关 / HTTP 访问服务（action 在 event.queryStringParameters 或 event.body 字符串 / event.body JSON 里）。
-// 经验 ID 1883158 已踩过坑：只读取 event.action，会让 HTTP 路径全部落进 default 「未知操作」。
-// 这里按优先级从 5 种常见结构取值，同时记录来源，便于排错。
-function normalizeRequestEvent(rawEvent) {
-  const event = rawEvent && typeof rawEvent === 'object' ? rawEvent : {};
-
-  // 尝试兼容 HTTP body：body 可能是 JSON 字符串，也可能是 Buffer/base64
-  let bodyObj = null;
-  if (typeof event.body === 'string' && event.body.length > 0) {
-    try {
-      const firstChar = event.body.trim().charAt(0);
-      if (firstChar === '{' || firstChar === '[') {
-        bodyObj = JSON.parse(event.body);
-      }
-    } catch (err) {
-      bodyObj = null;
-    }
-  } else if (event.body && typeof event.body === 'object' && !Array.isArray(event.body)) {
-    bodyObj = event.body;
-  }
-
-  const query = (event.queryStringParameters && typeof event.queryStringParameters === 'object')
-    ? event.queryStringParameters
-    : {};
-
-  const candidates = [
-    { name: 'event', payload: event },
-    { name: 'event.data', payload: event && event.data },
-    { name: 'event.queryStringParameters', payload: query },
-    { name: 'event.body', payload: bodyObj },
-    { name: 'event.body.data', payload: bodyObj && bodyObj.data }
-  ];
-
-  function pickFirstString(...keys) {
-    for (let i = 0; i < candidates.length; i += 1) {
-      const item = candidates[i];
-      if (!item.payload || typeof item.payload !== 'object') continue;
-      for (let j = 0; j < keys.length; j += 1) {
-        const key = keys[j];
-        const value = item.payload[key];
-        if (typeof value === 'string') {
-          return { value: value.trim(), source: `${item.name}.${key}` };
-        }
-        if (typeof value === 'number' || typeof value === 'boolean') {
-          return { value: String(value).trim(), source: `${item.name}.${key}` };
-        }
-      }
-    }
-    return { value: '', source: '' };
-  }
-
-  function pickPayload(sourceName) {
-    for (let i = 0; i < candidates.length; i += 1) {
-      const item = candidates[i];
-      if (item.name === sourceName && item.payload && typeof item.payload === 'object') {
-        return item.payload;
-      }
-    }
-    return null;
-  }
-
-  const actionPick = pickFirstString('action', 'ACTION', 'op', 'operation');
-  const orderIdPick = pickFirstString('orderId', 'order_id', 'id');
-
-  // 入参对象的合并优先级：找到 action 的那一层作为主 payload，再叠加 event 顶层字段；
-  // 这样 HTTP/SCF 调过来时，业务函数里取 courseCode / inviteCode 都能取到。
-  const sourcePayload = actionPick.source ? pickPayload(actionPick.source.split('.').slice(0, -1).join('.')) : null;
-  const normalizedEvent = {
-    ...event,
-    ...(sourcePayload && typeof sourcePayload === 'object' ? sourcePayload : {}),
-    action: actionPick.value,
-    orderId: orderIdPick.value
-  };
-
-  return {
-    event: normalizedEvent,
-    debug: {
-      topLevelKeys: Object.keys(event || {}),
-      actionSource: actionPick.source,
-      actionValue: actionPick.value,
-      orderIdSource: orderIdPick.source,
-      orderIdValue: orderIdPick.value,
-      hasEventBody: Boolean(event.body),
-      hasQueryStringParameters: Boolean(event.queryStringParameters),
-      httpMethod: typeof event.httpMethod === 'string' ? event.httpMethod : '',
-      path: typeof event.path === 'string' ? event.path : ''
-    }
-  };
-}
+// 注：健壮的 action/入参解析器 normalizeRequestEvent 已下沉到 _shared/request.js（本文件顶部 require）。
+// 兼容 callFunction / HTTP 云函数 / SCF 网关 / HTTP 访问服务四种入参封装，逻辑与原实现逐行一致：
+// 按 event → event.data → queryStringParameters → body → body.data 五种结构取值，并记录来源便于排错。
 
 exports.main = async (event, context) => {
   // 新增：兼容 callFunction / SCF HTTP / 微信 HTTP 访问服务三种入参封装
@@ -1062,10 +1127,13 @@ exports.main = async (event, context) => {
 
   // 把 normalize 后的 event 透传给后续 switch：业务里取 courseCode、inviteCode 等不会再在 HTTP 路径落空。
   const $event = parsed.event;
-  // 新增环境版本识别：由前端透传 develop/trial/release
-  CURRENT_ENV_VERSION = $event.envVersion || 'develop'
-  const wxContext = cloud.getWXContext()
-  const openid = wxContext.OPENID
+  // 公共层：一次 initRuntime 拿到本次请求的 env / db / openid / traceId
+  const ctx = initRuntime($event)
+  // 请求上下文包裹（2026-10-08）：把后续整条 await 链绑定到本次请求的 env，
+  // 深层 helper 里的 getCollectionName 通过 currentIsDev() 读到的就是本次请求的环境。
+  // 注：包裹块内的缩进沿用了包裹前的层次，未整体重排 —— 为的是把 diff 压到最小、便于逐行核对。
+  return await runInContext(ctx, async () => {
+  const openid = ctx.openid
   // userId 应该由前端传递，或者通过 openid 查找用户表获取 (这里沿用前端传 userId 的模式，或者自查)
   const userId = $event.userId
 
@@ -1077,7 +1145,7 @@ exports.main = async (event, context) => {
     return { code: 401, msg: '未登录' }
   }
 
-  logRuntimeEnvInfo({
+  makeLogger(ctx).runtimeEnv({
     action: action || '',
     orderId: orderId || '',
     hasOpenid: !!openid
@@ -1112,10 +1180,6 @@ exports.main = async (event, context) => {
     'publish',
     ACTION_SYNC_PARENT_BOOKING_TO_A,
     'update_order',
-    'admin_list_all',
-    'admin_logs',
-    'admin_get_detail',
-    'admin_add_log',
     'update_lesson_content',
     'add_lesson',
     'sync_lesson_progress',
@@ -1129,7 +1193,15 @@ exports.main = async (event, context) => {
     'assign_coach_by_pickup_code',
     'confirm_generate_pickup_code',
     'reset_pickup_confirm_code',
-    'mark_course_info_ready'
+    'mark_course_info_ready',
+    // 【2026-09-21 新流程·接取需管理确认】新增 3 个 action：
+    // request_coach_binding：教练输入「课程码+pl」提交绑定申请，写入 coach_binding_requests[]；
+    // confirm_coach_binding：管理层在 publish 页点「确认」时调用，把申请落到 assignedCoach* + 推 in_progress；
+    // reject_coach_binding：管理层拒绝某申请，标记 rejected，课程仍可被其他教练申请。
+    // 必须三处都加（supportedActionList + routeTable + 业务函数），否则路由兜底会误报「版本不同步」。
+    'request_coach_binding',
+    'confirm_coach_binding',
+    'reject_coach_binding'
   ];
 
   try {
@@ -1188,6 +1260,7 @@ exports.main = async (event, context) => {
       }
     }
   }
+  }) // ← runInContext 包裹结束
 };
 
 // 新增：NEWDL_execution_order 的业务动作映射表。每个 handler 的返回结构 { code, msg, data, debug? }
@@ -1244,19 +1317,6 @@ const routeTable = {
     if (!orderId) return { code: 1, msg: '缺少订单ID' };
     return await updateOrder(orderId, event.submitForm, openid, userId);
   },
-  admin_list_all: async ({ event }) => {
-    return await listAllAdmin(event.page || 1, event.limit || 20);
-  },
-  admin_logs: async ({ event }) => {
-    return await listLogs(event.page || 1, event.limit || 20);
-  },
-  admin_get_detail: async ({ event }) => {
-    if (!event.id || !event.collection) return { code: 1, msg: '缺少参数' };
-    return await adminGetDetail(event.id, event.collection);
-  },
-  admin_add_log: async ({ event }) => {
-    return await addLog(event.level, event.message, event.details);
-  },
   update_lesson_content: async ({ orderId, openid, userId, event }) => {
     if (!orderId) return { code: 1, msg: '缺少订单ID' };
     return await updateLessonContent(orderId, openid, userId, event.lessonIndex, event.content);
@@ -1297,6 +1357,21 @@ const routeTable = {
   mark_course_info_ready: async ({ orderId, openid, userId }) => {
     if (!orderId) return { code: 1, msg: '缺少订单ID' };
     return await markCourseInfoReady(orderId, openid, userId);
+  },
+  // 【2026-09-21 新流程·接取需管理确认】新增 3 个 action handler：
+  // request_coach_binding：教练输入「课程码+pl」提交绑定申请，写入 coach_binding_requests[]，fulfill_state 不变。
+  // confirm_coach_binding：管理层确认某申请 → 写 assignedCoach* + push 'ip' + fulfill_state='in_progress'。
+  // reject_coach_binding：管理层拒绝某申请 → 标 rejected，不动状态。
+  request_coach_binding: async ({ openid, userId, event }) => {
+    return await requestCoachBinding(event.pickupFullCode, openid, userId, event.coachName || '');
+  },
+  confirm_coach_binding: async ({ orderId, openid, userId, event }) => {
+    if (!orderId) return { code: 1, msg: '缺少订单ID' };
+    return await confirmCoachBinding(orderId, event.requestId, openid, userId);
+  },
+  reject_coach_binding: async ({ orderId, openid, userId, event }) => {
+    if (!orderId) return { code: 1, msg: '缺少订单ID' };
+    return await rejectCoachBinding(orderId, event.requestId, openid, userId, event.reason || '');
   }
 };
 
@@ -1314,27 +1389,63 @@ async function assignCoachByPickupCode(rawPickupFullCode, coachOpenid, coachUser
   if (!coachOpenid) {
     return { code: 401, msg: '未获取到教练身份，请重新登录后再试' }
   }
-  const fullCode = normalizePickupFullCode(rawPickupFullCode)
-  if (!fullCode) {
-    return {
-      code: 1,
-      msg: `接取码格式不对，必须是 ${PICKUP_FULL_CODE_LENGTH} 位英数字（8 位班级码 + 4 位确认码），无需带空格或横杠`
+
+  // 【2026-09-16 新增·新码制优先解析】教练端输入可能是两种格式之一：
+  //   1) 新制 10 位 = 课程码(8 位 M 码) + 2 位状态后缀(pl/ip/dl)，例如 ABCD1234pl
+  //   2) 旧制 12 位 = 课程码(8 位) + 4 位随机确认码（仅用于历史课程兼容，新流程不再生成）
+  // 先尝试新制 10 位拆分；命中则按新流程走（不再校验 4 位确认码，新制码不存在确认码）；
+  // 未命中再回退到旧 12 位 normalizePickupFullCode 路径，保证历史课程老数据仍可接取。
+  let newStatePickup = splitStatePickupCode(rawPickupFullCode)
+  let courseCode = ''
+  let stateSuffix = ''
+  let fullCode = ''
+  let legacyConfirmCode = ''
+  let isNewCodeSystem = false
+
+  if (newStatePickup.courseCode && newStatePickup.stateSuffix) {
+    // 新制命中：课程码 + 状态后缀
+    courseCode = newStatePickup.courseCode
+    stateSuffix = newStatePickup.stateSuffix
+    fullCode = buildStatePickupCode(courseCode, stateSuffix)
+    isNewCodeSystem = true
+  } else {
+    // 旧制回退：12 位班级码 + 4 位确认码（历史课程兼容路径）
+    fullCode = normalizePickupFullCode(rawPickupFullCode)
+    if (!fullCode) {
+      return {
+        code: 1,
+        // 调整（2026-09-16 二次定版）：机构新码制完整接取码为 13 位（9 课程码 + 4 确认码），双长度兼容提示
+        // 修正（2026-09-16 三次定版·终版确认）：新码统一为 12 位（8+4），下方文案中 13 位仅作历史测试码兼容说明保留
+        // 【2026-09-16 新增·新码制终版】新码制为 10 位（8 课程码 + 2 位状态后缀 pl/ip/dl），新增提示文案
+        msg: '接取码格式不对，新码为 10 位英数字（8 位课程码 + 2 位状态后缀 pl/ip/dl，如 ABCD1234pl）；旧随机码为 12 位英数字（8 位班级码 + 4 位确认码），无需带空格或横杠'
+      }
     }
-  }
-  const { courseCode, confirmCode } = splitPickupFullCode(fullCode)
-  if (!courseCode || !confirmCode) {
-    return { code: 1, msg: '接取码拆分失败，请检查输入' }
+    const legacySplit = splitPickupFullCode(fullCode)
+    if (!legacySplit.courseCode || !legacySplit.confirmCode) {
+      return { code: 1, msg: '接取码拆分失败，请检查输入' }
+    }
+    courseCode = legacySplit.courseCode
+    legacyConfirmCode = legacySplit.confirmCode
   }
 
   const targetCollection = getCollectionName(ORDER_COLLECTION_BASE)
   let matchedOrder = null
   try {
+    // 调整（2026-09-16 二次定版）：机构新码制课程码含小写字母（如 xing0001b），而用户输入会被标准化成大写，
+    // 这里查库时同时尝试大写 / 小写两种变体（旧随机码本身全大写，不受影响），保证小写机构码可被精确命中。
+    // 修正（2026-09-16 三次定版·终版确认）：机构代码改回大写，但末位来源后缀 b 仍保持小写（如 SZDX001b）。
+    // 修改（2026-09-21）：改用统一变体函数 buildCourseCodeVariants，
+    // 补齐机构码「主体大写 + 末位小写 b」混合形态（如 SZDX001b）。
+    // 旧写法只有 [原值, 全小写] 两种，缺大写主体 + 小写 b，机构课按码查询必定落空。
+    const courseCodeVariants = buildCourseCodeVariants(courseCode)
     const queryRes = await db.collection(targetCollection)
-      .where(_.or([
-        { courseCode },
-        { joinCode: courseCode },
-        { parent_course_code: courseCode }
-      ]))
+      .where(_.or(
+        courseCodeVariants.flatMap((codeVariant) => ([
+          { courseCode: codeVariant },
+          { joinCode: codeVariant },
+          { parent_course_code: codeVariant }
+        ]))
+      ))
       .limit(1)
       .get()
     matchedOrder = Array.isArray(queryRes.data) && queryRes.data.length ? queryRes.data[0] : null
@@ -1344,20 +1455,40 @@ async function assignCoachByPickupCode(rawPickupFullCode, coachOpenid, coachUser
   }
 
   if (!matchedOrder) {
-    return { code: 404, msg: '没有找到对应课程，请检查班级码前 8 位是否正确' }
+    return { code: 404, msg: '没有找到对应课程，请检查课程码部分是否正确' }
   }
 
   // 已结课 / 已关闭的课程不允许再接取，避免教练接到无效课
-  const fulfillState = String((matchedOrder.course_flow_info || {}).fulfill_state || matchedOrder.fulfill_state || '').trim()
-  if (fulfillState === 'closed' || fulfillState === 'cancelled') {
+  const fulfillState = readCourseState(matchedOrder, '')
+  // 口径注意（保持原状，未改行为）：接取链路只挡 closed / cancelled，**不挡 completed**。
+  // 下方 requestCoachBinding 挡的是 closed / cancelled / completed 三个终态，两处口径本来就不一致，
+  // 本轮只做收编不改判定，差异登记在此，要不要统一需单独一轮确认。
+  if (isClosedState(fulfillState)) {
     return { code: 403, msg: '该课程已关闭，无法再接取' }
   }
 
-  const savedConfirmCode = String(matchedOrder.pickup_confirm_code || matchedOrder.pickupConfirmCode || '').trim()
-  if (!savedConfirmCode || savedConfirmCode.toUpperCase() !== confirmCode) {
-    return {
-      code: 1,
-      msg: '确认码不匹配，课程可能已经被发布者更换了新确认码，请向管理员索要最新的完整接取码'
+  // 【2026-09-16 新增·新制码状态后缀校验】新码制下不需要 4 位确认码，
+  // 但要求教练输入的 stateSuffix 必须是 'pl'（待接取态），其他状态不允许再接取：
+  //   - 'ip' 表示已被某教练接取（进行中），不重复接取；
+  //   - 'dl' 表示课程已结束，不允许再接取。
+  // 旧码制保留原有 4 位确认码比对路径（已生成 pickup_confirm_code 的历史课程走这一支）。
+  if (isNewCodeSystem) {
+    if (stateSuffix === STATE_SUFFIX_DONE_LESSON) {
+      return { code: 403, msg: '该课程已结束，无法再接取' }
+    }
+    if (stateSuffix === STATE_SUFFIX_IN_PROGRESS) {
+      // 输入的是「课程码+ip」码：通常意味着已被某教练接取；交给下方 alreadyAssigned 逻辑统一返回
+      // 这里不直接报错，让后续 alreadyAssigned 判断给出更具体的「该课程已由你接取」或「已被他人接取」提示
+    } else if (stateSuffix !== STATE_SUFFIX_PENDING_LESSON) {
+      return { code: 1, msg: '接取码后缀不正确，新制接取码应为课程码 + pl（待接取态）' }
+    }
+  } else {
+    const savedConfirmCode = String(matchedOrder.pickup_confirm_code || matchedOrder.pickupConfirmCode || '').trim()
+    if (!savedConfirmCode || savedConfirmCode.toUpperCase() !== legacyConfirmCode) {
+      return {
+        code: 1,
+        msg: '确认码不匹配，课程可能已经被发布者更换了新确认码，请向管理员索要最新的完整接取码'
+      }
     }
   }
 
@@ -1409,28 +1540,57 @@ async function assignCoachByPickupCode(rawPickupFullCode, coachOpenid, coachUser
   }
 
   const now = new Date()
-  const pickupFinalCode = buildPickupFinalCode(fullCode)
+  // 【2026-09-16 新增·新制码双写】教练接取后：
+  //   - pickup_full_code 替换为 课程码 + 'ip'（10 位新制码）
+  //   - state_history 数组 push 'ip'（保留原 pl 元素，累积写入 DB）
+  //   - pickup_final_code 双写 = 课程码 + 'ip'（兼容旧前端读取 pickup_final_code 的代码路径）
+  //   - fulfill_state 同步写 'in_progress'（顶层 + course_flow_info 内层）
+  // 旧码制（legacy）继续走 buildPickupFinalCode(fullCode) 写入 pickup_final_code，保持兼容。
+  const finalCourseCode = String(matchedOrder.courseCode || matchedOrder.joinCode || courseCode || '').trim()
+  const newInProgressFullCode = isNewCodeSystem
+    ? buildStatePickupCode(finalCourseCode, STATE_SUFFIX_IN_PROGRESS)
+    : ''
+  const pickupFinalCode = isNewCodeSystem
+    ? newInProgressFullCode
+    : buildPickupFinalCode(fullCode)
   // 新增：教练成功接取后，课程生命周期状态推进到「进行中（in_progress）」。
   // 保证 progress 页面立刻把它从「待接取」挪到「进行中」Tab，和管理层生成接取码 → 教练接取 → 开始带课的业务顺序对齐。
   // 同时写顶层 fulfill_state 和 course_flow_info.fulfill_state，兼容两种读取位置。
   const currentCourseFlow = getCourseFlowInfo(matchedOrder)
+  // 【2026-09-16 新增·state_history 累积】读取订单当前 state_history，push 'ip' 后写回。
+  // 同时同步顶层 state_history（前端老路径兼容读取）；仅在 state_history 非空时写，避免覆盖旧课程空字段。
+  const currentHistory = getStateHistory(matchedOrder)
+  // 调整（2026-10-08）：去重 push 的语义下沉到 _shared/courseState.js 的 appendStateSuffix，
+  // 三处调用（接取 / 确认绑定 / 结课）原本各写一遍 includes 判断，漏一处就会在数组里堆重复后缀。
+  const nextHistory = appendStateSuffix(currentHistory, STATE_SUFFIX_IN_PROGRESS)
   const nextCourseFlow = {
     ...currentCourseFlow,
-    fulfill_state: 'in_progress'
+    fulfill_state: COURSE_STATE.IN_PROGRESS
+  }
+  if (isNewCodeSystem) {
+    nextCourseFlow[STATE_HISTORY_FIELD] = nextHistory
   }
   try {
+    const updateData = {
+      assignedCoachToken: safeCoachUserId,
+      assignedCoachOpenid: safeCoachOpenid,
+      assignedCoachName: finalCoachName,
+      assignedCoachAt: now,
+      // 新增：执行教练接取成功后，把“12 位接取码 + 固定 DL 尾码”一起写回订单。
+      pickup_final_code: pickupFinalCode,
+      fulfill_state: COURSE_STATE.IN_PROGRESS,
+      course_flow_info: _.set(nextCourseFlow),
+      updatedAt: now
+    }
+    // 【2026-09-16 新增·新制码双写字段】新码制下同步：
+    //   - 顶层 pickup_full_code 替换为 10 位新码（课程码 + ip）
+    //   - 顶层 state_history 同步更新（前端可能从顶层直接读取）
+    if (isNewCodeSystem) {
+      updateData.pickup_full_code = newInProgressFullCode
+      updateData[STATE_HISTORY_FIELD] = nextHistory
+    }
     await db.collection(targetCollection).doc(matchedOrder._id).update({
-      data: {
-        assignedCoachToken: safeCoachUserId,
-        assignedCoachOpenid: safeCoachOpenid,
-        assignedCoachName: finalCoachName,
-        assignedCoachAt: now,
-        // 新增：执行教练接取成功后，把“12 位接取码 + 固定 DL 尾码”一起写回订单。
-        pickup_final_code: pickupFinalCode,
-        fulfill_state: 'in_progress',
-        course_flow_info: _.set(nextCourseFlow),
-        updatedAt: now
-      }
+      data: updateData
     })
   } catch (err) {
     console.error('[pickup] write assignedCoach failed:', err && err.message)
@@ -1445,7 +1605,8 @@ async function assignCoachByPickupCode(rawPickupFullCode, coachOpenid, coachUser
   console.log('[pickup] coach assigned success:', {
     orderId: matchedOrder._id,
     courseCode,
-    confirmCode,
+    confirmCode: legacyConfirmCode || '(new code system)',
+    stateSuffix: isNewCodeSystem ? stateSuffix : '',
     coachOpenid: safeCoachOpenid,
     coachUserId: safeCoachUserId,
     coachName: finalCoachName
@@ -1457,12 +1618,546 @@ async function assignCoachByPickupCode(rawPickupFullCode, coachOpenid, coachUser
     orderId: matchedOrder._id,
     joinCode: matchedOrder.joinCode || courseCode,
     courseCode: matchedOrder.courseCode || courseCode,
-    pickupFullCode: fullCode,
+    pickupFullCode: isNewCodeSystem ? newInProgressFullCode : fullCode,
     pickupFinalCode,
+    // 【2026-09-16 新增·新制码透出】回传 state_history / fulfill_state，前端无需再拉详情即可渲染当前态
+    state_history: nextHistory,
+    fulfill_state: COURSE_STATE.IN_PROGRESS,
+    currentStateSuffix: isNewCodeSystem ? STATE_SUFFIX_IN_PROGRESS : '',
     coachName: finalCoachName,
     assignedAt: now,
     title: normalizedTitle,
     location: normalizedLocation
+  }
+}
+
+// ============================================================
+// 【2026-09-21 新流程·接取需管理确认】新增 3 个函数：
+// 1) requestCoachBinding —— 教练输入「课程码+pl」提交绑定申请，写入 coach_binding_requests[]，
+//                            fulfill_state 不变（仍 awaiting），不写 assignedCoach*，不推 state_history
+// 2) confirmCoachBinding  —— 管理层在 publish 页点「确认」时调用，把指定申请落到 assignedCoach*
+//                            + push 'ip' 到 state_history + fulfill_state='in_progress'，
+//                            同步把 coach_binding_requests[] 中这条标 confirmed，其余 pending 自动标 rejected
+// 3) rejectCoachBinding   —— 管理层拒绝某申请，标记 rejected，不动 fulfill_state，课程仍可被其他教练申请
+//
+// 设计选择 A（独立字段）：fulfill_state 不引入 awaiting_confirm 新态，中间态完全由 coach_binding_requests[] 承载。
+// 好处：接取码后缀保持 pl，教练看到的码不变；resolveCurrentStateSuffix / stageIsAwaiting / 结课校验等老路径无需改动。
+// ============================================================
+
+// 新增：coach_binding_requests[] 字段名（顶层与 course_flow_info 内层同步写，兼容两种读法）
+const COACH_BINDING_REQUESTS_FIELD = 'coach_binding_requests'
+const COACH_BINDING_STATUS_PENDING = 'pending'
+const COACH_BINDING_STATUS_CONFIRMED = 'confirmed'
+const COACH_BINDING_STATUS_REJECTED = 'rejected'
+
+// 新增：取订单的 coach_binding_requests[]（顶层优先，回退到 course_flow_info 内层）
+function getCoachBindingRequests(order = {}) {
+  const top = Array.isArray(order[COACH_BINDING_REQUESTS_FIELD]) ? order[COACH_BINDING_REQUESTS_FIELD] : null
+  if (top && top.length) return top
+  const flow = order.course_flow_info || {}
+  const inner = Array.isArray(flow[COACH_BINDING_REQUESTS_FIELD]) ? flow[COACH_BINDING_REQUESTS_FIELD] : null
+  return inner && inner.length ? inner : []
+}
+
+// 新增：在 coach_binding_requests[] 里找「当前这个人」那条 pending 申请。
+// list_myself 用它给列表项打 myPendingRequest 标记：申请阶段还没写 assignedCoach*，
+// 教练在「我的课程」里本来就查不到这门课，补上标记前端才知道要显示「待确认」。
+function findMyPendingBindingRequest(order = {}, coachOpenid, coachUserId) {
+  const safeOpenid = String(coachOpenid || '').trim()
+  const safeUserId = String(coachUserId || '').trim()
+  if (!safeOpenid && !safeUserId) return null
+  return getCoachBindingRequests(order).find((r) => {
+    const rOpenid = String((r && r.coachOpenid) || '').trim()
+    const rUserId = String((r && r.coachUserId) || '').trim()
+    const rStatus = String((r && r.status) || '').trim()
+    if (rStatus !== COACH_BINDING_STATUS_PENDING) return false
+    if (rOpenid && safeOpenid && rOpenid === safeOpenid) return true
+    if (rUserId && safeUserId && rUserId === safeUserId) return true
+    return false
+  }) || null
+}
+
+// 新增：教练通过「课程码+pl」提交绑定申请。
+// 复用 assignCoachByPickupCode 的输入解析、查库、终态/后缀校验、幂等段，但不写 assignedCoach*、不推状态。
+// 关键差异：
+// - 新增「发布者不能接自己的课」校验（assignCoachByPickupCode 没有此校验，因旧流程下 publish 即视为管理已确认，
+//   不会出现自接场景；新流程下管理需要挑人，自接会造成「自己申请、自己确认」绕过挑人环节，必须堵）
+// - 同教练已有 pending 申请 → 幂等成功，不重复 push
+// - 成功后只往 coach_binding_requests[] push 一条 pending 记录，fulfill_state 仍保持 awaiting
+async function requestCoachBinding(rawPickupFullCode, coachOpenid, coachUserId, coachNickname = '') {
+  if (!coachOpenid) {
+    return { code: 401, msg: '未获取到教练身份，请重新登录后再试' }
+  }
+
+  // === 输入解析：双格式（新制 10 位 / 旧制 12 位）—— 直接复用 assign 的口径 ===
+  const newStatePickup = splitStatePickupCode(rawPickupFullCode)
+  let courseCode = ''
+  let stateSuffix = ''
+  let fullCode = ''
+  let legacyConfirmCode = ''
+  let isNewCodeSystem = false
+
+  if (newStatePickup.courseCode && newStatePickup.stateSuffix) {
+    courseCode = newStatePickup.courseCode
+    stateSuffix = newStatePickup.stateSuffix
+    fullCode = buildStatePickupCode(courseCode, stateSuffix)
+    isNewCodeSystem = true
+  } else {
+    fullCode = normalizePickupFullCode(rawPickupFullCode)
+    if (!fullCode) {
+      return {
+        code: 1,
+        msg: '接取码格式不对，新码为 10 位英数字（8 位课程码 + 2 位状态后缀 pl/ip/dl，如 ABCD1234pl）；旧随机码为 12 位英数字（8 位班级码 + 4 位确认码），无需带空格或横杠'
+      }
+    }
+    const legacySplit = splitPickupFullCode(fullCode)
+    if (!legacySplit.courseCode || !legacySplit.confirmCode) {
+      return { code: 1, msg: '接取码拆分失败，请检查输入' }
+    }
+    courseCode = legacySplit.courseCode
+    legacyConfirmCode = legacySplit.confirmCode
+  }
+
+  const targetCollection = getCollectionName(ORDER_COLLECTION_BASE)
+  let matchedOrder = null
+  try {
+    // 修改（2026-09-21）：改用统一变体函数 buildCourseCodeVariants，
+    // 补齐机构码「主体大写 + 末位小写 b」混合形态（如 SZDX001b）。
+    // 旧写法只有 [原值, 全小写] 两种，缺大写主体 + 小写 b，机构课按码查询必定落空。
+    const courseCodeVariants = buildCourseCodeVariants(courseCode)
+    const queryRes = await db.collection(targetCollection)
+      .where(_.or(
+        courseCodeVariants.flatMap((codeVariant) => ([
+          { courseCode: codeVariant },
+          { joinCode: codeVariant },
+          { parent_course_code: codeVariant }
+        ]))
+      ))
+      .limit(1)
+      .get()
+    matchedOrder = Array.isArray(queryRes.data) && queryRes.data.length ? queryRes.data[0] : null
+  } catch (err) {
+    console.error('[coach_binding_request] query order by courseCode failed:', err && err.message)
+    return { code: 500, msg: '查询课程失败，请稍后重试' }
+  }
+
+  if (!matchedOrder) {
+    return { code: 404, msg: '没有找到对应课程，请检查课程码部分是否正确' }
+  }
+
+  // 终态拒绝：已结课 / 已关闭不能再申请
+  const fulfillState = readCourseState(matchedOrder, '')
+  if (isTerminalState(fulfillState)) {
+    return { code: 403, msg: '该课程已关闭，无法再接取' }
+  }
+
+  // 新码制后缀校验：dl 拒；ip 表示已被接取（落下方 alreadyAssigned 段统一返回）；非 pl 拒
+  if (isNewCodeSystem) {
+    if (stateSuffix === STATE_SUFFIX_DONE_LESSON) {
+      return { code: 403, msg: '该课程已结束，无法再接取' }
+    }
+    if (stateSuffix === STATE_SUFFIX_IN_PROGRESS) {
+      // 落到下方 alreadyAssigned 段统一返回更具体提示
+    } else if (stateSuffix !== STATE_SUFFIX_PENDING_LESSON) {
+      return { code: 1, msg: '接取码后缀不正确，新制接取码应为课程码 + pl（待接取态）' }
+    }
+  } else {
+    // 旧码制走 4 位确认码比对
+    const savedConfirmCode = String(matchedOrder.pickup_confirm_code || matchedOrder.pickupConfirmCode || '').trim()
+    if (!savedConfirmCode || savedConfirmCode.toUpperCase() !== legacyConfirmCode) {
+      return {
+        code: 1,
+        msg: '确认码不匹配，课程可能已经被发布者更换了新确认码，请向管理员索要最新的完整接取码'
+      }
+    }
+  }
+
+  const safeCoachUserId = String(coachUserId || '').trim()
+  const safeCoachOpenid = String(coachOpenid || '').trim()
+
+  // === 新增校验：发布者不能接自己创建的课 ===
+  // assignCoachByPickupCode 没有这段，旧流程下 publish 即视为管理已确认，不会出现自接；
+  // 新流程下管理需要挑人，自接会绕过挑人环节，必须堵。
+  const publisherOpenid = String(getPublisherOpenid(matchedOrder) || '').trim()
+  const publisherUserId = String(getPublisherId(matchedOrder) || '').trim()
+  const isSelfBind =
+    (publisherOpenid && safeCoachOpenid && publisherOpenid === safeCoachOpenid) ||
+    (publisherUserId && safeCoachUserId && publisherUserId === safeCoachUserId)
+  if (isSelfBind) {
+    return { code: 403, msg: '发布者不能接自己创建的课程，请让其他教练来接取' }
+  }
+
+  // 已绑定情况（兼容 confirm 后重复提交、或历史已绑定的旧课程重新申请）
+  const savedCoachToken = String(matchedOrder.assignedCoachToken || matchedOrder.assigned_coach_token || '').trim()
+  const savedCoachOpenid = String(matchedOrder.assignedCoachOpenid || matchedOrder.assigned_coach_openid || '').trim()
+  const alreadyAssigned = !!savedCoachToken || !!savedCoachOpenid
+  const assignedToMe =
+    (savedCoachToken && safeCoachUserId && savedCoachToken === safeCoachUserId) ||
+    (savedCoachOpenid && safeCoachOpenid && savedCoachOpenid === safeCoachOpenid)
+
+  if (alreadyAssigned && assignedToMe) {
+    return {
+      code: 0,
+      msg: '该课程已由你接取，无需重复申请',
+      alreadyAssigned: true,
+      orderId: matchedOrder._id,
+      joinCode: matchedOrder.joinCode || courseCode,
+      courseCode: matchedOrder.courseCode || courseCode
+    }
+  }
+  if (alreadyAssigned) {
+    const takenName = String(matchedOrder.assignedCoachName || matchedOrder.assigned_coach_name || '其他教练').trim() || '其他教练'
+    return {
+      code: 409,
+      msg: `该课程已被「${takenName}」接取，如需更换请联系发布者重置接取码`
+    }
+  }
+
+  // 同教练已提交过 pending 申请 → 幂等成功，不重复 push
+  const existingRequests = getCoachBindingRequests(matchedOrder)
+  const myPendingRequest = existingRequests.find((r) => {
+    const rOpenid = String((r && r.coachOpenid) || '').trim()
+    const rUserId = String((r && r.coachUserId) || '').trim()
+    const rStatus = String((r && r.status) || '').trim()
+    if (rStatus !== COACH_BINDING_STATUS_PENDING) return false
+    if (rOpenid && safeCoachOpenid && rOpenid === safeCoachOpenid) return true
+    if (rUserId && safeCoachUserId && rUserId === safeCoachUserId) return true
+    return false
+  })
+  if (myPendingRequest) {
+    return {
+      code: 0,
+      msg: '已提交过申请，等待管理者确认',
+      pending: true,
+      requestId: myPendingRequest.requestId,
+      orderId: matchedOrder._id,
+      joinCode: matchedOrder.joinCode || courseCode,
+      courseCode: matchedOrder.courseCode || courseCode
+    }
+  }
+
+  // 补充教练昵称，用于管理端列表展示（与 assignCoachByPickupCode 一致的兜底逻辑）
+  let finalCoachName = String(coachNickname || '').trim()
+  if (!finalCoachName) {
+    try {
+      const usersCollectionName = getCollectionName(USER_COLLECTION_BASE)
+      const userQuery = await db.collection(usersCollectionName).where({ openid: safeCoachOpenid }).limit(1).get()
+      const userDoc = Array.isArray(userQuery.data) && userQuery.data.length ? userQuery.data[0] : null
+      if (userDoc) {
+        finalCoachName = String(userDoc.nickname || userDoc.name || '执行教练').trim() || '执行教练'
+      } else {
+        finalCoachName = '执行教练'
+      }
+    } catch (err) {
+      console.warn('[coach_binding_request] fallback read coach name failed:', err && err.message)
+      finalCoachName = '执行教练'
+    }
+  }
+
+  const now = new Date()
+  const newRequest = {
+    requestId: `${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
+    coachOpenid: safeCoachOpenid,
+    coachUserId: safeCoachUserId,
+    coachName: finalCoachName,
+    requestedAt: now,
+    status: COACH_BINDING_STATUS_PENDING,
+    decidedAt: null,
+    decidedByOpenid: '',
+    decidedByUserId: ''
+  }
+  // push 到顶层与 course_flow_info 内层两份，前端任一读法都能命中
+  const nextTopRequests = [...existingRequests, newRequest]
+  const currentCourseFlow = getCourseFlowInfo(matchedOrder)
+  const nextCourseFlow = {
+    ...currentCourseFlow,
+    [COACH_BINDING_REQUESTS_FIELD]: nextTopRequests
+  }
+  // 注意：不动 fulfill_state / state_history / assignedCoach* / pickup_full_code
+  try {
+    await db.collection(targetCollection).doc(matchedOrder._id).update({
+      data: {
+        [COACH_BINDING_REQUESTS_FIELD]: nextTopRequests,
+        course_flow_info: _.set(nextCourseFlow),
+        updatedAt: now
+      }
+    })
+  } catch (err) {
+    console.error('[coach_binding_request] write request failed:', err && err.message)
+    return { code: 500, msg: '提交申请失败，写入课程信息时出错，请稍后重试' }
+  }
+
+  console.log('[coach_binding_request] request submitted:', {
+    orderId: matchedOrder._id,
+    courseCode,
+    requestId: newRequest.requestId,
+    coachOpenid: safeCoachOpenid,
+    coachName: finalCoachName
+  })
+
+  const normalizedTitle = (((matchedOrder.course_target || {}).title) || matchedOrder.title || '未命名课程')
+  const normalizedLocation = (((matchedOrder.course_basic || {}).location) || matchedOrder.location || '')
+
+  return {
+    code: 0,
+    msg: '已提交，等待管理者确认',
+    pending: true,
+    requestId: newRequest.requestId,
+    orderId: matchedOrder._id,
+    joinCode: matchedOrder.joinCode || courseCode,
+    courseCode: matchedOrder.courseCode || courseCode,
+    coachName: finalCoachName,
+    title: normalizedTitle,
+    location: normalizedLocation
+  }
+}
+
+// 新增：管理层在 publish 页点「确认」绑定某个教练的申请。
+// 复用 assignCoachByPickupCode 写入段（1664-1709）的口径：
+//   - assignedCoach* 四字段写入（1690-1693）
+//   - state_history push 'ip'（1675-1680）
+//   - pickup_final_code / pickup_full_code 双写 = 课程码+ip（1664-1666）
+//   - fulfill_state = 'in_progress'（顶层 + course_flow_info 内层）
+// 同步把 coach_binding_requests[] 中那条申请标 confirmed，其余 pending 自动标 rejected
+// （课程已 in_progress，其他 pending 永远确认不了，提前标 rejected 让前端列表干净）。
+async function confirmCoachBinding(orderId, requestId, operatorOpenid, operatorUserId) {
+  if (!operatorOpenid) {
+    return { code: 401, msg: '未获取到身份，请重新登录后再试' }
+  }
+  if (!orderId) return { code: 1, msg: '缺少订单ID' }
+  if (!requestId) return { code: 1, msg: '缺少申请ID' }
+
+  const targetCollection = getCollectionName(ORDER_COLLECTION_BASE)
+  let matchedOrder = null
+  try {
+    const orderRes = await db.collection(targetCollection).doc(orderId).get()
+    matchedOrder = orderRes && orderRes.data ? orderRes.data : null
+  } catch (err) {
+    console.error('[coach_binding_confirm] query order failed:', err && err.message)
+    return { code: 500, msg: '查询课程失败，请稍后重试' }
+  }
+  if (!matchedOrder) return { code: 404, msg: '课程不存在' }
+
+  // 鉴权：用修复后的 isPublisher（3542-3553）确保空串绕过已堵
+  if (!isPublisher(matchedOrder, operatorOpenid, operatorUserId)) {
+    console.warn('[coach_binding_confirm] 权限拒绝：操作者非课程创建者', {
+      orderId,
+      operatorOpenid: String(operatorOpenid || '').trim()
+    })
+    return { code: 403, msg: '只有课程的创建者可以确认教练绑定' }
+  }
+
+  // 终态拒绝：已结课不能再确认
+  const courseFlow = getCourseFlowInfo(matchedOrder)
+  const fulfillState = readCourseState(matchedOrder)
+  if (isTerminalState(fulfillState)) {
+    return { code: 403, msg: terminalBlockedMessage('无法确认绑定') }
+  }
+  // 已进行中（已绑定教练）幂等：返回当前绑定信息，不重复操作
+  const savedCoachToken = String(matchedOrder.assignedCoachToken || matchedOrder.assigned_coach_token || '').trim()
+  const savedCoachOpenid = String(matchedOrder.assignedCoachOpenid || matchedOrder.assigned_coach_openid || '').trim()
+  if (savedCoachToken || savedCoachOpenid) {
+    return {
+      code: 0,
+      msg: '该课程已绑定执行教练，无需重复确认',
+      alreadyAssigned: true,
+      orderId,
+      assignedCoachName: String(matchedOrder.assignedCoachName || matchedOrder.assigned_coach_name || '').trim()
+    }
+  }
+  // 【2026-09-21 新流程】状态门槛：只有 awaiting（已生成 pl 接取码、待接取）才允许确认绑定。
+  // 少了这道闸，editing 态（还没生成接取码）也能被直接推到 in_progress，等于绕过「生成接取码」这一步。
+  // 放在已绑定幂等之后：已绑定时优先回「已绑定」这种更准确的提示，而不是笼统的「不在待接取状态」。
+  if (fulfillState !== COURSE_STATE.AWAITING) {
+    console.warn('[coach_binding_confirm] 状态拒绝：课程不在 awaiting', { orderId, fulfillState })
+    return { code: 403, msg: '课程不在待接取状态，无法确认绑定' }
+  }
+
+  const existingRequests = getCoachBindingRequests(matchedOrder)
+  const targetRequest = existingRequests.find((r) => String((r && r.requestId) || '') === String(requestId))
+  if (!targetRequest) {
+    return { code: 404, msg: '找不到这条绑定申请，可能已被处理或重置' }
+  }
+  if (String(targetRequest.status || '') !== COACH_BINDING_STATUS_PENDING) {
+    const statusText = String(targetRequest.status || '') === COACH_BINDING_STATUS_CONFIRMED ? '确认' : '拒绝'
+    return { code: 409, msg: `该申请已${statusText}过，不能重复操作` }
+  }
+
+  const safeCoachOpenid = String(targetRequest.coachOpenid || '').trim()
+  const safeCoachUserId = String(targetRequest.coachUserId || '').trim()
+  const finalCoachName = String(targetRequest.coachName || '执行教练').trim() || '执行教练'
+
+  // === 写入段：复用 assignCoachByPickupCode 1664-1709 口径 ===
+  const finalCourseCode = String(matchedOrder.courseCode || matchedOrder.joinCode || '').trim()
+  const newInProgressFullCode = finalCourseCode
+    ? buildStatePickupCode(finalCourseCode, STATE_SUFFIX_IN_PROGRESS)
+    : ''
+  const currentHistory = getStateHistory(matchedOrder)
+  // 调整（2026-10-08）：去重 push 的语义下沉到 _shared/courseState.js 的 appendStateSuffix，
+  // 三处调用（接取 / 确认绑定 / 结课）原本各写一遍 includes 判断，漏一处就会在数组里堆重复后缀。
+  const nextHistory = appendStateSuffix(currentHistory, STATE_SUFFIX_IN_PROGRESS)
+  const now = new Date()
+  const safeOperatorOpenid = String(operatorOpenid || '').trim()
+  const safeOperatorUserId = String(operatorUserId || '').trim()
+  // 同步处理 coach_binding_requests[]：选中的标 confirmed，其余 pending 自动标 rejected
+  const nextRequests = existingRequests.map((r) => {
+    if (String((r && r.requestId) || '') === String(requestId)) {
+      return {
+        ...r,
+        status: COACH_BINDING_STATUS_CONFIRMED,
+        decidedAt: now,
+        decidedByOpenid: safeOperatorOpenid,
+        decidedByUserId: safeOperatorUserId
+      }
+    }
+    if (r && String(r.status || '') === COACH_BINDING_STATUS_PENDING) {
+      return {
+        ...r,
+        status: COACH_BINDING_STATUS_REJECTED,
+        decidedAt: now,
+        decidedByOpenid: safeOperatorOpenid,
+        decidedByUserId: safeOperatorUserId,
+        rejectReason: '其他教练已被确认，本申请自动失效'
+      }
+    }
+    return r
+  })
+  const nextCourseFlow = {
+    ...courseFlow,
+    fulfill_state: COURSE_STATE.IN_PROGRESS,
+    [STATE_HISTORY_FIELD]: nextHistory,
+    [COACH_BINDING_REQUESTS_FIELD]: nextRequests
+  }
+  const updateData = {
+    assignedCoachToken: safeCoachUserId,
+    assignedCoachOpenid: safeCoachOpenid,
+    assignedCoachName: finalCoachName,
+    assignedCoachAt: now,
+    pickup_final_code: newInProgressFullCode,
+    fulfill_state: COURSE_STATE.IN_PROGRESS,
+    course_flow_info: _.set(nextCourseFlow),
+    // 顶层同步 coach_binding_requests[]（前端老路径兼容读取）
+    [COACH_BINDING_REQUESTS_FIELD]: nextRequests,
+    updatedAt: now
+  }
+  // 新码制双写 pickup_full_code + 顶层 state_history（与 assignCoachByPickupCode 1700-1706 一致）
+  if (newInProgressFullCode) {
+    updateData.pickup_full_code = newInProgressFullCode
+    updateData[STATE_HISTORY_FIELD] = nextHistory
+  }
+
+  try {
+    await db.collection(targetCollection).doc(orderId).update({ data: updateData })
+  } catch (err) {
+    console.error('[coach_binding_confirm] update order failed:', err && err.message)
+    return { code: 500, msg: '确认失败，写入课程信息时出错，请稍后重试' }
+  }
+
+  console.log('[coach_binding_confirm] confirm success:', {
+    orderId,
+    requestId,
+    courseCode: finalCourseCode,
+    coachOpenid: safeCoachOpenid,
+    coachName: finalCoachName,
+    operatorOpenid: safeOperatorOpenid
+  })
+
+  return {
+    code: 0,
+    msg: '已确认教练绑定，课程进入进行中',
+    orderId,
+    requestId,
+    assignedCoachName: finalCoachName,
+    state_history: nextHistory,
+    fulfill_state: COURSE_STATE.IN_PROGRESS,
+    currentStateSuffix: newInProgressFullCode ? STATE_SUFFIX_IN_PROGRESS : '',
+    pickupFullCode: newInProgressFullCode
+  }
+}
+
+// 新增：管理层拒绝某个教练的绑定申请。
+// 不动 fulfill_state（仍 awaiting），不动 assignedCoach*，只把申请标 rejected。
+// 课程保持可被其他教练申请，直到管理确认某个为止。
+async function rejectCoachBinding(orderId, requestId, operatorOpenid, operatorUserId, reason = '') {
+  if (!operatorOpenid) {
+    return { code: 401, msg: '未获取到身份，请重新登录后再试' }
+  }
+  if (!orderId) return { code: 1, msg: '缺少订单ID' }
+  if (!requestId) return { code: 1, msg: '缺少申请ID' }
+
+  const targetCollection = getCollectionName(ORDER_COLLECTION_BASE)
+  let matchedOrder = null
+  try {
+    const orderRes = await db.collection(targetCollection).doc(orderId).get()
+    matchedOrder = orderRes && orderRes.data ? orderRes.data : null
+  } catch (err) {
+    console.error('[coach_binding_reject] query order failed:', err && err.message)
+    return { code: 500, msg: '查询课程失败，请稍后重试' }
+  }
+  if (!matchedOrder) return { code: 404, msg: '课程不存在' }
+
+  if (!isPublisher(matchedOrder, operatorOpenid, operatorUserId)) {
+    return { code: 403, msg: '只有课程的创建者可以拒绝教练绑定' }
+  }
+
+  const existingRequests = getCoachBindingRequests(matchedOrder)
+  const targetRequest = existingRequests.find((r) => String((r && r.requestId) || '') === String(requestId))
+  if (!targetRequest) {
+    return { code: 404, msg: '找不到这条绑定申请，可能已被处理或重置' }
+  }
+  if (String(targetRequest.status || '') !== COACH_BINDING_STATUS_PENDING) {
+    const statusText = String(targetRequest.status || '') === COACH_BINDING_STATUS_CONFIRMED ? '确认' : '拒绝'
+    return { code: 409, msg: `该申请已${statusText}过，不能重复操作` }
+  }
+
+  const now = new Date()
+  const safeOperatorOpenid = String(operatorOpenid || '').trim()
+  const safeOperatorUserId = String(operatorUserId || '').trim()
+  const safeReason = String(reason || '').trim().slice(0, 200)
+  const nextRequests = existingRequests.map((r) => {
+    if (String((r && r.requestId) || '') === String(requestId)) {
+      return {
+        ...r,
+        status: COACH_BINDING_STATUS_REJECTED,
+        decidedAt: now,
+        decidedByOpenid: safeOperatorOpenid,
+        decidedByUserId: safeOperatorUserId,
+        rejectReason: safeReason || '管理者拒绝'
+      }
+    }
+    return r
+  })
+  const currentCourseFlow = getCourseFlowInfo(matchedOrder)
+  const nextCourseFlow = {
+    ...currentCourseFlow,
+    [COACH_BINDING_REQUESTS_FIELD]: nextRequests
+  }
+
+  try {
+    await db.collection(targetCollection).doc(orderId).update({
+      data: {
+        [COACH_BINDING_REQUESTS_FIELD]: nextRequests,
+        course_flow_info: _.set(nextCourseFlow),
+        updatedAt: now
+      }
+    })
+  } catch (err) {
+    console.error('[coach_binding_reject] update order failed:', err && err.message)
+    return { code: 500, msg: '拒绝失败，写入课程信息时出错，请稍后重试' }
+  }
+
+  console.log('[coach_binding_reject] reject success:', {
+    orderId,
+    requestId,
+    operatorOpenid: safeOperatorOpenid,
+    reason: safeReason
+  })
+
+  return {
+    code: 0,
+    msg: '已拒绝该教练的绑定申请',
+    orderId,
+    requestId
   }
 }
 
@@ -1472,6 +2167,12 @@ async function assignCoachByPickupCode(rawPickupFullCode, coachOpenid, coachUser
 // 2) 管理层在 A 端页面确认后，再生成 4 位确认码 + 12 位完整接取码；
 // 3) 如果已经生成过，就直接返回当前这组码，避免重复点击生成出不同结果。
 async function confirmGeneratePickupCode(orderId, operatorOpenid, operatorUserId) {
+  // 【2026-09-16 新增·链路追踪】入口 log：记录 orderId + 操作者身份，便于排查「点了没反应/没生成码」
+  console.log('[pickup_generate] >>> confirm_generate_pickup_code 入口', {
+    orderId,
+    hasOpenid: !!operatorOpenid,
+    hasUserId: !!operatorUserId
+  })
   if (!operatorOpenid) {
     return { code: 401, msg: '未获取到身份，请重新登录后再试' }
   }
@@ -1497,72 +2198,114 @@ async function confirmGeneratePickupCode(orderId, operatorOpenid, operatorUserId
     (publisherUserId && safeUserId && publisherUserId === safeUserId)
 
   if (!isPublisher) {
+    console.warn('[pickup_generate] 权限拒绝：操作者非课程创建者', {
+      orderId,
+      publisherOpenid,
+      operatorOpenid: safeOpenid
+    })
     return { code: 403, msg: '只有课程的创建者可以确认生成接取码' }
   }
 
   const currentFullCode = String(matchedOrder.pickup_full_code || matchedOrder.pickupFullCode || '').trim()
-  const currentConfirmCode = String(matchedOrder.pickup_confirm_code || matchedOrder.pickupConfirmCode || '').trim()
   const baseCourseCode = String(matchedOrder.joinCode || matchedOrder.courseCode || '').trim()
 
   if (!baseCourseCode) {
     return { code: 500, msg: '课程缺少 8 位课程码，暂时无法生成接取码' }
   }
 
-  if (currentFullCode && currentConfirmCode) {
+  // 【2026-09-16 新码制改造】幂等判断：state_history 已含 'pl' 表示已生成过接取码，直接返回。
+  // 旧逻辑是判断 currentFullCode && currentConfirmCode（12 位码），新码制下改为 state_history 口径。
+  const existingHistory = getStateHistory(matchedOrder)
+  const alreadyGenerated = existingHistory.includes(STATE_SUFFIX_PENDING_LESSON)
+    || (currentFullCode && splitStatePickupCode(currentFullCode).stateSuffix === STATE_SUFFIX_PENDING_LESSON)
+  if (alreadyGenerated) {
+    console.log('[pickup_generate] 幂等命中：pl 码已生成，直接返回当前码', {
+      orderId,
+      courseCode: baseCourseCode,
+      existingHistory
+    })
     return {
       code: 0,
-      msg: '已存在可用接取码',
+      msg: '接取码已生成，无需重复操作',
       orderId,
-      pickupConfirmCode: currentConfirmCode,
-      pickupFullCode: currentFullCode,
+      pickupFullCode: currentFullCode || buildStatePickupCode(baseCourseCode, STATE_SUFFIX_PENDING_LESSON),
       joinCode: baseCourseCode,
-      courseCode: baseCourseCode
+      courseCode: baseCourseCode,
+      state_history: existingHistory.length ? existingHistory : [STATE_SUFFIX_PENDING_LESSON],
+      fulfill_state: COURSE_STATE.AWAITING,
+      courseInfoReady: true
     }
   }
 
-  // 新增：生成 12 位接取码前的强制前置门槛。
-  // 必须先调用 mark_course_info_ready（publish 页点「完成课程信息编辑，允许教练接单」），
-  // 否则直接拒绝，从而保证「B家长提交 → 管理层补资料 → mark_ready → 生成接取码 → 待接取」顺序严格推进。
-  // 历史兼容：如果 matchedOrder 完全没有 course_info_ready_at 字段（老数据），但 fulfill_state 已经是
-  // awaiting/in_progress 或已经生成过 pickup_full_code，则视为已经过了确认流程；否则一律要求重新 mark。
-  const infoReadyAt = matchedOrder.course_info_ready_at
-    || (((matchedOrder.course_flow_info || {}).course_info_ready_at) || null)
-  const explicitPassed =
-    (matchedOrder.fulfill_state === 'awaiting')
-    || (matchedOrder.fulfill_state === 'in_progress')
-    || ((matchedOrder.course_flow_info || {}).fulfill_state === 'awaiting')
-    || ((matchedOrder.course_flow_info || {}).fulfill_state === 'in_progress')
-  if (!infoReadyAt && !explicitPassed) {
-    return {
-      code: 1,
-      msg: '请先点击【完成课程信息编辑，允许教练接单】确认课程资料完整后，再生成 12 位接取码'
-    }
+  // 【2026-09-16 新码制改造】去掉 mark_course_info_ready 前置门槛：
+  // 原逻辑要求先调 mark_course_info_ready 写 course_info_ready_at 才能生成接取码（双步确认）；
+  // 新流程下单步「完成创建，允许接单」即合并 mark + generate，直接写 course_info_ready_at + 生成 pl 码。
+  // 同时保留课程资料完整性校验（title/contact/location/总课时 > 0），避免空壳课程对外发码。
+  const courseFlow = getCourseFlowInfo(matchedOrder)
+  const fulfillState = readCourseState(matchedOrder)
+  if (isTerminalState(fulfillState)) {
+    console.warn('[pickup_generate] 课程已终态，拒绝生成接取码', { orderId, fulfillState })
+    return { code: 403, msg: terminalBlockedMessage('无需再生成接取码') }
   }
 
-  const newConfirmCode = buildPickupConfirmCode()
-  const newFullCode = buildPickupFullCode(baseCourseCode, newConfirmCode)
+  // 课程资料完整性最小校验（与 markCourseInfoReady 保持一致）：
+  const courseTarget = matchedOrder.course_target || {}
+  const courseBasic = matchedOrder.course_basic || {}
+  const teachingRecord = matchedOrder.teaching_record || {}
+  const courseBasicInfo = matchedOrder.course_basic_info || {}
+  const normalizedTitle = String(
+    courseTarget.title || matchedOrder.title || teachingRecord.title || ''
+  ).trim()
+  const normalizedContact = normalizePhone(
+    courseBasic.contact || matchedOrder.contact || courseBasicInfo.contact
+    || ((matchedOrder.order_base_info || {}).contact || '')
+  )
+  const normalizedLocation = String(
+    courseBasic.location || matchedOrder.location || courseBasicInfo.location || ''
+  ).trim()
+  const scheduleCount = Array.isArray(courseFlow.schedule) ? courseFlow.schedule.length : 0
+  const totalLessons = Number(courseFlow.progress_total || matchedOrder.progress_total || scheduleCount) || 0
+
+  // 【2026-09-16 新增·链路追踪】完整性校验 log：记录关键字段是否为空，便于定位「校验不过」原因
+  console.log('[pickup_generate] 完整性校验', {
+    orderId,
+    hasTitle: !!normalizedTitle,
+    contactValid: isValidPhone(normalizedContact),
+    hasLocation: !!normalizedLocation,
+    totalLessons
+  })
+  if (!normalizedTitle) return { code: 1, msg: '请先补充课程标题后再确认' }
+  if (!isValidPhone(normalizedContact)) return { code: 1, msg: '请先填写正确的 11 位联系手机号后再确认' }
+  if (!normalizedLocation) return { code: 1, msg: '请先填写上课地点后再确认' }
+  if (totalLessons <= 0) return { code: 1, msg: '请先设置总课时数后再确认' }
+
+  // 【2026-09-16 新码制】生成 10 位 pl 接取码（8 课程码 + 'pl' 后缀），替代旧 12 位随机码。
+  const newFullCode = buildStatePickupCode(baseCourseCode, STATE_SUFFIX_PENDING_LESSON)
   if (!newFullCode) {
-    return { code: 500, msg: '拼接完整接取码失败，请稍后重试' }
+    return { code: 500, msg: '生成接取码失败，请稍后重试' }
   }
 
   const now = new Date()
-  // 新增：管理层确认生成 12 位接取码的同时，把课程生命周期状态推进到「待接取（awaiting）」，
-  // 这样 progress 页面四档 Tab 就能明确把该课程分到「待接取」栏，而不是停留在「待编辑」。
-  // 同时顶层 fulfill_state 和 course_flow_info.fulfill_state 一起更新，兼容新旧两套读取位置。
-  // 再额外写一个 pickup_code_generated_at 时间戳，方便后续审计和列表排序。
-  const currentCourseFlow = getCourseFlowInfo(matchedOrder)
+  // 单步合并 mark + generate：同时写 course_info_ready_at + pickup_full_code + state_history + fulfill_state。
+  // 顶层与 course_flow_info 内层同步写 state_history / fulfill_state，兼容两套读取位置。
   const nextCourseFlow = {
-    ...currentCourseFlow,
-    fulfill_state: 'awaiting'
+    ...courseFlow,
+    fulfill_state: COURSE_STATE.AWAITING,
+    course_info_ready_at: now,
+    [STATE_HISTORY_FIELD]: [STATE_SUFFIX_PENDING_LESSON]
   }
   try {
     await db.collection(targetCollection).doc(orderId).update({
       data: {
-        pickup_confirm_code: newConfirmCode,
+        // 旧字段留空兼容（新码制下不再使用 4 位确认码 / 12 位 final 码）
+        pickup_confirm_code: '',
         pickup_full_code: newFullCode,
         pickup_final_code: '',
         pickup_code_generated_at: now,
-        fulfill_state: 'awaiting',
+        course_info_ready_at: now,
+        fulfill_state: COURSE_STATE.AWAITING,
+        // 顶层同步 state_history，兼容只读顶层字段的前端路径
+        [STATE_HISTORY_FIELD]: [STATE_SUFFIX_PENDING_LESSON],
         course_flow_info: _.set(nextCourseFlow),
         updatedAt: now
       }
@@ -1572,24 +2315,27 @@ async function confirmGeneratePickupCode(orderId, operatorOpenid, operatorUserId
     return { code: 500, msg: '生成接取码失败，请稍后重试' }
   }
 
-  console.log('[pickup_generate] manual confirm success:', {
+  console.log('[pickup_generate] manual confirm success (new code system):', {
     orderId,
     courseCode: baseCourseCode,
     pickupFullCode: newFullCode,
-    fulfillState: 'awaiting',
+    fulfillState: COURSE_STATE.AWAITING,
+    stateHistory: [STATE_SUFFIX_PENDING_LESSON],
     operatorOpenid: safeOpenid
   })
 
   return {
     code: 0,
-    msg: '12 位接取码已生成，课程已进入待接取队列',
+    msg: '接取码已生成，课程已进入待接取队列',
     orderId,
-    pickupConfirmCode: newConfirmCode,
     pickupFullCode: newFullCode,
     joinCode: baseCourseCode,
     courseCode: baseCourseCode,
-    // 新增：前端可以用这个字段判断是否需要立刻把当前课程视为「待接取」，避免等下次拉列表才刷新。
-    fulfill_state: 'awaiting'
+    // 【2026-09-16 新码制】回传 state_history / fulfill_state / courseInfoReady，
+    // 前端无需再拉详情即可落地渲染流转卡。
+    state_history: [STATE_SUFFIX_PENDING_LESSON],
+    fulfill_state: COURSE_STATE.AWAITING,
+    courseInfoReady: true
   }
 }
 
@@ -1640,10 +2386,15 @@ async function resetPickupConfirmCode(orderId, operatorOpenid, operatorUserId, k
   // - keepCoach=false（清空执行教练）→ 回到 awaiting（待接取），等待新教练重新接取；
   // - keepCoach=true（保留原教练，只换确认码）→ 保持 in_progress，不影响正在进行的课程。
   const currentCourseFlow = getCourseFlowInfo(matchedOrder)
-  const resetFulfillState = keepCoach ? 'in_progress' : 'awaiting'
+  const resetFulfillState = keepCoach ? COURSE_STATE.IN_PROGRESS : COURSE_STATE.AWAITING
   const nextCourseFlow = {
     ...currentCourseFlow,
-    fulfill_state: resetFulfillState
+    fulfill_state: resetFulfillState,
+    // 【2026-09-21 新流程】重置接取码时同步清空 coach_binding_requests[]：
+    // 旧 pending 申请相对新码已失效，否则管理用 confirm_coach_binding 还能把旧申请落成 assignedCoach*，
+    // 让重置码「想让新教练接」的意图被绕过。两种 keepCoach 情况都清（keepCoach=true 时本就无 pending，
+    // 清空只是兜底；keepCoach=false 时必须清，新码才能干净接取）。
+    [COACH_BINDING_REQUESTS_FIELD]: []
   }
   const updatePayload = {
     pickup_confirm_code: newConfirmCode,
@@ -1651,6 +2402,8 @@ async function resetPickupConfirmCode(orderId, operatorOpenid, operatorUserId, k
     pickup_final_code: newFinalCode,
     fulfill_state: resetFulfillState,
     course_flow_info: _.set(nextCourseFlow),
+    // 顶层同步清空 coach_binding_requests[]（前端老路径兼容读取）
+    [COACH_BINDING_REQUESTS_FIELD]: [],
     updatedAt: now
   }
   if (!keepCoach) {
@@ -1725,11 +2478,9 @@ async function markCourseInfoReady(orderId, operatorOpenid, operatorUserId) {
   }
 
   const courseFlow = getCourseFlowInfo(matchedOrder)
-  const fulfillState = String(
-    courseFlow.fulfill_state || matchedOrder.fulfill_state || 'editing'
-  ).trim()
-  if (fulfillState === 'closed' || fulfillState === 'cancelled' || fulfillState === 'completed') {
-    return { code: 403, msg: '该课程已关闭或已完成，无需再确认课程资料' }
+  const fulfillState = readCourseState(matchedOrder)
+  if (isTerminalState(fulfillState)) {
+    return { code: 403, msg: terminalBlockedMessage('无需再确认课程资料') }
   }
 
   // 幂等：如果已经确认过（有 ready 时间戳），直接返回成功，不再重复写时间戳。
@@ -1749,18 +2500,30 @@ async function markCourseInfoReady(orderId, operatorOpenid, operatorUserId) {
   // 新增：对课程资料最基本的完整性检查（和前端 publish 页表单校验保持一致的最小集合）：
   // 至少要有课程标题、联系电话、上课地点、排好的课时数 > 0。
   // 避免管理层点了「完成编辑」但资料还是空壳，发出去让教练接了又返工。
+  // 【2026-09-15 修复】分组结构兼容：updateOrder 已把旧顶层 title / course_target / course_basic 从文档中 _.remove()，
+  // 标题统一归档到 teaching_record.title，联系方式归档到 course_basic_info.contact；
+  // 本校验必须同时读取新分组结构，否则保存过的课程会被误判「请先补充课程标题后再确认」。
   const courseTarget = matchedOrder.course_target || {}
   const courseBasic = matchedOrder.course_basic || {}
-  const normalizedTitle = String(courseTarget.title || matchedOrder.title || '').trim()
+  const teachingRecord = matchedOrder.teaching_record || {}
+  const courseBasicInfo = matchedOrder.course_basic_info || {}
+  const normalizedTitle = String(
+    courseTarget.title
+    || matchedOrder.title
+    || teachingRecord.title
+    || ''
+  ).trim()
   const normalizedContact = normalizePhone(
     courseBasic.contact
     || matchedOrder.contact
+    || courseBasicInfo.contact
     || ((matchedOrder.order_base_info || {}).contact || '')
   )
   const normalizedLocation = String(
     courseBasic.location
     || matchedOrder.location
-    || ((matchedOrder.course_basic_info || {}).location || '')
+    || courseBasicInfo.location
+    || ''
   ).trim()
   const scheduleCount = Array.isArray(courseFlow.schedule) ? courseFlow.schedule.length : 0
   const historyCount = Number((((courseFlow || {}).history_sync || {}).syncedCount) || 0)
@@ -1818,128 +2581,6 @@ async function markCourseInfoReady(orderId, operatorOpenid, operatorUserId) {
 }
 
 /**
- * 获取所有订单（管理员）
- */
-async function listAllAdmin(page, limit) {
-  const COLLECTIONS = [getCollectionName(ORDER_COLLECTION_BASE)]
-  const skip = (page - 1) * limit
-
-  try {
-    const fetchPromises = COLLECTIONS.map(colName => {
-        return db.collection(colName)
-            .orderBy('createdAt', 'desc')
-            .skip(0) 
-            .limit(page * limit) 
-            .field({
-                _id: true,
-                publish_type: true,
-                publish_state: true,
-                createdAt: true,
-                start_date: true,
-                start_time: true,
-                address: true,
-                userInfo: true,
-                contact: true
-            })
-            .get()
-            .then(res => res.data.map(item => ({ ...item, _collection: colName })))
-            .catch(err => {
-                console.error(`Error fetching ${colName}:`, err)
-                return [] 
-            })
-    })
-
-    const results = await Promise.all(fetchPromises)
-    let allOrders = results.flat()
-    
-    allOrders.sort((a, b) => {
-        const timeA = new Date(a.createdAt).getTime()
-        const timeB = new Date(b.createdAt).getTime()
-        return timeB - timeA
-    })
-    
-    const pagedOrders = allOrders.slice(skip, skip + limit)
-    
-    return {
-        code: 0,
-        data: pagedOrders,
-        msg: 'ok'
-    }
-
-  } catch (err) {
-    console.error('listAllAdmin error:', err)
-    return {
-      code: -1,
-      msg: err.message
-    }
-  }
-}
-
-/**
- * 获取系统日志
- */
-async function listLogs(page, limit) {
-  const skip = (page - 1) * limit
-  const logCollection = getCollectionName('sys_logs')
-
-  try {
-    const countResult = await db.collection(logCollection).count()
-    const total = countResult.total
-
-    const res = await db.collection(logCollection)
-      .orderBy('timestamp', 'desc')
-      .skip(skip)
-      .limit(limit)
-      .get()
-
-    return {
-      code: 0,
-      data: {
-        list: res.data,
-        total: total,
-        page: page,
-        limit: limit
-      },
-      msg: 'ok'
-    }
-  } catch (err) {
-    console.error('listLogs error:', err)
-    if (err.errMsg && err.errMsg.includes('Collection not found')) {
-        return {
-            code: 0,
-            data: { list: [], total: 0 },
-            msg: 'ok (no logs collection)'
-        }
-    }
-    return {
-      code: -1,
-      msg: err.message
-    }
-  }
-}
-
-/**
- * 添加系统日志
- */
-async function addLog(level, message, details) {
-    const logCollection = getCollectionName('sys_logs')
-    try {
-        await db.collection(logCollection).add({
-            data: {
-                level: level || 'info',
-                message: message || '',
-                details: details || {},
-                timestamp: db.serverDate(),
-                env: cloud.DYNAMIC_CURRENT_ENV
-            }
-        })
-        return { code: 0, msg: 'log added' }
-    } catch (err) {
-        return { code: -1, msg: err.message }
-    }
-}
-
-/**
  * 获取单个订单详情
  */
 async function getOneOrder(orderId, openid) {
@@ -1971,20 +2612,15 @@ async function getOrderByCourseCode(courseCode) {
     return { code: 1, msg: '请输入课程码' }
   }
 
-  // 新增：8 位 M 码格式预校验。M 码规则是「A 或 B + 7 位可读字符」，合计 8 位；
-  // 如果输入看起来像人类短码但不符合这个格式，就提前提示，避免继续打 DB 查不到。
-  // 注意：仍然保留对 B 早期 form_xxx / course_xxx / 其他历史长 ID 的兼容入口（直接跳过该校验）。
-  const looksLikeShortHumanCode = /^[A-Z0-9]+$/.test(safeCourseCode) && !/^(FORM_|COURSE_)/.test(safeCourseCode)
-  if (looksLikeShortHumanCode) {
-    const invalidLength = safeCourseCode.length < 6 || safeCourseCode.length > 12
-    const invalidMPrefix = safeCourseCode.length === 8 && safeCourseCode[0] !== M_CODE_PREFIX_FROM_A && safeCourseCode[0] !== M_CODE_PREFIX_FROM_B
-    if (invalidLength || invalidMPrefix) {
-      return {
-        code: 1,
-        msg: '8 位课程码必须以 A 或 B 开头，后 7 位为大写字母或数字'
-      }
-    }
-  }
+  // 删除（2026-09-21）：原「8 位 M 码格式预校验」整段移除，查不到统一由下方 404 兜底。
+  // 移除理由：
+  // 1. 该校验随码制定版反复改写（8 位 → 9 位 → 再回 8 位），每定版一次就留下一批历史码被判非法。
+  //    典型如二次定版的 9 位机构码被 invalidOrgFormat 直接拦截 —— 它在库里明明存在、按变体本可命中，
+  //    却连库都没打就被拒了。
+  // 2. 码是否合法应由「库里存了什么」决定，而不是由一段会漂移的正则决定。
+  //    现在已有 buildCourseCodeVariants 覆盖原值 / 去空格 / 全大写 / 全小写 / 混合大小写（机构码末位小写 b）
+  //    五种形态，并对 from_b_course_id / courseCode / joinCode / parent_course_code 四字段逐个查询，
+  //    查得到就是合法码，查不到返回统一的「没有找到对应课程」，比格式规则更准确也更省维护。
 
   const targetCollection = getCollectionName(ORDER_COLLECTION_BASE)
   // 修复：统一先按 safeCourseCode 做变体，不再沿用原始入参里带大小写 / 空格的脏值。
@@ -2069,7 +2705,7 @@ async function startOrder(orderId, openid, userId) {
   }
   const courseFlowInfo = {
     ...getCourseFlowInfo(data),
-    fulfill_state: 'in_progress',
+    fulfill_state: COURSE_STATE.IN_PROGRESS,
     startedAt: new Date()
   }
 
@@ -2178,12 +2814,12 @@ async function lessonHandshake(orderId, openid, userId, lessonIndex, subAction) 
 
     const allDone = schedule.every(l => l.status === 'DONE')
     if (allDone) {
-      nextCourseFlowInfo.fulfill_state = 'completed'
+      nextCourseFlowInfo.fulfill_state = COURSE_STATE.COMPLETED
       nextCourseFlowInfo.completedAt = new Date()
     } else {
       // 只要有一节课开始，且未全部完成，就是 in_progress
-      if ((courseFlowInfo.fulfill_state || data.fulfill_state) !== 'in_progress') {
-        nextCourseFlowInfo.fulfill_state = 'in_progress'
+      if (readCourseState(data, '') !== COURSE_STATE.IN_PROGRESS) {
+        nextCourseFlowInfo.fulfill_state = COURSE_STATE.IN_PROGRESS
       }
     }
   }
@@ -2214,9 +2850,13 @@ async function updateLessonContent(orderId, openid, userId, lessonIndex, content
   const courseFlowInfo = getCourseFlowInfo(data)
   if (!Array.isArray(courseFlowInfo.schedule) && !Array.isArray(data.schedule)) return { code: 400, msg: '课表不存在' }
 
-  // 必须是教练或发布者
-  // 但通常只有教练填写总结
-  if (!isParticipant(data, openid, userId)) {
+  // 【2026-09-21 权限口径调整】每日总结的写入权收紧为「只认接取的执行教练」：
+  // 原判定 isParticipant（发布者 或 接取教练）会让管理层 / 机构 admin 也能写，
+  // 与新规则「接取后由执行教练填写、管理层 admin 只读」冲突，
+  // 且前端锁不住绕过小程序直接调云函数的写入请求，所以在服务端一并收紧。
+  // 未接取（editing / awaiting）时没有 acceptor，isAcceptor 必然为 false，
+  // 正好对应「接取前每日总结 tab 不开放」。
+  if (!isAcceptor(data, openid, userId)) {
       return { code: 403, msg: '无权操作' }
   }
 
@@ -2320,7 +2960,7 @@ async function completeOrder(orderId, openid, userId) {
     },
     course_flow_info: {
       ...getCourseFlowInfo(data),
-      fulfill_state: 'completed',
+      fulfill_state: COURSE_STATE.COMPLETED,
       completedAt: now
     },
     updatedAt: now
@@ -2359,7 +2999,7 @@ async function cancelOrder(orderId, openid, userId, reason) {
      },
      course_flow_info: {
        ...getCourseFlowInfo(data),
-       fulfill_state: 'cancelled',
+       fulfill_state: COURSE_STATE.CANCELLED,
        publish_state: 'closed',
        cancelledAt: now,
        cancelReason: reason || '无'
@@ -2386,11 +3026,27 @@ async function closeOrder(orderId, openid, userId, closeSummary, closeCoachNote)
   const { data, ref } = await findOrder(orderId)
   if (!data) return { code: 404, msg: '订单不存在' }
 
-  if (!isPublisher(data, openid, userId)) {
+  // 【2026-09-21 权限口径调整】结课不再只认发布者：
+  // 新规则是「教练接取后由执行教练本人结课」，管理层 / 机构 admin 前端只读，
+  // 所以这里放行发布者 + 接取教练两类身份；其余身份仍一律 403。
+  // 前置条件隐含在 isAcceptor 里：只有课程已写入 assignedCoach* 才可能命中，
+  // 未接取（editing / awaiting）的课程不会有 acceptor，天然满足「接取后才可结课」。
+  if (!isPublisher(data, openid, userId) && !isAcceptor(data, openid, userId)) {
     return { code: 403, msg: '无权操作' }
   }
 
   const now = new Date()
+
+  // 【2026-09-16 新增·结课 dl 状态后缀】结课时累积 push 'dl' 到 state_history，
+  // 同步更新 pickup_full_code / pickup_final_code 为「课程码 + dl」（10 位新制码 + 旧字段双写兼容）。
+  // 仅对已切换到新码制（state_history 已有 pl/ip 等元素）的课程生效；旧课程无 state_history 时跳过新字段写入，保持兼容。
+  const currentHistoryForClose = getStateHistory(data)
+  const nextHistoryForClose = appendStateSuffix(currentHistoryForClose, STATE_SUFFIX_DONE_LESSON)
+  const finalCourseCodeForClose = String(data.courseCode || data.joinCode || data.parent_course_code || '').trim()
+  const newDoneFullCode = finalCourseCodeForClose && currentHistoryForClose.length
+    ? buildStatePickupCode(finalCourseCodeForClose, STATE_SUFFIX_DONE_LESSON)
+    : ''
+
   const nextOrder = {
     ...data,
     order_base_info: {
@@ -2399,27 +3055,49 @@ async function closeOrder(orderId, openid, userId, closeSummary, closeCoachNote)
     },
     course_flow_info: {
       ...getCourseFlowInfo(data),
-      fulfill_state: 'closed',
+      fulfill_state: COURSE_STATE.CLOSED,
       publish_state: 'closed',
       closedAt: now,
       // 新增结课页字段：结语和教练备注随结课动作一起落库
       close_summary: closeSummary || '',
       close_coach_note: closeCoachNote || ''
     },
+    // 【2026-09-16 新增·state_history 同步】新码制课程结课时累积 'dl' 到顶层 state_history
+    [STATE_HISTORY_FIELD]: nextHistoryForClose,
     updatedAt: now
+  }
+  // 新增：state_history 也写入 course_flow_info 内层，保持顶层 / 内层一致，兼容两种读取位置
+  nextOrder.course_flow_info[STATE_HISTORY_FIELD] = nextHistoryForClose
+
+  // 新增：构造 update.data 对象，按新码制是否有值决定是否双写 pickup_full_code / pickup_final_code
+  const closeUpdateData = {
+    order_base_info: nextOrder.order_base_info,
+    course_flow_info: nextOrder.course_flow_info,
+    updatedAt: now
+  }
+  if (newDoneFullCode) {
+    // 【2026-09-16 新增·结课双写】新码制课程结课时：
+    //   - pickup_full_code 替换为 课程码 + 'dl'（10 位新制码）
+    //   - pickup_final_code 双写为 课程码 + 'dl'（兼容旧前端读取 pickup_final_code 的代码路径）
+    //   - 顶层 state_history 已包含在 closeUpdateData 中（nextOrder 透传）
+    closeUpdateData.pickup_full_code = newDoneFullCode
+    closeUpdateData.pickup_final_code = newDoneFullCode
   }
 
   await ref.update({
-    data: {
-      order_base_info: nextOrder.order_base_info,
-      course_flow_info: nextOrder.course_flow_info,
-      updatedAt: now
-    }
+    data: closeUpdateData
   })
 
   await syncCoachResultToBIfNeeded(nextOrder, 'order_closed')
 
-  return { code: 0, msg: '课程已结课' }
+  return {
+    code: 0,
+    msg: '课程已结课',
+    // 【2026-09-16 新增·结课回传】返回 state_history / currentStateSuffix / pickupFullCode，前端可直接刷新流转卡
+    state_history: nextHistoryForClose,
+    currentStateSuffix: nextHistoryForClose.length ? nextHistoryForClose[nextHistoryForClose.length - 1] : '',
+    pickupFullCode: newDoneFullCode
+  }
 }
 
 /**
@@ -2444,7 +3122,31 @@ async function listMyself(openid, userId, page, limit) {
   const results = await Promise.all(tasks)
   let allOrders = []
   results.forEach(r => { allOrders = allOrders.concat(r.data) })
-  
+
+  // 【2026-09-21 新流程·接取需管理确认】补查一轮「我提交了绑定申请、等管理确认」的课。
+  // 申请阶段不写 assignedCoach*，publisher/acceptor 两个口径都命中不到，教练在列表里会彻底看不到这门课。
+  // 走独立查询而不是塞进主 query：万一 elemMatch 在老环境不被支持，只丢这一路，不影响主列表。
+  const safeOpenid = String(openid || '').trim()
+  const safeUserId = String(userId || '').trim()
+  try {
+    const pendingClauses = []
+    if (safeOpenid) {
+      pendingClauses.push({ [COACH_BINDING_REQUESTS_FIELD]: _.elemMatch({ coachOpenid: safeOpenid, status: COACH_BINDING_STATUS_PENDING }) })
+    }
+    if (safeUserId) {
+      pendingClauses.push({ [COACH_BINDING_REQUESTS_FIELD]: _.elemMatch({ coachUserId: safeUserId, status: COACH_BINDING_STATUS_PENDING }) })
+    }
+    if (pendingClauses.length) {
+      const pendingWhere = pendingClauses.length > 1 ? _.or(pendingClauses) : pendingClauses[0]
+      const pendingResults = await Promise.all(collections.map(c =>
+        db.collection(c).where(pendingWhere).orderBy('createdAt', 'desc').limit(50).get().catch(() => ({ data: [] }))
+      ))
+      pendingResults.forEach(r => { if (Array.isArray(r.data)) allOrders = allOrders.concat(r.data) })
+    }
+  } catch (err) {
+    console.warn('[list_myself] 待确认申请查询跳过（不影响主列表）:', err && err.message)
+  }
+
   // Deduplicate by _id
   const uniqueOrders = new Map();
   for (const order of allOrders) {
@@ -2461,7 +3163,17 @@ async function listMyself(openid, userId, page, limit) {
   const start = (page - 1) * limit
   const pagedData = allOrders.slice(start, start + limit)
   
-  return { code: 0, data: pagedData.map(item => normalizeOrderForClient(item)) }
+  return {
+    code: 0,
+    // 【2026-09-21 新流程】给「我申请中」的课打 myPendingRequest 标记，
+    // 前端列表据此显示「待确认」，避免它混在一堆待接取课程里看不出区别。
+    data: pagedData.map(item => {
+      const normalized = normalizeOrderForClient(item)
+      const myPending = findMyPendingBindingRequest(item, safeOpenid, safeUserId)
+      if (!myPending) return normalized
+      return { ...normalized, hasMyPendingRequest: true, myPendingRequest: myPending }
+    })
+  }
 }
 
 
@@ -2572,7 +3284,7 @@ async function syncLessonProgress(orderId, openid, userId, totalLessons, startLe
     schedule: newSchedule,
     history_sync: nextHistorySync,
     // 新增状态收敛：当前课程流程只区分“未关闭 / 已关闭”，不再在这里推进旧进行中状态
-    fulfill_state: 'pending'
+    fulfill_state: COURSE_STATE.PENDING
   }
   const now = new Date()
   const nextOrder = {
@@ -2672,7 +3384,16 @@ async function syncParentBookingToA(event = {}) {
   const groupedPayload = buildGroupedOrderPayload(importedSubmitForm)
   // 新增：情况 2 的 B 约课场景（家长在 B 端提交约课后，A 侧大云函数直接建 A 订单）。
   // 按约定必须生成「前缀 B」的 8 位 M 码，保证后续家长拿到的 M 和教练在 A 端查到的 M 完全一致。
-  const uniqueMCode = await generateUniqueMCode(targetCollection, M_CODE_PREFIX_FROM_B)
+  // 调整（2026-09-16）：命中机构时优先改用新码制「机构代码前 4 位 + 4 位序号（从 0001 叠加）」——
+  // 机构代码取机构文档 organization_basic.invitation_code（超出 4 位取前 4 位，不足右侧补 0），
+  // 本机构第一个用户 0001、第二个用户 0002，依次叠加；与 twowaybinding_1_DLforC 保持同一套规则；
+  // 未命中机构（教练识别码）或新码制失败/冲突时退回原「B + 7 位随机」码制，建单永不阻塞。
+  const organizationBasicForCode = (importedOrganizationDoc && importedOrganizationDoc.organization_basic) || {}
+  const orgInvitationCode = normalizeInviteCode(organizationBasicForCode.invitation_code || '')
+  const orgSequenceMCode = orgInvitationCode
+    ? await generateOrgSequenceMCode(targetCollection, orgInvitationCode)
+    : ''
+  const uniqueMCode = orgSequenceMCode || (await generateUniqueMCode(targetCollection, M_CODE_PREFIX_FROM_B))
   const now = new Date()
   const classCount = Number(importedSubmitForm.class_count || 10) || 10
   const schedule = []
@@ -2718,7 +3439,7 @@ async function syncParentBookingToA(event = {}) {
     // 新增：B 家长刚提交表单时，课程资料还不完整（机构/管理层还要在 publish 页面补学员、时间、地点等），
     // 因此初始 fulfill_state 固定为 editing（待编辑），后续只有管理层手动点「完成课程信息编辑，允许教练接单」
     // mark_course_info_ready → 再点「确认生成 12 位接取码」confirm_generate_pickup_code → 才会进到 awaiting。
-    fulfill_state: 'editing',
+    fulfill_state: COURSE_STATE.EDITING,
     progress_total: classCount,
     progress_done: 0,
     schedule
@@ -2766,6 +3487,10 @@ async function syncParentBookingToA(event = {}) {
     joinCode: uniqueMCode,
     courseCode: uniqueMCode,
     parent_course_code: uniqueMCode,
+    // 新增（2026-09-16）：机构新码制标记 —— 记录本单课程码归属的机构邀请码（大写标准化）。
+    // 仅当本单实际使用「机构代码 + 序号」新码制时写入（随机码兜底单为空串、不参与计数）；
+    // 序号生成按该字段计数，实现「该机构第 N 个用户从 0001 叠加」。
+    m_code_org_invite: orgSequenceMCode ? orgInvitationCode : '',
     // 新增：B 约课桥接进 A 后，同样改成由 A 端管理层在 publish 页面手动确认后才生成 12 位接取码。
     pickup_confirm_code: '',
     pickup_full_code: '',
@@ -2777,7 +3502,7 @@ async function syncParentBookingToA(event = {}) {
     // 新增：B 端桥接课程默认是「待编辑」。后续必须先 mark_course_info_ready（手动确认课程资料补完），
     // 才能继续点 confirm_generate_pickup_code 生成接取码并进入「待接取」。
     // 顶层 fulfill_state 同步写 editing，保证 progress 前端两处读取位置都能识别。
-    fulfill_state: 'editing',
+    fulfill_state: COURSE_STATE.EDITING,
     // 新增：课程资料「管理层已确认允许教练接单」的显式标志。null / 不存在 = 还没确认；
     // 有时间戳 = 已确认，可以走 confirm_generate_pickup_code 生成 12 位接取码。
     course_info_ready_at: null,
@@ -2871,13 +3596,21 @@ async function publishOrder(submitForm, openid, userId) {
     ...groupedPayload.course_flow_info,
     publish_type: publishType,
     publish_state: publishState,
-    // 新增：A 端直建课程，初始仍然是「待编辑 editing」，表示发布者还可以继续改标题、课节、学员等资料。
-    // 只有发布者在 publish 页手动 mark_course_info_ready → confirm_generate_pickup_code
-    // 才会依次推进到「允许教练接单 → 待接取（awaiting）」。
-    fulfill_state: 'editing',
+    // 【2026-09-16 旧码制·历史保留】A 端直建课程发布即视为「已确认接单 + 已生成 pl 接取码」，
+    // 直接进入「待接取 awaiting」状态，教练可立即输入「课程码 + pl」接取。
+    // 原 mark_course_info_ready + confirm_generate_pickup_code 两步云函数保留但不再必需。
+    // 【2026-09-21 新流程·接取需管理确认】publish 不再抢跑写 awaiting/pl，
+    // 课程停在 editing；管理层必须在 publish 页点「完成创建，允许接单」走 confirm_generate_pickup_code
+    // 才生成 pl 码并推到 awaiting；教练输入码走 request_coach_binding 提交申请，
+    // 等管理 confirm_coach_binding 才真正绑定 assignedCoach* + 推 in_progress。
+    fulfill_state: COURSE_STATE.EDITING,
     progress_total: classCount,
     progress_done: 0,
     schedule
+    // 新增：state_history 累积状态后缀数组，发布时初始化为 ['pl']（Pending Lesson）。
+    // 教练接取时追加 'ip'，结课时追加 'dl'，前端按末尾元素展示当前状态码。
+    // 【2026-09-21 新流程】publish 阶段不再初始化 state_history；confirm_generate_pickup_code
+    // 阶段才写入 ['pl']。删掉初始化行，避免覆盖 groupedPayload 透传的旧 state_history。
   }
   const shareVisibility = {
     ...groupedPayload.share_visibility,
@@ -2917,29 +3650,40 @@ async function publishOrder(submitForm, openid, userId) {
     courseCode: uniqueMCode,
     parent_course_code: uniqueMCode,
     // 新增：教练接取码相关字段。
-    // 现在改成“管理层在 A 端 publish 页面手动确认后才生成”：
-    // 建课时先不自动给出 12 位接取码，只保留 8 位课程码；执行教练接取仍然吃后续手动生成出的完整码。
+    // 【2026-09-16 旧码制·历史保留】发布点击直接生成「课程码 + pl」形式接取码：
+    // pickup_full_code 字段写入 10 位新制码（8 课程码 + 'pl' 后缀），替换原 12 位随机码；
+    // pickup_confirm_code / pickup_final_code 字段在新流程下不再使用，留空兼容旧前端读取。
     // assignedCoach*：执行教练认领后写入，未认领时为空字符串。
+    // 【2026-09-21 新流程·接取需管理确认】publish 不再生成 pickup_full_code / state_history / course_info_ready_at；
+    // 留空字符串与不写 state_history，等 confirm_generate_pickup_code 阶段再统一写入。
+    // fulfill_state 改回 'editing'，让管理层在 publish 页能看到「待编辑」操作台并手动确认「完成创建，允许接单」。
     pickup_confirm_code: '',
     pickup_full_code: '',
     pickup_final_code: '',
+    // 新增：顶层同步 state_history 数组，兼容只读顶层字段的前端代码路径。
+    // 【2026-09-21 新流程】publish 阶段不写顶层 state_history；confirm_generate_pickup_code 阶段才写入 ['pl']。
+    // 删掉初始化行避免覆盖 groupedPayload 透传的旧 state_history（桥接场景可能已带值）。
     assignedCoachToken: '',
     assignedCoachOpenid: '',
     assignedCoachName: '',
     assignedCoachAt: null,
-    // 新增：A 端直建课程初始仍然在「待编辑」阶段，同步写入顶层 fulfill_state，
-    // 保证 progress 四档 Tab 直接落入「待编辑」而不是提前到待接取。
-    fulfill_state: 'editing',
-    // 新增：课程资料确认标志。发布者在 publish 页确认信息完整后，mark_course_info_ready
-    // 会写入时间戳；confirm_generate_pickup_code 会校验这个时间戳，避免还没补完资料就开始对外发接取码。
-    course_info_ready_at: null,
+    // 【2026-09-16 旧码制·历史保留】A 端直建课程发布即视为「已确认接单」，fulfill_state 直接写入 'awaiting'。
+    // 顶层与 course_flow_info.fulfill_state 同步写为 awaiting，保证 progress 页四档 Tab 直接落入「待接取」。
+    // 【2026-09-21 新流程】fulfill_state 改回 'editing'，A 端直建课程发布后停在编辑态，
+    // 等管理层手动点「完成创建，允许接单」由 confirm_generate_pickup_code 推到 'awaiting'。
+    fulfill_state: COURSE_STATE.EDITING,
+    // 【2026-09-16 旧码制·历史保留】course_info_ready_at 写入当前时间戳，等同于自动调用 mark_course_info_ready。
+    // 原 mark_course_info_ready + confirm_generate_pickup_code 流程保留但不再必需。
+    // 【2026-09-21 新流程】course_info_ready_at 不在 publish 阶段写入；confirm_generate_pickup_code 阶段才写。
     createdAt: now,
     updatedAt: now
   }
   
   const res = await db.collection(targetCollection).add({ data })
   const newOrderId = res._id;
-  console.log('订单创建成功:', newOrderId, ' M 码(fromA):', uniqueMCode, ' 接取码待管理层手动确认生成');
+  // 【2026-09-21 新流程】publish 不再生成 pl 码，删掉 buildStatePickupCode 调用；
+  // 日志中「接取码」字段保留为空字符串占位，便于运维日志检索关键字保持兼容。
+  console.log('订单创建成功:', newOrderId, ' M 码(fromA):', uniqueMCode, ' 接取码(新流程下 publish 不生成):', '');
 
   await appendOrderIdToOrganizationClass(
     orderOrgInfo,
@@ -2954,7 +3698,19 @@ async function publishOrder(submitForm, openid, userId) {
     // 新增：发布成功后直接把 M 码回传给前端，教练管理页 / 详情页不用再拉一次详情。
     joinCode: uniqueMCode,
     courseCode: uniqueMCode,
-    parent_course_code: uniqueMCode
+    parent_course_code: uniqueMCode,
+    // 【2026-09-16 旧码制·历史保留】发布即生成 pl 接取码，前端可直接展示「课程码 + pl」并允许教练输入接取。
+    // 【2026-09-21 新流程】publish 不再生成接取码，pickupFullCode 留空；
+    // 前端 publish 页流转 tab 看到 fulfill_state=editing + courseInfoReady=false，
+    // 会引导管理层点「完成创建，允许接单」走 confirm_generate_pickup_code。
+    pickupFullCode: '',
+    pickupConfirmCode: '',
+    pickupFinalCode: '',
+    // 同步返回 state_history 与 fulfill_state，前端无需再拉一次详情就能渲染流转卡。
+    // 【2026-09-21 新流程】与 publish 阶段一致：state_history 空数组、fulfill_state=editing、courseInfoReady=false。
+    state_history: [],
+    fulfill_state: COURSE_STATE.EDITING,
+    courseInfoReady: false
   }
 }
 
@@ -3072,32 +3828,6 @@ async function updateOrder(orderId, submitForm, openid, userId) {
   return { code: 0, msg: '修改成功', orderId }
 }
 
-/**
- * 获取详细信息 (管理员)
- */
-async function adminGetDetail(id, collectionName) {
-    const normalizedCollectionName = normalizeCollectionName(collectionName);
-    const ALLOWED_COLLECTIONS = [
-      getCollectionName(ORDER_COLLECTION_BASE),
-      getCollectionName('sys_logs'),
-      getCollectionName('sys_user')
-    ];
-    if (!ALLOWED_COLLECTIONS.includes(normalizedCollectionName)) {
-        return { code: 403, msg: '非法集合访问' };
-    }
-
-    try {
-        const res = await db.collection(normalizedCollectionName).doc(id).get();
-        return {
-            code: 0,
-            data: res.data
-        };
-    } catch (err) {
-        console.error('adminGetDetail error:', err);
-        return { code: 404, msg: '未找到记录或查询失败', error: err };
-    }
-}
-
 // ================= 辅助函数 =================
 
 async function findOrder(orderId) {
@@ -3120,11 +3850,25 @@ function isParticipant(order, openid, userId) {
 }
 
 function isPublisher(order, openid, userId) {
-  if (getPublisherOpenid(order) === openid || getPublisherId(order) === userId) return true
+  // 【2026-09-21 修复·空串绕过】两侧值都必须非空才允许判定为相等，
+  // 否则空 openid / 空 userId 传入时 '' === '' 会误判为创建者，
+  // 直接绕过 closeOrder / confirm_coach_binding 等鉴权，扩权后这个口子价值变大必须先堵。
+  const pubOpenid = String(getPublisherOpenid(order) || '').trim()
+  const pubUserId = String(getPublisherId(order) || '').trim()
+  const safeOpenid = String(openid || '').trim()
+  const safeUserId = String(userId || '').trim()
+  if (pubOpenid && safeOpenid && pubOpenid === safeOpenid) return true
+  if (pubUserId && safeUserId && pubUserId === safeUserId) return true
   return false
 }
 
 function isAcceptor(order, openid, userId) {
-  if (getAcceptorOpenid(order) === openid || getAcceptorId(order) === userId) return true
+  // 【2026-09-21 修复·空串绕过】同 isPublisher 同根问题：两侧值都必须非空才允许判定为相等。
+  const accOpenid = String(getAcceptorOpenid(order) || '').trim()
+  const accUserId = String(getAcceptorId(order) || '').trim()
+  const safeOpenid = String(openid || '').trim()
+  const safeUserId = String(userId || '').trim()
+  if (accOpenid && safeOpenid && accOpenid === safeOpenid) return true
+  if (accUserId && safeUserId && accUserId === safeUserId) return true
   return false
 }

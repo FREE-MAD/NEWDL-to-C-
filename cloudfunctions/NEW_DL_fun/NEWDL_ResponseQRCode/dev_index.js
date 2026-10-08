@@ -33,38 +33,75 @@ const cloud = require('wx-server-sdk')
 // 合成为二维码中间的样式（中间放教练头像 / 品牌 Logo），再转存 A 侧云存储。
 const { PNG } = require('pngjs')
 const JPEG = require('jpeg-js')
+// 调整（2026-10-08）：cloud.init / 集合名 / 运行日志统一走公共层 _shared（源在 NEW_DL_fun/_shared/，副本只读）。
+const { initRuntime, dbHandle, runInContext, currentIsDev, currentEnvVersion } = require('./_shared/runtime')
+const { normalizeCollectionName, prefix } = require('./_shared/collections')
+const { make: makeLogger } = require('./_shared/logger')
+const { ENDPOINTS, postJson } = require('./_shared/http')
 
-cloud.init({ env: 'cloud1-6gh7jgl8c5b16a83' })
-
-const db = cloud.database()
+const db = dbHandle()
 
 // ===== 环境与集合约定（与 ForOrganizationDo / NEWDL_execution_order 保持一致）=====
 const A_ENV_ID = 'cloud1-6gh7jgl8c5b16a83'
 const ORGANIZATION_COLLECTION_BASE = 'organization'
 const USER_COLLECTION_BASE = 'users'
-const CURRENT_RUNTIME_SOURCE = 'dev_index.js'
-let CURRENT_ENV_VERSION = 'develop'
+// 调整（2026-09-05）：runtimeSource 改为按实际入口文件名动态取值，同步覆盖到 true_index.js 后日志自动显示 true_index.js，
+// 修复「dev 覆盖 true 的日志环境区分」问题（原硬编码 'dev_index.js' 同步后误导排障）。
+const CURRENT_RUNTIME_SOURCE = __filename.split(/[\\/]/).pop()
+// 调整（2026-10-08）：CURRENT_ENV_VERSION 已删除 —— 环境改由 _shared/runtime.js 的请求上下文提供
+// （见下方 getCollectionName / resolveBEnvVersion / handleMain 的 runInContext 包裹）。
+
+// 新增（2026-09-05）：HTTP 请求级分流的真实环境目标模块。
+// 背景：HTTP 请求的 envVersion 在请求体内、服务器启动时未知，因此 9000 端口服务固定由 dev 模块启动，
+// 非 develop 的 HTTP 请求在下方处理器内转发给 true 模块处理（callFunction 路径由 index.js 分流）。
+// 仅当本文件以 dev_index.js 身份运行且 true_index.js 已由同步脚本生成时才加载；
+// true 自身运行时（runtimeSource === 'true_index.js'）不加载，避免自引用循环。
+let TRUE_HTTP_ENTRY = null
+if (CURRENT_RUNTIME_SOURCE === 'dev_index.js') {
+  try {
+    TRUE_HTTP_ENTRY = require('./true_index.js')
+  } catch (trueEntryError) {
+    // true_index.js 尚未由同步脚本生成时保持 null：所有 HTTP 请求仍由 dev 处理（与历史行为一致，不报错）。
+    TRUE_HTTP_ENTRY = null
+  }
+}
 
 // ===== B 侧联动地址（HTTP 云接入）=====
 // B 环境 cloud1-d7g77k8il914e5b12 的 HTTP 访问服务路由：
 //   域名 cloud1-d7g77k8il914e5b12-1476831641.ap-shanghai.app.tcloudbase.com，
 //   访问路径 /DLforP_entry_qrcode，网关转发时会【去掉触发路径】，
 //   所以 B 函数收到的 path 是 "/"，query/body 照常透传。
-// 如后续 B 侧更换路由，只改这一个常量即可，不动业务逻辑。
-const B_QRCODE_HTTP_BASE_URL = 'https://cloud1-d7g77k8il914e5b12-1476831641.ap-shanghai.app.tcloudbase.com/DLforP_entry_qrcode'
+// 调整（2026-10-08）：地址已下沉到 _shared/http.js 的 ENDPOINTS.bQrcodeEntry。
+// 如后续 B 侧更换路由，只改 ENDPOINTS 一处即可，不动业务逻辑。
 // B 侧动作名（与 DLforP_entry_qrcode 的 ACTION_HANDLERS 严格对应，不要擅自改名）。
 const B_ACTION_GENERATE = 'generate_entry_qrcode'
 const B_ACTION_GET = 'get_entry_qrcode'
 const B_ACTION_REFRESH_SNAPSHOT = 'refresh_entry_snapshot'
 const B_ACTION_DISABLE = 'disable_entry'
+// 新增（A 侧机构展示信息同步，2026-09-05）：B 侧 sync_org_show 动作。
+// 用途：把 A 侧机构展示信息（名称/简介/城市/地址/轮播图/成员等，分散在 NDLdev_organization + NDLdev_users）
+// 推送到 B 侧 dev_forPshowC 集合，家长扫码落地页 resolve_entry 直接读取展示。
+const B_ACTION_SYNC_SHOW = 'sync_org_show'
+// 机构展示信息同步时，单次批量换取临时链接的 fileID 数量上限（微信 getTempFileURL 单次最多 50 个）。
+const SHOW_TEMP_URL_BATCH_LIMIT = 50
 // 入口类型：当前只开放机构入口；个人教练入口 B 侧已预留 individual，A 侧后续再接。
 const TARGET_TYPE_ORGANIZATION = 'organization'
 // A 侧二维码转存目录：每个机构一张 PNG，按 targetId 固定路径覆盖上传，fileID 保持稳定。
 const A_QR_STORAGE_DIR = 'NEWDL/entry_qrcode'
-// 新增 DIY 二维码 Logo 合成参数：Logo 宽占二维码宽度比例与白色衬底边距比例。
-// 20% 是中心 Logo 的常用安全比例：占比太大容易破坏扫码容错，太小则品牌图看不清。
-const DIY_LOGO_WIDTH_RATIO = 0.2
-const DIY_LOGO_PLATE_PADDING_RATIO = 0.08
+// DIY 二维码 Logo 合成参数（2026-09-05 改版：白圆封底 + 圆内最大化 Logo）。
+// 背景：微信 wxacode.getUnlimited 生成的小程序码自带中心头像区（品牌图标实测约占码宽 35%~37%），
+// 旧方案 Logo 仅占码宽 20%、加方形衬底总宽才 ~23%，盖不住自带图标，合成后图标从 Logo 四周露出来。
+// 新方案（用户要求：先用白色⚪贴住中间图片，再尽可能大的覆盖）：
+//   1) 先在码心画一个纯白圆，整片贴死自带中心图标；
+//   2) 再把 DIY Logo 等比缩放到「外接矩形刚好内接于白圆」的最大尺寸居中贴上（不裁剪 Logo 内容）。
+// 0.38 取值依据：完全盖住自带中心图标（~37%）并留约 1% 余量；该区域本就被微信自带图标占用，
+// 换成白圆 + Logo 后遮挡面积与官方图标相当（圆面积约占码面 11%），不额外破坏扫码容错。
+const DIY_CENTER_COVER_CIRCLE_RATIO = 0.38
+// Logo 内接白圆时距圆边的安全余量（像素）：给抗锯齿 / 取整留 1px，避免 Logo 角点溢到圆外。
+const DIY_LOGO_CIRCLE_INSET_PX = 1
+// （旧方形衬底方案参数，已废弃，保留仅作历史对照，新合成逻辑不再引用）：
+// const DIY_LOGO_WIDTH_RATIO = 0.2        // 旧：Logo 宽 = 码宽 * 0.2
+// const DIY_LOGO_PLATE_PADDING_RATIO = 0.08 // 旧：白色方衬底四周 padding = Logo 宽 * 0.08
 // 机构文档里存放二维码联动结果的字段名。
 const ORG_QR_FIELD = 'entry_qrcode'
 // 调 B 侧 HTTP 的超时时间（毫秒）：B 侧要调微信 wxacode 接口，留足时间。
@@ -72,28 +109,21 @@ const B_HTTP_TIMEOUT_MS = 15000
 // 下载二维码图片的超时时间（毫秒）。
 const DOWNLOAD_TIMEOUT_MS = 15000
 
+// 集合前缀规则已下沉到 _shared/collections.js（develop → NDLdev_，trial/release → NDLreal_）。
+// 调整（2026-10-08）：环境不再存模块级变量 —— 改由 _shared/runtime.js 的请求上下文提供。
+// handleMain 里用 runInContext(ctx, ...) 包裹后，任意深度的调用都能通过 currentIsDev() 读到本次请求的
+// envVersion，并发请求互不干扰（AsyncLocalStorage 可用时；不可用则退化为现状，见 runtime.js 注释）。
 function getCollectionPrefix() {
-  return CURRENT_ENV_VERSION === 'develop' ? 'NDLdev_' : 'NDLreal_'
+  return prefix(currentIsDev())
 }
 
 function getCollectionName(baseName) {
-  return `${getCollectionPrefix()}${baseName}`
-}
-
-// 运行环境日志：用于快速判断本次调用按什么环境、什么源码文件在执行（沿用 A 侧统一约定）。
-function logRuntimeEnvInfo(extra = {}) {
-  console.log('[runtime_env]', {
-    functionName: 'NEWDL_ResponseQRCode',
-    runtimeSource: CURRENT_RUNTIME_SOURCE,
-    envVersion: CURRENT_ENV_VERSION,
-    collectionPrefix: getCollectionPrefix(),
-    ...extra
-  })
+  return normalizeCollectionName(baseName, currentIsDev())
 }
 
 // A 侧 develop 联调时二维码指向 B 的 develop 版本；trial/release 对应 B 的 release 版本。
 function resolveBEnvVersion() {
-  return CURRENT_ENV_VERSION === 'develop' ? 'develop' : 'release'
+  return currentIsDev() ? 'develop' : 'release'
 }
 
 function normalizeStr(value = '', maxLen = 0) {
@@ -111,12 +141,11 @@ function normalizeStr(value = '', maxLen = 0) {
 // 快照会被 normalizeSnapshot 判空，所以这里一律用 POST JSON body 透传。
 function postToBHttp(action = '', payload = {}) {
   const body = JSON.stringify({ ...payload, action })
-  const requestUrl = `${B_QRCODE_HTTP_BASE_URL}?action=${encodeURIComponent(action)}`
 
   // 请求前日志：记录调 B 侧的 action、URL、body 大小与预览（snapshot 整体不打，避免日志膨胀）。
   console.log('[NEWDL_ResponseQRCode][INFO] postToBHttp.request.start', {
     action,
-    url: B_QRCODE_HTTP_BASE_URL,
+    url: ENDPOINTS.bQrcodeEntry,
     bodyLen: Buffer.byteLength(body),
     targetId: payload.targetId || '',
     targetType: payload.targetType || '',
@@ -125,78 +154,35 @@ function postToBHttp(action = '', payload = {}) {
     hasSnapshot: !!(payload.snapshot && typeof payload.snapshot === 'object')
   })
 
-  return new Promise((resolve, reject) => {
-    let urlObj
-    try {
-      urlObj = new URL(requestUrl)
-    } catch (err) {
-      reject(new Error('B 侧二维码服务地址格式非法'))
-      return
+  // 调整（2026-10-08）：https 请求体下沉到 _shared/http.js 的 postJson。
+  // 口径全部保留：成功判定 success !== false、超时 15s、请求 / 响应 / 错误三处日志。
+  // 注意成功判定与自环境二维码服务（status === 'success'）不同，这里必须显式传 isSuccess。
+  return postJson(ENDPOINTS.bQrcodeEntry, { ...payload, action }, {
+    timeoutMs: B_HTTP_TIMEOUT_MS,
+    timeoutMessage: '调用 B 侧二维码服务超时',
+    isSuccess: (statusCode, parsed) => (statusCode || 0) < 400 && !!parsed && parsed.success !== false,
+    invalidPayload: (rawText) => ({
+      success: false,
+      message: 'B 侧返回的不是 JSON',
+      rawText: String(rawText || '').slice(0, 500)
+    }),
+    // 响应日志：记录 B 侧返回的 HTTP 状态码、原始文本长度与预览，便于排查 B 侧 502 / access_token 等错误。
+    onResponse: (statusCode, rawText) => {
+      console.log('[NEWDL_ResponseQRCode][INFO] postToBHttp.response.received', {
+        action,
+        httpStatus: statusCode || 0,
+        rawLen: rawText ? rawText.length : 0,
+        rawPreview: rawText ? String(rawText).slice(0, 500) : ''
+      })
     }
-
-    const req = https.request(
-      {
-        hostname: urlObj.hostname,
-        path: `${urlObj.pathname}${urlObj.search}`,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json; charset=utf-8',
-          'Content-Length': Buffer.byteLength(body)
-        }
-      },
-      (response) => {
-        let rawText = ''
-        response.on('data', (chunk) => {
-          rawText += chunk
-        })
-        response.on('end', () => {
-          // 响应日志：记录 B 侧返回的 HTTP 状态码、原始文本长度与预览，便于排查 B 侧 502 / access_token 等错误。
-          console.log('[NEWDL_ResponseQRCode][INFO] postToBHttp.response.received', {
-            action,
-            httpStatus: response.statusCode || 0,
-            rawLen: rawText ? rawText.length : 0,
-            rawPreview: rawText ? String(rawText).slice(0, 500) : ''
-          })
-          let parsed = null
-          try {
-            parsed = rawText ? JSON.parse(rawText) : {}
-          } catch (error) {
-            console.warn('[NEWDL_ResponseQRCode][WARN] postToBHttp.response.not_json', {
-              action,
-              parseError: error && error.message ? error.message : String(error)
-            })
-            parsed = {
-              success: false,
-              message: 'B 侧返回的不是 JSON',
-              rawText: rawText.slice(0, 500)
-            }
-          }
-          resolve({
-            success: (response.statusCode || 0) < 400 && !!parsed && parsed.success !== false,
-            statusCode: response.statusCode || 0,
-            data: parsed || {}
-          })
-        })
-      }
-    )
-
-    req.on('error', (err) => {
-      console.error('[NEWDL_ResponseQRCode][ERROR] postToBHttp.request.error', {
-        action,
-        message: err && err.message ? err.message : String(err),
-        stack: err && err.stack ? String(err.stack).slice(0, 800) : ''
-      })
-      reject(err)
+  }).catch((err) => {
+    // 错误 / 超时统一在这里落日志（超时也是 destroy(err) → reject，走同一条路径）
+    console.error('[NEWDL_ResponseQRCode][ERROR] postToBHttp.request.error', {
+      action,
+      message: err && err.message ? err.message : String(err),
+      stack: err && err.stack ? String(err.stack).slice(0, 800) : ''
     })
-    req.setTimeout(B_HTTP_TIMEOUT_MS, () => {
-      console.error('[NEWDL_ResponseQRCode][ERROR] postToBHttp.request.timeout', {
-        action,
-        timeoutMs: B_HTTP_TIMEOUT_MS
-      })
-      req.destroy(new Error('调用 B 侧二维码服务超时'))
-    })
-    req.write(body)
-    req.end()
+    throw err
   })
 }
 
@@ -384,7 +370,7 @@ async function resolveTargetOrganization(event = {}, openid = '', isHttpCall = f
 // ===== 快照与转存 =====
 
 // 从 A 侧机构文档构造推给 B 的入口快照。
-// 字段名对齐 B 侧 normalizeSnapshot：institutionName / logoFileId / intro / updatedAt。
+// 字段名对齐 B 侧 normalizeSnapshot：institutionName / logoFileId / intro / inviteCode / updatedAt。
 // A 侧没有单独 logo 字段，暂取品牌轮播图第一张作为 logo。
 function buildOrganizationSnapshot(organizationDoc = {}) {
   const basic = organizationDoc.organization_basic || {}
@@ -393,7 +379,313 @@ function buildOrganizationSnapshot(organizationDoc = {}) {
     institutionName: String(basic.organization_name || '').trim(),
     logoFileId: String(brandImages[0] || '').trim(),
     intro: String(basic.intro || '').trim(),
+    // 新增（扫码自动补识别码，2026-09-06）：机构家长端识别码随入口快照推给 B，
+    // B 侧 resolve_entry 回传给扫码落地页 → 家长点「我要预约」进约课页自动填入，无需手输。
+    // invitation_code 在 ForOrganizationDo 创建机构时已按识别码规则规范化入库，这里直接透传，
+    // B 侧 normalizeSnapshot 会再兜底规范化一次（非字母数字剥离 / 大写 / 截断 16 位）。
+    inviteCode: String(basic.invitation_code || '').trim(),
     updatedAt: basic.updated_at || new Date()
+  }
+}
+
+// ===== 机构展示信息同步（A → B，新增 2026-09-05） =====
+// 背景：A 侧机构展示信息分散在 NDLdev_organization（基本信息/成员列表）与 NDLdev_users（昵称/头像），
+// B 侧云环境无法跨环境读取 A 数据库，只能由 A 侧主动 HTTP 推送到 B 侧 dev_forPshowC 集合；
+// 家长扫码落地页（entry_landing）通过 resolve_entry 一次拿到完整展示信息。
+
+// 批量把 A 侧 fileID 换成临时 HTTPS 链接（B 侧下载转存用；A 侧 cloud:// 在 B 环境取不到链接也渲染不了）。
+// 失败的项 tempUrl 为空串，B 侧对应图片转存会跳过，不阻断文字信息同步。
+async function fetchATempFileUrlMap(fileIds = []) {
+  const map = {}
+  const idList = Array.isArray(fileIds) ? fileIds.map((id) => String(id || '').trim()).filter(Boolean) : []
+  if (!idList.length) {
+    return map
+  }
+  try {
+    // 微信单次 getTempFileURL 上限 50 个；机构图片量（logo + 轮播图 + 成员头像）正常远小于该值，分批兜底。
+    for (let start = 0; start < idList.length; start += SHOW_TEMP_URL_BATCH_LIMIT) {
+      const batch = idList.slice(start, start + SHOW_TEMP_URL_BATCH_LIMIT)
+      // eslint-disable-next-line no-await-in-loop
+      const res = await cloud.getTempFileURL({ fileList: batch })
+      const items = res && Array.isArray(res.fileList) ? res.fileList : []
+      items.forEach((item) => {
+        const fileId = String((item && item.fileID) || '').trim()
+        const tempUrl = String((item && item.tempFileURL) || '').trim()
+        const ok = item && item.status === 0 && tempUrl
+        if (fileId) {
+          map[fileId] = ok ? tempUrl : ''
+        }
+        if (fileId && !ok) {
+          console.warn('[NEWDL_ResponseQRCode][WARN] fetchATempFileUrlMap.item_fail', {
+            fileIdPrefix: fileId.slice(0, 60),
+            status: item && item.status != null ? item.status : '',
+            errMsg: String((item && item.errMsg) || '').slice(0, 120),
+          })
+        }
+      })
+    }
+  } catch (err) {
+    console.error('[NEWDL_ResponseQRCode][ERROR] fetchATempFileUrlMap.fail', {
+      message: err && err.message ? err.message : String(err),
+      fileCount: idList.length,
+    })
+  }
+  return map
+}
+
+// 新增（2026-09-06）：成员身份（staff_role）展示文案映射。
+// A 侧落库值是枚举 key（head_coach 等，见 ForOrganizationDo normalizeStaffRole）或自填文本，
+// 家长端展示需要中文：预设枚举在这里翻译，自填文本原样透传，空值/未知 key 返回原值由前端兜底泛化角色。
+const STAFF_ROLE_SHOW_LABEL_MAP = {
+  head_coach: '主教',
+  assistant_coach: '副教练',
+  instructor: '指导',
+  training_analyst: '训练分析'
+}
+function staffRoleShowText(staffRole = '') {
+  const raw = String(staffRole || '').trim()
+  return STAFF_ROLE_SHOW_LABEL_MAP[raw] || raw
+}
+
+// 新增（2026-09-06）：按 openid 批量拉取成员最新昵称/头像。
+// 背景：organization_member 里的 nickname/avatarUrl 是「创建/加入机构」那一刻的快照，
+// 教练后来在资料页改昵称/头像不会回写成员列表，直接推快照会导致 B 侧成员信息陈旧。
+// 这里推送前统一回 NDLdev_users 查最新值（查不到的用户回退成员项快照，查询失败也不阻断同步）。
+async function fetchFreshMemberInfoMap(openidList = []) {
+  const infoMap = {}
+  const idList = Array.isArray(openidList) ? openidList.map((id) => String(id || '').trim()).filter(Boolean) : []
+  if (!idList.length) {
+    return infoMap
+  }
+  try {
+    const usersCollectionName = getCollectionName(USER_COLLECTION_BASE)
+    // 成员上限 50（见下方 members 组装 .slice(0, 50)），一次 in 查询即可覆盖。
+    const res = await db.collection(usersCollectionName)
+      .where({ openid: db.command.in(idList) })
+      .field({ openid: true, nickname: true, avatarUrl: true })
+      .limit(50)
+      .get()
+    const docs = Array.isArray(res.data) ? res.data : []
+    docs.forEach((doc) => {
+      const docOpenid = String((doc && doc.openid) || '').trim()
+      if (docOpenid) {
+        infoMap[docOpenid] = {
+          nickname: String((doc && doc.nickname) || '').trim(),
+          avatarUrl: String((doc && doc.avatarUrl) || '').trim()
+        }
+      }
+    })
+  } catch (err) {
+    // 查询失败不阻断同步：回退用成员项快照（旧行为），下次触发点会再补。
+    console.error('[NEWDL_ResponseQRCode][ERROR] fetchFreshMemberInfoMap.fail', {
+      message: err && err.message ? err.message : String(err),
+      count: idList.length
+    })
+  }
+  return infoMap
+}
+
+// 从机构文档组装推送 B 侧 sync_org_show 的完整 payload。
+// 数据源全部取自 A 侧 DB 真实文档（不接受前端传值），成员列表已脱敏：只推昵称/角色/头像，不推手机号。
+// 调整（2026-09-06）：昵称/头像改为优先取 NDLdev_users 最新值（快照可能陈旧）；成员新增 staff_role 具体身份文案。
+async function buildOrganizationShowPayload(organizationDoc = {}, entryId = '') {
+  const basic = organizationDoc.organization_basic || {}
+  const member = organizationDoc.organization_member || {}
+  const adminList = Array.isArray(member.admin_list) ? member.admin_list : []
+  const coachList = Array.isArray(member.coach_list) ? member.coach_list : []
+  const brandImages = Array.isArray(basic.brand_swiper_images) ? basic.brand_swiper_images : []
+  const diyLogoFileId = String(basic.diy_qrcode_image || '').trim()
+
+  // logo 优先用 DIY 二维码图（机构品牌图），没有则退回轮播图第一张（与入口快照口径一致）。
+  const logoFileId = diyLogoFileId || String(brandImages[0] || '').trim()
+
+  // 新增（2026-09-06）：先按 openid 拉 NDLdev_users 最新昵称/头像，推送时覆盖成员项快照，
+  // 解决「教练改了资料但 B 侧成员信息一直是加入时的旧值」。
+  const memberOpenidList = adminList.concat(coachList)
+    .map((m) => String((m && m.openid) || '').trim())
+    .filter(Boolean)
+  const freshInfoMap = await fetchFreshMemberInfoMap(memberOpenidList)
+
+  // 成员脱敏组装：admin 在前、教练在后，只保留展示字段（昵称/头像优先取最新值）。
+  // 新增（2026-09-06）：staff_role 具体身份（主教/副教练/自填文本）随成员一起推送，家长端展示用。
+  const members = adminList
+    .map((m) => ({ item: m, role: 'admin' }))
+    .concat(coachList.map((m) => ({ item: m, role: 'coach' })))
+    .map(({ item, role }) => {
+      const itemOpenid = String((item && item.openid) || '').trim()
+      const freshInfo = freshInfoMap[itemOpenid] || {}
+      return {
+        name: String(freshInfo.nickname || (item && item.nickname) || '').trim(),
+        role,
+        // 新增（2026-09-06）：成员具体身份展示文案，空值时 B 侧/前端兜底泛化角色（管理层/教练）。
+        staff_role: staffRoleShowText((item && item.staff_role) || ''),
+        avatar: { fileId: String(freshInfo.avatarUrl || (item && item.avatarUrl) || '').trim(), tempUrl: '' },
+      }
+    })
+    .filter((m) => m.name || m.avatar.fileId)
+    .slice(0, 50)
+
+  // 收集全部需要换临时链接的 A 侧 fileID，一次性批量换取。
+  const fileIdList = []
+  if (logoFileId) {
+    fileIdList.push(logoFileId)
+  }
+  brandImages.forEach((id) => {
+    const trimmed = String(id || '').trim()
+    if (trimmed) {
+      fileIdList.push(trimmed)
+    }
+  })
+  members.forEach((m) => {
+    if (m.avatar.fileId) {
+      fileIdList.push(m.avatar.fileId)
+    }
+  })
+  const tempUrlMap = await fetchATempFileUrlMap(fileIdList)
+
+  return {
+    organizationId: String(basic.organization_id || '').trim(),
+    entryId: String(entryId || '').trim(),
+    show: {
+      organization_name: String(basic.organization_name || '').trim(),
+      // 新增（2026-09-05）：品牌副标题 slogan → B 侧 show_basic.brand_slogan，
+      // 展示在机构首页 Hero 区机构名称下方（os-hero-subtitle）；A 侧 organization_basic.slogan 收集后随同步推送
+      brand_slogan: String(basic.slogan || '').trim(),
+      intro: String(basic.intro || '').trim(),
+      city: String(basic.city || '').trim(),
+      address: String(basic.address || '').trim(),
+      contact_name: String(basic.contact_name || '').trim(),
+      contact_phone: String(basic.contact_phone || '').trim(),
+      // 新增（2026-09-05）：机构展示页区块三（基本信息）四项字段，A 侧区块二必填收集后随同步推送 B；
+      // 老机构资料里可能还是空串，B 侧按空值展示「暂无」占位（展示页所有行保持显示）
+      core_services: String(basic.core_services || '').trim(),
+      service_area: String(basic.service_area || '').trim(),
+      target_audience: String(basic.target_audience || '').trim(),
+      coaching_philosophy: String(basic.coaching_philosophy || '').trim(),
+      // 新增（扫码自动补识别码，2026-09-06）：机构家长端识别码随展示同步落 B 侧 dev_forPshowC，
+      // B 侧 resolve_entry 在入口快照缺码时用它作为第二级回退（机构创建 / 编辑 / 教练加入触发同步后即有值）。
+      invite_code: String(basic.invitation_code || '').trim(),
+    },
+    images: {
+      logo: {
+        fileId: logoFileId,
+        tempUrl: tempUrlMap[logoFileId] || '',
+      },
+      swiper: brandImages.map((id) => {
+        const trimmed = String(id || '').trim()
+        return { fileId: trimmed, tempUrl: tempUrlMap[trimmed] || '' }
+      }),
+    },
+    members: members.map((m) => ({
+      ...m,
+      avatar: {
+        fileId: m.avatar.fileId,
+        tempUrl: tempUrlMap[m.avatar.fileId] || '',
+      },
+    })),
+    sourceUpdatedAt: basic.updated_at || new Date(),
+  }
+}
+
+// 机构展示信息同步动作（B 侧动作名 sync_org_show）。
+// 机构解析规则：
+//   1) 显式传 organizationId / targetId（ForOrganizationDo 云函数间顺推的场景）→ 直查机构文档。
+//      不走 resolveTargetOrganization 的 admin 校验：教练 joinOrganization 成功时也会顺推成员变化，
+//      此时当前用户是教练而非管理员，admin 校验会误拦（数据源是 A 侧 DB 真实文档，无越权风险）。
+//   2) 未传 organizationId（前端 callFunction 手动补推）→ 按 openid 解析当前机构 + admin 校验。
+async function syncOrganizationShow(event = {}, openid = '', isHttpCall = false) {
+  const usersCollectionName = getCollectionName(USER_COLLECTION_BASE)
+  const organizationCollectionName = getCollectionName(ORGANIZATION_COLLECTION_BASE)
+  console.log('[NEWDL_ResponseQRCode][INFO] syncOrganizationShow.start', {
+    isHttpCall,
+    hasOpenid: !!openid,
+    hasOrganizationId: !!(event.organizationId || event.targetId),
+  })
+
+  let organizationDoc = null
+  const explicitOrgId = String(event.organizationId || event.targetId || '').trim()
+  if (explicitOrgId) {
+    // 云函数间顺推：按 organizationId 直查（findOrganizationDocById 内含 NDLdev_ 前缀拼装）。
+    organizationDoc = await findOrganizationDocById(organizationCollectionName, explicitOrgId)
+    if (!organizationDoc) {
+      console.warn('[NEWDL_ResponseQRCode][WARN] syncOrganizationShow.org_not_found', { organizationId: explicitOrgId })
+      return { status: 'fail', message: '未找到对应机构，无法同步展示信息' }
+    }
+  } else {
+    // 前端手动调用：按当前登录用户解析机构，并要求管理员身份。
+    organizationDoc = await resolveTargetOrganization(event, openid, isHttpCall, usersCollectionName, organizationCollectionName)
+  }
+
+  const organizationBasic = organizationDoc.organization_basic || {}
+  const organizationId = String(organizationBasic.organization_id || '').trim()
+  const entryQrcodeRecord = getEntryQrcodeRecord(organizationDoc)
+  const entryId = String((entryQrcodeRecord && entryQrcodeRecord.entryId) || '').trim()
+
+  const payload = await buildOrganizationShowPayload(organizationDoc, entryId)
+  console.log('[NEWDL_ResponseQRCode][INFO] syncOrganizationShow.call_b.start', {
+    organizationId,
+    entryId,
+    swiperCount: payload.images.swiper.length,
+    memberCount: payload.members.length,
+    hasLogoTempUrl: !!payload.images.logo.tempUrl,
+  })
+
+  // 新增（2026-09-06）：把 A 侧 envVersion 透传给 B 侧，B 侧 DLforP_entry_qrcode 按它切换 dev_/real_ 集合。
+  // A 侧 develop→B 侧 dev_*，A 侧 release→B 侧 real_*，保证两端数据隔离口径一致。
+  const bRes = await postToBHttp(B_ACTION_SYNC_SHOW, { ...payload, envVersion: currentEnvVersion() })
+  console.log('[NEWDL_ResponseQRCode][INFO] syncOrganizationShow.call_b.result', {
+    organizationId,
+    success: bRes.success,
+    bStatusCode: bRes.statusCode,
+    bCode: bRes.data ? bRes.data.code : '',
+    bShowDocId: bRes.data ? bRes.data.showDocId : '',
+    bFailedCount: bRes.data ? bRes.data.failedCount : '',
+  })
+  if (!bRes.success) {
+    return {
+      status: 'fail',
+      message: `B 侧同步机构展示信息失败：${(bRes.data && (bRes.data.message || bRes.data.errorMessage)) || '未知错误'}`,
+      bCode: bRes.data ? bRes.data.code || bRes.statusCode : bRes.statusCode,
+      organizationId,
+    }
+  }
+
+  return {
+    status: 'success',
+    message: '机构展示信息已同步到 B 侧',
+    organizationId,
+    entryId,
+    showDocId: bRes.data ? bRes.data.showDocId : '',
+    // 图片转存失败数量（B 侧会自动重试：下次推送 source_file_id 未变则复用，变了则重新转存）。
+    failedImageCount: bRes.data ? bRes.data.failedCount : 0,
+  }
+}
+
+// 静默顺推机构展示信息：失败只打日志，绝不阻断调用方主流程（二维码生成 / 机构资料保存 / 教练加入）。
+// 设计为「发后不管」：同步是幂等覆盖推送，本次失败可由下一次任意触发点补齐。
+async function pushOrganizationShowQuietly({ organizationDoc = {}, entryId = '', remark = '' } = {}) {
+  try {
+    const payload = await buildOrganizationShowPayload(organizationDoc, entryId)
+    if (!payload.organizationId) {
+      console.warn('[NEWDL_ResponseQRCode][WARN] pushOrganizationShowQuietly.no_orgid', { remark })
+      return
+    }
+    const bRes = await postToBHttp(B_ACTION_SYNC_SHOW, { ...payload, envVersion: currentEnvVersion() })
+    console.log('[NEWDL_ResponseQRCode][INFO] pushOrganizationShowQuietly.done', {
+      remark,
+      organizationId: payload.organizationId,
+      entryId: payload.entryId,
+      success: bRes.success,
+      bCode: bRes.data ? bRes.data.code : '',
+      bFailedCount: bRes.data ? bRes.data.failedCount : '',
+    })
+  } catch (err) {
+    // 顺推失败不影响主流程：机构资料保存 / 二维码生成照常返回成功，展示信息等下次触发点补推。
+    console.error('[NEWDL_ResponseQRCode][ERROR] pushOrganizationShowQuietly.fail', {
+      remark,
+      message: err && err.message ? err.message : String(err),
+      stack: err && err.stack ? String(err.stack).slice(0, 600) : '',
+    })
   }
 }
 
@@ -543,12 +835,16 @@ function resizeRgbaBilinear(src = {}, dstWidth = 0, dstHeight = 0) {
 }
 
 // 把 DIY Logo 合成到二维码中间（中间放教练头像 / 品牌 Logo）：
-// 1) Logo 目标宽 = 二维码宽 * DIY_LOGO_WIDTH_RATIO（约 20%，保证扫码容错），高度按原比例缩放；
-// 2) Logo 先贴到一块白色衬底上（四周留 DIY_LOGO_PLATE_PADDING_RATIO 边距），
-//    再整体居中盖到二维码中心，视觉上正好替换掉小程序码自带的中心图标区域；
-// 3) 带 alpha 通道的 PNG Logo 与白色衬底做 alpha 混合，透明背景不会发黑。
+// 2026-09-05 改版（用户要求：先用白色⚪贴住中间图片，再尽可能大的覆盖）：
+// 1) 白色圆底：以码心为圆心画纯白圆（直径 = 码宽 * DIY_CENTER_COVER_CIRCLE_RATIO ≈ 38%），
+//    整片盖掉小程序码自带的中心头像图标（实测约占码宽 35%~37%），圆边做 1px 抗锯齿柔化；
+// 2) Logo 最大化：Logo 等比缩放到「外接矩形刚好内接于白圆」的最大尺寸
+//    （正方形 Logo 边长 ≈ 圆直径 / √2 ≈ 0.707D，比旧方案 20% 大约 1/3 且完整不裁剪），
+//    居中 alpha 混合贴上，带 alpha 通道的 PNG 透明背景透出白底圆，不会发黑；
+// 3) 圆形裁剪：Logo 角点超出白圆的像素一律不写，圆外码点一个都不碰，扫码容错不受影响。
+// （旧方案：Logo 宽 20% + 8% padding 方形白衬底整体盖章，盖不住自带中心图标，已废弃。）
 // 任一步失败都返回原二维码 buffer（只打日志），绝不阻断生成主流程。
-// 新增（诊断日志）：中间每一步关键计算（解码尺寸 / 缩放结果 / 衬底大小 / 居中偏移）都打出来，
+// 新增（诊断日志）：中间每一步关键计算（解码尺寸 / 白圆直径 / 缩放结果 / 居中偏移）都打出来，
 // 避免 Logo 位置偏、尺寸错、或缩放失败后静默退化造成排查盲区。
 function compositeDiyLogoOntoQrcode(qrBuffer = null, logoBuffer = null) {
   if (!qrBuffer || !qrBuffer.length || !logoBuffer || !logoBuffer.length) {
@@ -571,13 +867,59 @@ function compositeDiyLogoOntoQrcode(qrBuffer = null, logoBuffer = null) {
     }
 
     const qrSize = Math.min(qrImage.width, qrImage.height)
-    const logoWidth = Math.max(1, Math.floor(qrSize * DIY_LOGO_WIDTH_RATIO))
-    const logoHeight = Math.max(1, Math.floor((logoImage.height * logoWidth) / logoImage.width))
+
+    // ===== 第 1 步：白色圆底，整片贴死小程序码自带的中心头像图标（先白圆、后 Logo）=====
+    // 圆心取码图几何中心，半径 = 码短边 * DIY_CENTER_COVER_CIRCLE_RATIO / 2。
+    const centerX = qrImage.width / 2
+    const centerY = qrImage.height / 2
+    const coverRadius = Math.max(4, Math.floor((qrSize * DIY_CENTER_COVER_CIRCLE_RATIO) / 2))
+    console.log('[NEWDL_ResponseQRCode][INFO] composite_diy_logo.cover_circle', {
+      qrWidth: qrImage.width,
+      qrHeight: qrImage.height,
+      qrSize,
+      coverRatio: DIY_CENTER_COVER_CIRCLE_RATIO,
+      coverDiameter: coverRadius * 2,
+      centerX: Math.round(centerX),
+      centerY: Math.round(centerY),
+    })
+    // 只遍历圆的外接框（避免全图扫描），逐像素按到圆心距离做白色覆盖。
+    const circleBoxMinX = Math.max(0, Math.floor(centerX - coverRadius - 1))
+    const circleBoxMaxX = Math.min(qrImage.width - 1, Math.ceil(centerX + coverRadius + 1))
+    const circleBoxMinY = Math.max(0, Math.floor(centerY - coverRadius - 1))
+    const circleBoxMaxY = Math.min(qrImage.height - 1, Math.ceil(centerY + coverRadius + 1))
+    for (let y = circleBoxMinY; y <= circleBoxMaxY; y += 1) {
+      for (let x = circleBoxMinX; x <= circleBoxMaxX; x += 1) {
+        const dx = x + 0.5 - centerX
+        const dy = y + 0.5 - centerY
+        const dist = Math.sqrt(dx * dx + dy * dy)
+        // 覆盖强度：圆内 = 1（纯白盖死），圆外 = 0（不动），圆边 1px 带内线性渐变做抗锯齿。
+        const coverage = Math.min(1, Math.max(0, coverRadius - dist + 0.5))
+        if (coverage <= 0) continue
+        const idx = (y * qrImage.width + x) * 4
+        // 白色与原像素混合：码底本就是白色，coverage=1 直接变白；边缘处柔化被切到的黑码点，不显锯齿。
+        for (let channel = 0; channel < 3; channel += 1) {
+          qrImage.data[idx + channel] = Math.round(
+            255 * coverage + qrImage.data[idx + channel] * (1 - coverage)
+          )
+        }
+        qrImage.data[idx + 3] = 255
+      }
+    }
+
+    // ===== 第 2 步：DIY Logo 等比缩放到「内接白圆」的最大尺寸，居中 alpha 混合贴上 =====
+    // 内接约束：缩放后 Logo 外接矩形角点到圆心距离 ≤ (coverRadius - INSET)，
+    // 即 scale = 2*(r-inset)/sqrt(原图宽^2 + 原图高^2)；正方形 Logo 边长 ≈ 圆直径 / √2 ≈ 0.707D。
+    const fitRadius = Math.max(2, coverRadius - DIY_LOGO_CIRCLE_INSET_PX)
+    const logoScale = (fitRadius * 2) /
+      Math.sqrt(logoImage.width * logoImage.width + logoImage.height * logoImage.height)
+    const logoWidth = Math.max(1, Math.floor(logoImage.width * logoScale))
+    const logoHeight = Math.max(1, Math.floor(logoImage.height * logoScale))
     console.log('[NEWDL_ResponseQRCode][INFO] composite_diy_logo.size_plan', {
       qrWidth: qrImage.width,
       qrHeight: qrImage.height,
       qrSize,
-      logoRatio: DIY_LOGO_WIDTH_RATIO,
+      coverRadius,
+      logoInscribedInCircle: true,
       originLogoW: logoImage.width,
       originLogoH: logoImage.height,
       targetLogoW: logoWidth,
@@ -595,54 +937,49 @@ function compositeDiyLogoOntoQrcode(qrBuffer = null, logoBuffer = null) {
       return qrBuffer
     }
 
-    // 白色衬底：先建一块纯白 RGBA，再把 Logo 以 alpha 混合贴上去
-    const padding = Math.max(2, Math.floor(logoWidth * DIY_LOGO_PLATE_PADDING_RATIO))
-    const plateSize = logoWidth + padding * 2
-    const offsetX = Math.floor((qrImage.width - plateSize) / 2)
-    const offsetY = Math.floor((qrImage.height - plateSize) / 2)
-    // 新增：衬底 + 居中偏移参数，用于排查 Logo 是否被裁掉（比如当 plateSize > qrSize 时会越界写）
-    console.log('[NEWDL_ResponseQRCode][INFO] composite_diy_logo.plate_params', {
-      platePadding: padding,
-      plateSize,
-      qrWidth: qrImage.width,
-      qrHeight: qrImage.height,
-      offsetX,
-      offsetY,
-      plateFitsQr: plateSize <= Math.min(qrImage.width, qrImage.height),
-    })
-    const plate = Buffer.alloc(plateSize * plateSize * 4, 0xff)
+    // Logo 居中贴到白圆上：逐像素 alpha 混合（透明 PNG 透出第 1 步的白底，不会发黑）。
+    const logoOffsetX = Math.floor(centerX - logoWidth / 2)
+    const logoOffsetY = Math.floor(centerY - logoHeight / 2)
+    let logoPixelsWritten = 0
     for (let y = 0; y < logoHeight; y += 1) {
+      const dstY = logoOffsetY + y
+      if (dstY < 0 || dstY >= qrImage.height) continue
       for (let x = 0; x < logoWidth; x += 1) {
+        const dstX = logoOffsetX + x
+        if (dstX < 0 || dstX >= qrImage.width) continue
+        // 圆形裁剪：Logo 像素中心点落在白圆外（角点越界）一律不写，保证圆外码点原样保留、不破坏扫码。
+        const pdx = dstX + 0.5 - centerX
+        const pdy = dstY + 0.5 - centerY
+        if (Math.sqrt(pdx * pdx + pdy * pdy) > coverRadius + 0.5) continue
         const srcIndex = (y * logoWidth + x) * 4
         const alpha = resizedLogo.data[srcIndex + 3] / 255
-        const dstIndex = ((y + padding) * plateSize + (x + padding)) * 4
+        if (alpha <= 0) continue
+        const dstIndex = (dstY * qrImage.width + dstX) * 4
         for (let channel = 0; channel < 3; channel += 1) {
-          plate[dstIndex + channel] = Math.round(
-            plate[dstIndex + channel] * (1 - alpha) + resizedLogo.data[srcIndex + channel] * alpha
+          qrImage.data[dstIndex + channel] = Math.round(
+            resizedLogo.data[srcIndex + channel] * alpha +
+            qrImage.data[dstIndex + channel] * (1 - alpha)
           )
         }
-        plate[dstIndex + 3] = 255
+        qrImage.data[dstIndex + 3] = 255
+        logoPixelsWritten += 1
       }
     }
-
-    // 衬底整体居中覆盖到二维码中心（直接覆写像素，衬底不透明所以无需再混合）
-    for (let y = 0; y < plateSize; y += 1) {
-      for (let x = 0; x < plateSize; x += 1) {
-        const srcIndex = (y * plateSize + x) * 4
-        const dstIndex = ((y + offsetY) * qrImage.width + (x + offsetX)) * 4
-        for (let channel = 0; channel < 4; channel += 1) {
-          qrImage.data[dstIndex + channel] = plate[srcIndex + channel]
-        }
-      }
-    }
+    console.log('[NEWDL_ResponseQRCode][INFO] composite_diy_logo.logo_placed', {
+      logoWidth,
+      logoHeight,
+      logoOffsetX,
+      logoOffsetY,
+      logoPixelsWritten,
+    })
 
     const compositedBuffer = PNG.sync.write(qrImage)
     console.log('[NEWDL_ResponseQRCode][INFO] composite_diy_logo.ok', {
       qrWidth: qrImage.width,
       qrHeight: qrImage.height,
+      coverDiameter: coverRadius * 2,
       logoWidth,
       logoHeight,
-      plateSize,
       compositedLen: compositedBuffer.length
     })
     return compositedBuffer
@@ -946,6 +1283,15 @@ async function generateOrganizationQrcode(event = {}, openid = '', isHttpCall = 
     entryId: record.entryId
   })
 
+  // 新增（A 侧机构展示信息同步，2026-09-05）：二维码生成成功后顺推一次完整机构展示信息到 B 侧 dev_forPshowC。
+  // 这是「创建机构」场景的同步触发点（创建流程前端拿到二维码后即完成首次推送）；
+  // 静默顺推：失败只打日志，不影响二维码生成的返回结果，后续编辑保存 / 教练加入时会再次补推。
+  await pushOrganizationShowQuietly({
+    organizationDoc,
+    entryId: record.entryId,
+    remark: 'generateOrganizationQrcode'
+  })
+
   return {
     status: 'success',
     message: bData.reused ? '机构入口二维码已存在，已直接复用' : '机构入口二维码生成成功',
@@ -1049,7 +1395,9 @@ async function getOrganizationQrcode(event = {}, openid = '', isHttpCall = false
     targetId: organizationId,
   })
   try {
-    const bRes = await postToBHttp(B_ACTION_GET, { targetId: organizationId })
+    // 新增（2026-09-07 修复）：调 B 侧必须透传 envVersion，否则 B 侧 applyEnvVersion('') 会走 real_* 集合，
+    // 开发环境生成的码存在 dev_entry_registry 里就查不到。取值与同文件 syncOrganizationShow / pushOrganizationShowQuietly 一致。
+    const bRes = await postToBHttp(B_ACTION_GET, { targetId: organizationId, envVersion: currentEnvVersion() })
     if (bRes.success) {
       bStatus = 'active'
       freshTempUrl = String((bRes.data || {}).qrcodeTempUrl || '').trim()
@@ -1229,7 +1577,8 @@ async function refreshOrganizationSnapshot(event = {}, openid = '', isHttpCall =
     snapshotKeys: Object.keys(snapshot),
     institutionName: snapshot.institutionName || '',
   })
-  const bRes = await postToBHttp(B_ACTION_REFRESH_SNAPSHOT, { entryId, snapshot })
+  // 新增（2026-09-07 修复）：透传 envVersion，避免 B 侧空值默认走 real_* 集合、开发环境刷不到 dev_entry_registry 的快照。
+  const bRes = await postToBHttp(B_ACTION_REFRESH_SNAPSHOT, { entryId, snapshot, envVersion: currentEnvVersion() })
   console.log('[NEWDL_ResponseQRCode][INFO] refreshOrganizationSnapshot.call_b.result', {
     organizationId,
     entryId,
@@ -1317,7 +1666,8 @@ async function disableOrganizationQrcode(event = {}, openid = '', isHttpCall = f
       organizationId,
       entryId,
     })
-    const bRes = await postToBHttp(B_ACTION_DISABLE, { entryId })
+    // 新增（2026-09-07 修复）：透传 envVersion，避免 B 侧空值默认走 real_* 集合、停用错库的入口记录。
+    const bRes = await postToBHttp(B_ACTION_DISABLE, { entryId, envVersion: currentEnvVersion() })
     bStatusCode = bRes.statusCode
     bCode = Number((bRes.data || {}).code || 0)
     bOk = bRes.success || bCode === 404
@@ -1392,22 +1742,24 @@ const ACTION_HANDLERS = {
   generateOrganizationQrcode,
   getOrganizationQrcode,
   refreshOrganizationSnapshot,
-  disableOrganizationQrcode
+  disableOrganizationQrcode,
+  // 新增（A 侧机构展示信息同步，2026-09-05）：推送机构展示信息到 B 侧 dev_forPshowC。
+  // 支持两种调用：ForOrganizationDo 云函数间顺推（带 organizationId，直查文档）；
+  // 前端手动补推（无 organizationId，按 openid 解析机构 + admin 校验）。
+  syncOrganizationShow
 }
 
 async function handleMain(event = {}, context = {}) {
-  CURRENT_ENV_VERSION = event.envVersion || 'develop'
-
-  // callFunction 模式能拿到微信 openid；HTTP 云函数模式是普通 HTTP 请求，没有微信身份。
-  let openid = ''
-  try {
-    openid = (cloud.getWXContext() || {}).OPENID || ''
-  } catch (error) {
-    openid = ''
-  }
+  // 公共层：一次 initRuntime 拿到本次请求的 env / db / openid / traceId（HTTP 模式拿不到 openid 时返回空串，与历史行为一致）
+  const ctx = initRuntime(event)
+  // 请求上下文包裹（2026-10-08）：把后续整条 await 链绑定到本次请求的 env，
+  // 深层 helper 里的 getCollectionName / resolveBEnvVersion 读到的就是本次请求的环境。
+  // 注：包裹块内的缩进沿用了包裹前的层次，未整体重排 —— 为的是把 diff 压到最小、便于逐行核对。
+  return await runInContext(ctx, async () => {
+  const openid = ctx.openid
   const isHttpCall = !openid
 
-  logRuntimeEnvInfo({
+  makeLogger(ctx).runtimeEnv({
     action: event.action || '',
     hasOpenid: !!openid,
     isHttpCall
@@ -1456,6 +1808,7 @@ async function handleMain(event = {}, context = {}) {
       message: error && error.message ? error.message : '二维码联动操作失败'
     }
   }
+  }) // ← runInContext 包裹结束
 }
 
 exports.main = handleMain
@@ -1612,7 +1965,14 @@ function startHttpServer() {
         entryId: event.entryId || '',
         envVersion: event.envVersion || ''
       })
-      const result = await handleMain(event, {})
+      // 新增（2026-09-05）：HTTP 请求级分流——develop（或未传 envVersion）走 dev（本文件 handleMain）；
+      // 非 develop（release/trial）且 true 模块可用时转发给 true 的 main 处理，保证真实环境跑同步确认过的稳定代码。
+      const httpTargetEntry = (event.envVersion && event.envVersion !== 'develop' && TRUE_HTTP_ENTRY)
+        ? TRUE_HTTP_ENTRY
+        : null
+      const result = httpTargetEntry
+        ? await httpTargetEntry.main(event, {})
+        : await handleMain(event, {})
       // 打印响应摘要，便于排查 A 侧最终给前端 / 调用方返回了什么。
       console.log('[NEWDL_ResponseQRCode][INFO] http.response.send', {
         httpStatus: 200,

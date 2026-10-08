@@ -493,6 +493,110 @@
   background: #ffffff;
 }
 
+/* ===== 新增加入身份（管理 / 执行）样式（2026-09-21） =====
+   替换原「主教 / 副教练 / 指导 / 训练分析」岗位身份的展示；
+   原 .staff-role-* 样式按项目约定保留不删（老机构数据回填仍可能用到）。 */
+.join-role-list {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 18rpx;
+}
+
+.join-role-item {
+  flex: 1;
+  padding: 22rpx 18rpx;
+  border-radius: 20rpx;
+  background: #ffffff;
+  border: 2rpx solid #dbe2ee;
+  text-align: center;
+}
+
+.join-role-label {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.join-role-sub {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #8a94a6;
+}
+
+.join-role-item.active {
+  background: #1457ff;
+  border-color: #1457ff;
+}
+
+.join-role-item.active .join-role-label {
+  color: #ffffff;
+}
+
+.join-role-item.active .join-role-sub {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+/* 已加入团队后只读展示当前身份（管理 / 执行不能再自己改，需管理层处理） */
+.join-role-readonly {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 24rpx;
+  padding: 20rpx 22rpx;
+  border-radius: 18rpx;
+  background: #eef4ff;
+}
+
+.join-role-readonly-label {
+  font-size: 26rpx;
+  color: #536075;
+}
+
+.join-role-readonly-value {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1457ff;
+}
+
+/* 新增加入申请状态提示条（待确认 / 已被拒绝） */
+.apply-banner {
+  margin-top: 28rpx;
+  padding: 24rpx 22rpx;
+  border-radius: 20rpx;
+  border: 2rpx solid transparent;
+}
+
+.apply-banner-pending {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.apply-banner-rejected {
+  background: #fdecef;
+  border-color: #f8bfc9;
+}
+
+.apply-banner-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #111827;
+}
+
+.apply-banner-row {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #4b5563;
+}
+
+.apply-banner-desc {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #667085;
+}
+
 /* 新增 DIY 二维码框样式（区块一字段）：二维码框始终显示不隐藏，
    未上传时以空框 + 占位提示展示，上传后框内展示图片 */
 .diy-qrcode-frame {

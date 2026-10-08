@@ -1,27 +1,30 @@
 {
   "pages": [
-    "pages/index/index",
+    
     "pages/login/login",
-    "pages/mine/mine",
     "pages/login/Register/initial_choose",
-    "pages/index/about/about",
-    "pages/index/publish/publish",
-    "pages/index/profile/profile",
+   
+
+
+    "pages/index/index",
     "pages/index/do_certification/do_certification",
-    "pages/index/sport_events/sport_events",
-    "pages/task/progress/progress",
-    "pages/profile/profile",
+    "pages/index/profile/profile",
     "pages/profile/edit/edit",
+
+
+
+
     "pages/task/publish/publish",
-    "pages/circle/circle",
-    "pages/exercise/record/record",
-    "pages/train/plan/plan",
-    "pages/index/events/list/list",
-    "pages/index/hot/hot",
+    "pages/task/progress/progress",
     "pages/task/progress/progress_specialOperation/progress_specialOperation",
     "pages/task/progress/progress_specialOperation/progress_classdetailed/progress_classdetailed",
+
+
     "pages/organization/organization",
-    "pages/organization/organization_create/organization_create"
+    "pages/organization/organization_create/organization_create",
+    "pages/organization/organization_admin/organization_admin",
+
+    "pages/mine/mine"
 
   ],
   "window": {

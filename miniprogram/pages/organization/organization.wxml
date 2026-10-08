@@ -24,7 +24,11 @@
         hover-stay-time="80"
       >
         <!-- 新增整卡可点击：用户点“创建机构/加入机构”整块区域都触发同一动作，不再只能点底部小按钮 -->
-        <view class="entry-action-title">{{item.title}}</view>
+        <!-- 新增（2026-09-21）：团队管理卡的待确认申请徽标，有数量时才出现 -->
+        <view class="entry-action-title-row">
+          <view class="entry-action-title">{{item.title}}</view>
+          <view wx:if="{{item.badge}}" class="entry-action-badge">{{item.badge}}</view>
+        </view>
         <view class="entry-action-desc">{{item.desc}}</view>
         <view class="entry-action-button">
           {{item.buttonText}}
@@ -33,96 +37,153 @@
     </view>
   </view>
 
-  <!-- 新增机构展示总容器：把结果卡片和机构门面统一包进 organization_show，后续方便整体控制 -->
+  <!-- 新增机构结果卡片承接：创建机构/加入机构成功后的结果卡片从 organization_show 内移到外面，紧跟机构入口区展示 -->
+  <view wx:if="{{submitResultCard}}" class="result-card">
+    <view class="result-title">{{submitResultCard.title}}</view>
+    <view class="result-row">团队名称：{{submitResultCard.organizationName}}</view>
+    <!-- 新增：机构邀请码支持点击复制到剪贴板，方便教练/管理员分享给其他成员 -->
+    <view wx:if="{{submitResultCard.invitationCode}}" class="result-row result-row-copyable" bindtap="onCopyInvitationCode" data-code="{{submitResultCard.invitationCode}}">
+      <text>团队邀请码：</text>
+      <text class="invitation-code-text">{{submitResultCard.invitationCode}}</text>
+      <text class="copy-btn">复制</text>
+    </view>
+    <view class="result-row">当前身份：{{submitResultCard.memberRoleLabel}}</view>
+    <view class="result-desc">{{submitResultCard.message}}</view>
+  </view>
+
+  <!-- 新增（2026-09-06）：家长端展示预览语义提示条 —— 按「默认 / 修改 / 同步」三段讲清下方 organization_show 长图的语义：
+       ① 默认：长图即家长扫码进入家长端看到的团队展示，未填写资料以默认示例兜底；
+       ② 修改：团队管理层从上方「修改信息」入口进编辑页改资料（仅管理层展示该行）；
+       ③ 同步：保存后点本条下方通栏「同步展示信息」按钮一键补推 A→B dev_forPshowC（仅管理层展示该行与按钮）。
+       原入口区「同步展示信息」按钮一并移入本条内（文案下方通栏展示），复用 SYNC_ORG_SHOW 动作分发，交互逻辑不变 -->
+  <view class="os-preview-hint">
+    <view class="os-preview-hint-body">
+      <view class="os-preview-hint-title">家长端展示预览</view>
+      <!-- 默认：所有身份都可见，说明下方长图的预览语义与默认兜底规则 -->
+      <view class="os-preview-hint-row">
+        <text class="os-preview-hint-tag">默认</text>
+        <text class="os-preview-hint-text">下方长图就是家长扫码进入家长端后看到的团队展示效果；团队资料未填写的部分，以默认示例内容兜底展示。</text>
+      </view>
+      <!-- 修改 / 同步：仅团队管理层可见，对应「去修改 → 保存 → 点同步」的操作闭环 -->
+      <block wx:if="{{currentBizRole === 'org_admin'}}">
+        <view class="os-preview-hint-row">
+          <text class="os-preview-hint-tag">修改</text>
+          <text class="os-preview-hint-text">点上方「修改信息」进入编辑页修改团队资料，保存后团队邀请码保持不变。</text>
+        </view>
+        <view class="os-preview-hint-row">
+          <text class="os-preview-hint-tag">同步</text>
+          <text class="os-preview-hint-text">保存后点下方「同步展示信息」按钮，最新资料立即推送到家长端展示（幂等覆盖，随时可点）。</text>
+        </view>
+      </block>
+    </view>
+    <!-- 同步按钮：复用入口动作分发，data-action 仍为 SYNC_ORG_SHOW，交互逻辑与原入口卡片完全一致 -->
+    <view
+      wx:if="{{currentBizRole === 'org_admin'}}"
+      class="os-preview-hint-btn"
+      data-action="SYNC_ORG_SHOW"
+      bindtap="onEntryActionTap"
+      hover-class="os-preview-hint-btn-active"
+      hover-stay-time="80"
+    >同步展示信息</view>
+  </view>
+
+  <!-- 新增机构展示总容器：深色海军蓝斜切背景 + 红色斜切块 + 白色卡片堆叠，对应"星耀体育训练中心"长图设计 -->
   <view class="organization_show">
-    <!-- 新增机构结果卡片承接：创建机构/加入机构成功后的结果卡片统一放到首页入口区下面 -->
-    <view wx:if="{{submitResultCard}}" class="result-card">
-      <view class="result-title">{{submitResultCard.title}}</view>
-      <view class="result-row">团队名称：{{submitResultCard.organizationName}}</view>
-      <!-- 新增：机构邀请码支持点击复制到剪贴板，方便教练/管理员分享给其他成员 -->
-      <view wx:if="{{submitResultCard.invitationCode}}" class="result-row result-row-copyable" bindtap="onCopyInvitationCode" data-code="{{submitResultCard.invitationCode}}">
-        <text>团队邀请码：</text>
-        <text class="invitation-code-text">{{submitResultCard.invitationCode}}</text>
-        <text class="copy-btn">复制</text>
-      </view>
-      <view class="result-row">当前身份：{{submitResultCard.memberRoleLabel}}</view>
-      <view class="result-desc">{{submitResultCard.message}}</view>
-    </view>
+    <!-- 装饰斜线 / 红色斜切块：模拟设计稿里的动效线与右上、左下红色色块（原 os-deco-line-1~6 与 os-deco-red-right/os-deco-red-bottom 共 8 个装饰 view 已按要求删除，仅保留本注释） -->
 
-    <!-- 新增品牌轮播模块：品牌展示 + 教练团队统一放到同一卡片容器内 -->
-    <view class="brand-swiper-section">
-      <view class="module-head">
-        <view class="module-title">团队门面</view>
-        <view class="module-subtitle">团队入口在上面，下面继续承接品牌展示和教练团队</view>
-      </view>
-
+    <!-- 1. 顶部品牌 Hero：训练图片轮播 + 文字遮罩 + 轮播指示器 -->
+    <view class="os-hero">
       <swiper
-        class="brand-swiper"
-        indicator-dots="{{true}}"
-        autoplay="{{true}}"
-        interval="{{3500}}"
-        duration="{{500}}"
-        circular="{{true}}"
-        indicator-color="rgba(255,255,255,0.36)"
-        indicator-active-color="#ffffff"
+        class="os-hero-swiper"
+        circular="{{brandHeroSlides.length > 1}}"
+        autoplay="{{brandHeroSlides.length > 1}}"
+        interval="4000"
+        duration="500"
+        indicator-dots="{{false}}"
+        bindchange="onBrandHeroChange"
       >
-        <block wx:for="{{brandSwiperList}}" wx:key="imageUrl">
-          <swiper-item>
-            <view class="brand-slide-card">
-              <image wx:if="{{item.imageUrl}}" class="brand-slide-image" src="{{item.imageUrl}}" mode="aspectFill" />
-              <!-- 新增轮播展示收口：swiper 内部只保留图片；没有图片时显示写死的“代码肌广告”空白态 -->
-              <view wx:else class="brand-slide-empty">
-                <view class="brand-slide-empty-title">{{item.emptyTitle || '代码肌广告'}}</view>
-              </view>
-            </view>
-          </swiper-item>
-        </block>
+        <swiper-item wx:for="{{brandHeroSlides}}" wx:key="index">
+          <image
+            wx:if="{{item.imageUrl}}"
+            class="os-hero-image"
+            src="{{item.imageUrl}}"
+            mode="aspectFill"
+            data-index="{{index}}"
+            binderror="onBrandHeroImageError"
+          />
+          <view wx:else class="os-hero-image os-hero-placeholder">
+            <view class="os-hero-placeholder-text">训练现场图片</view>
+          </view>
+        </swiper-item>
       </swiper>
-    </view>
 
-    <!-- 新增品牌理念模块：直接告诉用户机构怎么理解训练和陪伴 -->
-    <!-- 新增调整：理念模块从外层移入 organization_show，按「1轮播 2理念 3教练团队」顺序竖直排布 -->
-    <view class="philosophy-section">
-      <!-- 品牌理念标题区只保留标题：副标题已移除，不再展示说明文案 -->
-      <view class="module-head">
-        <view class="module-title">品牌理念</view>
+      <view class="os-hero-mask"></view>
+
+      <!-- 轮播指示器：只有多张图时才展示，指示点随当前页切换 -->
+      <view wx:if="{{brandHeroSlides.length > 1}}" class="os-hero-dots">
+        <block wx:for="{{brandHeroSlides}}" wx:key="index">
+          <view class="os-hero-dot {{brandHeroCurrent === index ? 'os-hero-dot-active' : ''}}"></view>
+        </block>
       </view>
 
-      <block wx:for="{{philosophyList}}" wx:key="title">
-        <view class="philosophy-card">
-          <view class="philosophy-title">{{item.title}}</view>
-          <view class="philosophy-desc">{{item.desc}}</view>
+      <view class="os-hero-text">
+        <view class="os-hero-title">{{organizationProfile.organizationName}}</view>
+        <view class="os-hero-subtitle">{{organizationProfile.slogan}}</view>
+      </view>
+    </view>
+
+    <!-- 2. 机构简介卡：4 行字段（成立时间 / 课程项目 / 招生对象 / 训练理念） -->
+    <!-- 调整（2026-09-05）：改为 4 行字段（核心服务 / 服务区域 / 适合谁 / 教练理念），渲染 introInfoList；字段缺省时 JS 层已退回默认（完整）值，展示永远完整不空；「成立时间」行非必要已移除 -->
+    <view class="os-card os-intro-card">
+      <view class="os-card-head">
+        <view class="os-card-dot"></view>
+        <view class="os-card-title">机构简介</view>
+        <view class="os-card-dot"></view>
+      </view>
+
+      <block wx:for="{{introInfoList}}" wx:key="label">
+        <view class="os-intro-row">
+          <view class="os-intro-bullet"></view>
+          <view class="os-intro-label">{{item.label}}</view>
+          <view class="os-intro-value">{{item.value}}</view>
         </view>
       </block>
     </view>
 
-    <!-- 新增：教练团队模块合并到品牌轮播卡片内部，品牌 + 团队在同一视觉区块展示 -->
-    <!-- 新增调整：教练团队拆出为独立区块并改为竖直方向排布，不再使用横向滑动，按顺序排为第 3 个模块 -->
-    <view class="coach-section">
-      <view class="module-head">
-        <view class="module-title">教练团队</view>
-        <view class="module-subtitle">先看团队方向，后续再继续补头像、履历和擅长项目</view>
+    <!-- 3. 团队成员：一人一行一个块；真实成员按加入顺序向下追加（默认兜底 1 人），
+         列表最多同时展示 5 人，超过 5 人时末尾出现「展开全部 / 收起」 -->
+    <view class="os-card os-team-card">
+      <view class="os-card-head">
+        <view class="os-card-dot"></view>
+        <view class="os-card-title">团队成员</view>
+        <view class="os-card-dot"></view>
       </view>
 
-      <view class="coach-list-vertical">
-        <block wx:for="{{coachTeamList}}" wx:key="name">
-          <view class="coach-card">
-            <view class="coach-avatar">{{item.avatar}}</view>
-            <view class="coach-name">{{item.name}}</view>
-            <view class="coach-role">{{item.role}}</view>
-            <view class="coach-tag">{{item.tag}}</view>
-            <view class="coach-intro">{{item.intro}}</view>
+      <view class="os-team-grid">
+        <block wx:for="{{teamMembers}}" wx:key="name" wx:for-index="teamIndex">
+          <view wx:if="{{teamShowAll || teamIndex < 5}}" class="os-team-item">
+            <view class="os-team-avatar">
+              <image
+                wx:if="{{item.avatarUrl}}"
+                class="os-team-avatar-image"
+                src="{{item.avatarUrl}}"
+                mode="aspectFill"
+              />
+              <text wx:else class="os-team-avatar-text">{{item.avatar || item.name}}</text>
+            </view>
+            <view class="os-team-info">
+              <view class="os-team-name">{{item.name}}</view>
+              <view class="os-team-role">{{item.role}}</view>
+            </view>
           </view>
         </block>
-      </view>
-    </view>
-  </view>
 
-  <!-- 新增第四模块预留：你这条消息里的第 4 块还没写完，我先留出位置方便继续补 -->
-  <view class="reserve-section">
-    <view class="module-head">
-      <view class="module-title">团队入口后续可接什么</view>
-      <view class="module-subtitle">后面这里可以继续接团队邀请码、成员管理、课程码查询和执行记录看板</view>
+        <!-- 成员超过 5 人时才出现折叠入口，点击切换全部展开 / 收起 -->
+        <view wx:if="{{teamMembers.length > 5}}" class="os-team-toggle" bindtap="onToggleTeamMembers">
+          <text class="os-team-toggle-text">{{teamShowAll ? '收起' : '展开全部'}}</text>
+          <text class="os-team-toggle-arrow {{teamShowAll ? 'os-team-toggle-arrow-up' : ''}}">▾</text>
+        </view>
+      </view>
     </view>
   </view>
 

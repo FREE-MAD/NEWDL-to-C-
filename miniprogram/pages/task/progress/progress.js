@@ -81,12 +81,31 @@ Page({
     const courseFlow = order.course_flow_info || {}
     // 新增：优先读 course_flow_info.fulfill_state（后端同步更新的位置），
     // 没有再退回顶层 fulfill_state，兼容历史上只写了其中一个位置的情况。
-    const explicitState = String(
+    const fulfillStateRaw = String(
       courseFlow.fulfill_state
       || order.fulfill_state
       || order.status
       || 'pending'
     ).trim()
+    // 【2026-09-16 新增·新码制状态后缀优先】新码制下 state_history 数组累积 pl/ip/dl，
+    // 末尾元素代表当前态：pl → awaiting、ip → in_progress、dl → completed。
+    // state_history 有值时优先于 fulfill_state 进行分类，保证新流程下的 Tab 划分与后端动作对齐；
+    // 无 state_history 时 fallback 到 fulfill_state，保留对老课程的兼容。
+    const stateHistory = Array.isArray(order.state_history)
+      ? order.state_history
+      : (Array.isArray(courseFlow.state_history) ? courseFlow.state_history : [])
+    const currentStateSuffix = stateHistory.length
+      ? String(stateHistory[stateHistory.length - 1] || '').toLowerCase()
+      : ''
+    // 新增：把 state_history 末尾后缀映射成 fulfill_state 等价值，方便复用下方已有显式状态判断。
+    let explicitState = fulfillStateRaw
+    if (currentStateSuffix === 'pl') {
+      explicitState = 'awaiting'
+    } else if (currentStateSuffix === 'ip') {
+      explicitState = 'in_progress'
+    } else if (currentStateSuffix === 'dl') {
+      explicitState = 'completed'
+    }
     const hasAssignedCoach = !!String(
       order.assignedCoachName
       || order.assigned_coach_name
@@ -108,11 +127,13 @@ Page({
       )
     })
     // 新增：判断管理层是否已经点「确认生成 12 位接取码」，pickup_full_code 有值才算真正对外发布了接取码。
+    // 【2026-09-16 新增·新码制】新码制下 publishOrder 已一站式生成 pl 码并写入 state_history=['pl']，
+    // 因此 state_history 非空也算「已生成接取码」，与旧 pickup_full_code 字段取或，保证新流程也能进入「待接取」。
     const hasGeneratedPickupCode = !!String(
       order.pickup_full_code
       || order.pickupFullCode
       || ''
-    ).trim()
+    ).trim() || stateHistory.length > 0
     const isClosedClass = explicitState === 'cancelled' || explicitState === 'closed'
     const isCompletedState = explicitState === 'completed' || explicitState === 'p_completed'
     const isAllLessonsCompleted = !!(progressStats.totalCount > 0 && progressStats.completedCount >= progressStats.totalCount)
@@ -183,6 +204,20 @@ Page({
         badgeText: '待编辑',
         badgeClass: 'editing',
         canManageClass: managerialEditable,
+        progressText: commonProgress
+      }
+    }
+    // 【2026-09-21 新流程·接取需管理确认】当前用户是这条课的「申请中教练」：
+    // 课程仍停在 awaiting（还没写 assignedCoach*），但对他来说不是「待接取」而是「待管理者确认」。
+    // 归入同一个 awaiting Tab，文案单独显示「待确认」；canManageClass 放开，
+    // 让他能进 publish 页看到自己的申请卡片（publish 页准入已同步对申请人放开）。
+    const myPendingRequest = order.myPendingRequest || null
+    if ((order.hasMyPendingRequest || myPendingRequest) && isExplicitAwaiting && !isManagerialUser) {
+      return {
+        tabStatus: 'awaiting',
+        badgeText: '待确认',
+        badgeClass: 'awaiting',
+        canManageClass: true,
         progressText: commonProgress
       }
     }
@@ -464,6 +499,8 @@ Page({
             const assignedCoachOpenid = String(item.assignedCoachOpenid || item.assigned_coach_openid || item.coach_openid || '').trim()
             const isSameOrg = !!(currentOrgId && orderOrgId && currentOrgId === orderOrgId)
             const isAssignedToMe = assignedCoachToken === currentUserToken || assignedCoachOpenid === (app.globalData.openid || '')
+            // 【2026-09-21 新流程】后端 list_myself 给「我申请中」的课打了 myPendingRequest 标记。
+            const hasMyPendingRequest = !!(item.hasMyPendingRequest || item.myPendingRequest)
 
             if (currentBizRole === BIZ_ROLE_ORG_ADMIN) {
               if (currentOrgId) {
@@ -499,6 +536,12 @@ Page({
               userId: currentUserToken
             };
 
+            // 【2026-09-21 新流程】「我申请中」的课不属于任何角色口径（既不是发布者也不是执行教练），
+            // 上面的角色过滤会把它丢掉，这里提前放行，再统一按 tabStatus 归 Tab。
+            if (hasMyPendingRequest) {
+              return this.buildOrderLifecycleMeta(item, currentUserIdentity).tabStatus === status
+            }
+
             // 新增四档前端过滤：先按角色过滤可见范围，再按课程生命周期归入对应 Tab
             return this.buildOrderLifecycleMeta(item, currentUserIdentity).tabStatus === status
           })
@@ -528,7 +571,12 @@ Page({
               || (item.assigned_coach_token === currentUserToken)
               || (item.assigned_coach_openid === (app.globalData.openid || ''));
             let courseOwnerText;
-            if (currentBizRole === BIZ_ROLE_ORG_ADMIN || currentBizRole === BIZ_ROLE_FREE_COACH) {
+            // 【2026-09-21 新流程】这里重新按 item 计算一次，filter 回调里的同名变量不在作用域内。
+            const hasMyPendingRequest = !!(item.hasMyPendingRequest || item.myPendingRequest);
+            if (hasMyPendingRequest) {
+              // 【2026-09-21 新流程】申请中的课优先标「待确认」，避免和发布者视角的「待接取教练」混在一起。
+              courseOwnerText = '我的接取申请·待确认';
+            } else if (currentBizRole === BIZ_ROLE_ORG_ADMIN || currentBizRole === BIZ_ROLE_FREE_COACH) {
               // 发布者视角：优先展示执行教练接取状态
               if (normalizedAssignedCoachName) {
                 courseOwnerText = isThisItemAssignedToMe
@@ -602,11 +650,11 @@ Page({
   },
 
   // ================== 查看详情 ==================
+  // 【2026-10-05 修复】原详情页 /pages/task/detail/task_detail 已删除，
+  // 改为 toast 提示，避免 navigateTo 指向不存在页面导致编译报错。
   onOrderDetail(e) {
     const orderId = e.currentTarget.dataset.id
-    wx.navigateTo({
-      url: `/pages/task/detail/task_detail?id=${orderId}`
-    })
+    wx.showToast({ title: '详情功能开发中', icon: 'none' })
   },
 
   // ================== 进入查看页 ==================
@@ -675,7 +723,8 @@ Page({
 
     const entryMode = this.data.bizRole || BIZ_ROLE_VISITOR
     wx.navigateTo({
-      url: `/pages/task/publish/publish?id=${orderId}&tab=manage&entryMode=${entryMode}`
+      // 【2026-09-14 三次调整】课节管理已并入 publish 页【流转】页签，跳转参数由 tab=manage 改为 tab=flow
+      url: `/pages/task/publish/publish?id=${orderId}&tab=flow&entryMode=${entryMode}`
     })
   },
 

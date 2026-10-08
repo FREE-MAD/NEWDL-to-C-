@@ -14,26 +14,451 @@
   margin-bottom: 24rpx;
 }
 
-/* 新增机构展示总容器：统一包裹结果卡片和机构门面，后续方便整体调布局 */
+/* 新增：organization_show 容器海军蓝主背景 + 右上红斜切块，对应长图设计稿 */
+/* 修改：与上方 entry-section 保持同一宽度（取消左右负边距），整体圆角卡片化展示 */
 .organization_show {
-  display: block;
+  position: relative;
+  box-sizing: border-box;
+  margin: 24rpx 0 0;
+  padding: 28rpx 24rpx 40rpx;
+  border-radius: 32rpx;
+  background: #0c1c4d;
+  overflow: hidden;
+  box-shadow: 0 18rpx 40rpx rgba(12, 28, 77, 0.18);
 }
 
-/* 新增：教练团队嵌套到品牌轮播卡片内部时，取消外层间距避免出现双倍留白 */
-/* 新增调整：教练团队已拆为独立区块并改竖直方向排布，原嵌套间距样式改为竖直列表样式，卡片逐行堆叠占满整行 */
-.coach-list-vertical {
-  display: block;
+.organization_show > view {
+  position: relative;
+  z-index: 2;
 }
 
-.coach-list-vertical .coach-card {
-  display: block;
+/* 新增（2026-09-06）：家长端展示预览语义提示条，位于 organization_show 长图上方；
+   白底卡片 + 海军蓝标题，同步按钮沿用入口区蓝色胶囊按钮样式 */
+/* 调整（2026-09-06）：同步按钮改为放在文案下方（flex 纵向排列），不再占右侧位置，按钮通栏整行展示 */
+.os-preview-hint {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  margin: 24rpx 0 0;
+  padding: 22rpx 24rpx;
+  border-radius: 24rpx;
+  background: #ffffff;
+  box-shadow: 0 10rpx 30rpx rgba(16, 24, 40, 0.06);
+}
+
+.os-preview-hint-body {
+  min-width: 0;
+}
+
+.os-preview-hint-title {
+  font-size: 27rpx;
+  font-weight: 700;
+  line-height: 1.5;
+  color: #0c1c4d;
+}
+
+/* 调整（2026-09-06）：提示文案改为「默认 / 修改 / 同步」三段式标签行，原 os-preview-hint-desc 单段样式由下列行样式替代 */
+.os-preview-hint-row {
+  display: flex;
+  align-items: flex-start;
+  margin-top: 10rpx;
+}
+
+.os-preview-hint-tag {
+  flex-shrink: 0;
+  margin-right: 12rpx;
+  padding: 2rpx 12rpx;
+  border-radius: 8rpx;
+  background: #eef3ff;
+  color: #1457ff;
+  font-size: 20rpx;
+  font-weight: 600;
+  line-height: 1.7;
+}
+
+.os-preview-hint-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 23rpx;
+  line-height: 1.6;
+  color: #667085;
+}
+
+/* 按钮位于文案下方：通栏整行 + 顶部留间距，点击热区更大 */
+.os-preview-hint-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
-  min-height: auto;
-  margin-right: 0;
+  box-sizing: border-box;
+  margin-top: 18rpx;
+  height: 72rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, #1457ff 0%, #2896ff 100%);
+  color: #ffffff;
+  font-size: 26rpx;
+  font-weight: 600;
 }
 
-.coach-list-vertical .coach-card + .coach-card {
-  margin-top: 20rpx;
+.os-preview-hint-btn-active {
+  opacity: 0.85;
+}
+
+/* 新增：装饰动效斜线（白色短线），模拟设计稿里的速度线 */
+.os-deco {
+  position: absolute;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.os-deco-line {
+  height: 4rpx;
+  border-radius: 4rpx;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.os-deco-line-1 {
+  top: 60rpx;
+  left: -40rpx;
+  width: 180rpx;
+  transform: rotate(-26deg);
+}
+
+.os-deco-line-2 {
+  top: 220rpx;
+  left: 30rpx;
+  width: 120rpx;
+  transform: rotate(-26deg);
+}
+
+.os-deco-line-3 {
+  top: 820rpx;
+  right: -30rpx;
+  width: 140rpx;
+  transform: rotate(-26deg);
+}
+
+.os-deco-line-4 {
+  top: 900rpx;
+  left: 24rpx;
+  width: 90rpx;
+  transform: rotate(-26deg);
+}
+
+.os-deco-line-5 {
+  bottom: 60rpx;
+  right: 40rpx;
+  width: 110rpx;
+  transform: rotate(-26deg);
+  background: rgba(255, 255, 255, 0.34);
+}
+
+.os-deco-line-6 {
+  bottom: 140rpx;
+  left: 0;
+  width: 80rpx;
+  transform: rotate(-26deg);
+}
+
+/* 新增：红色斜切块，对应设计稿右上 + 右下两条红色对角 */
+.os-deco-red-block {
+  background: #d8232a;
+}
+
+.os-deco-red-right {
+  top: -160rpx;
+  right: -120rpx;
+  width: 360rpx;
+  height: 460rpx;
+  transform: rotate(-22deg);
+  transform-origin: top right;
+  opacity: 0.96;
+}
+
+.os-deco-red-bottom {
+  bottom: -180rpx;
+  right: -160rpx;
+  width: 420rpx;
+  height: 320rpx;
+  background: linear-gradient(135deg, #d8232a 0%, #a71418 100%);
+  transform: rotate(-22deg);
+  transform-origin: bottom right;
+  opacity: 0.94;
+}
+
+/* 新增：Hero 训练图卡，圆角 + 阴影 + 文字遮罩 */
+/* 调整（2026-09-05）：长宽尺寸参考创建页 organization_create 首页轮播图的 upload-standard-card 上传标准
+   （16:9 横图 / 1280x720）；os-hero 实际宽度 654rpx（750 - 页面左右48 - organization_show 左右48），
+   按 16:9 对应高度改为 368rpx（原 540rpx 定高），轮播图与遮罩均随卡片自适应 */
+.os-hero {
+  position: relative;
+  height: 368rpx;
+  border-radius: 24rpx;
+  overflow: hidden;
+  box-shadow: 0 18rpx 40rpx rgba(12, 28, 77, 0.45);
+}
+
+/* 新增：Hero 轮播容器，占满 Hero 卡片，每屏一张训练图 */
+.os-hero-swiper,
+.os-hero-swiper swiper-item {
+  width: 100%;
+  height: 100%;
+}
+
+.os-hero-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.os-hero-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1e3a8a 0%, #0c1c4d 100%);
+}
+
+.os-hero-placeholder-text {
+  padding: 16rpx 36rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 28rpx;
+  font-weight: 600;
+  letter-spacing: 2rpx;
+}
+
+.os-hero-mask {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(12, 28, 77, 0.06) 0%, rgba(12, 28, 77, 0.75) 100%);
+}
+
+.os-hero-dots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 132rpx;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.os-hero-dot {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.46);
+}
+
+.os-hero-dot-active {
+  width: 40rpx;
+  border-radius: 999rpx;
+  background: #ffffff;
+}
+
+.os-hero-text {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 36rpx;
+  padding: 0 40rpx;
+  text-align: center;
+  color: #ffffff;
+}
+
+.os-hero-title {
+  font-size: 48rpx;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 2rpx;
+  text-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.5);
+}
+
+.os-hero-subtitle {
+  margin-top: 14rpx;
+  font-size: 26rpx;
+  font-weight: 500;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.94);
+  text-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.4);
+}
+
+/* 新增：白色卡片公用样式（机构简介 + 团队成员），相对 navy 背景叠加阴影 */
+.os-card {
+  box-sizing: border-box;
+  margin-top: 28rpx;
+  padding: 30rpx 28rpx 32rpx;
+  border-radius: 24rpx;
+  background: #ffffff;
+  box-shadow: 0 18rpx 36rpx rgba(12, 28, 77, 0.24);
+}
+
+.os-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 26rpx;
+}
+
+.os-card-dot {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background: #d8232a;
+}
+
+.os-card-title {
+  position: relative;
+  margin: 0 16rpx;
+  padding-bottom: 10rpx;
+  font-size: 36rpx;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #1a1f33;
+}
+
+.os-card-title::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 44rpx;
+  height: 4rpx;
+  border-radius: 2rpx;
+  background: #d8232a;
+}
+
+/* 新增：机构简介 4 行字段列表 */
+.os-intro-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 16rpx 0;
+  font-size: 28rpx;
+  line-height: 1.7;
+  border-bottom: 1rpx dashed #eef1f6;
+}
+
+.os-intro-row:last-child {
+  border-bottom: 0;
+}
+
+.os-intro-bullet {
+  width: 14rpx;
+  height: 14rpx;
+  margin-top: 18rpx;
+  margin-right: 16rpx;
+  border-radius: 50%;
+  background: #d8232a;
+  flex-shrink: 0;
+}
+
+.os-intro-label {
+  color: #1a1f33;
+  font-weight: 600;
+}
+
+.os-intro-value {
+  flex: 1;
+  margin-left: 4rpx;
+  color: #4b5563;
+}
+
+/* 团队成员：一人一行一个块；真实成员按加入顺序向下追加；最多展示 5 行，超过折叠展开 */
+.os-team-grid {
+  display: flex;
+  flex-direction: column;
+}
+
+.os-team-item {
+  box-sizing: border-box;
+  width: 100%;
+  margin-bottom: 20rpx;
+  padding: 22rpx 24rpx;
+  border-radius: 20rpx;
+  background: #f8faff;
+  display: flex;
+  align-items: center;
+}
+
+.os-team-avatar {
+  position: relative;
+  flex-shrink: 0;
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 50%;
+  border: 4rpx solid #ffffff;
+  box-shadow: 0 6rpx 16rpx rgba(216, 35, 42, 0.22);
+  overflow: hidden;
+  background: linear-gradient(135deg, #d8232a 0%, #a8181c 100%);
+}
+
+.os-team-avatar-image {
+  width: 100%;
+  height: 100%;
+}
+
+.os-team-avatar-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 40rpx;
+  font-weight: 700;
+  letter-spacing: 1rpx;
+}
+
+.os-team-info {
+  flex: 1;
+  min-width: 0;
+  margin-left: 22rpx;
+  display: flex;
+  flex-direction: column;
+}
+
+.os-team-name {
+  font-size: 30rpx;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #1a1f33;
+}
+
+.os-team-role {
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #6b7280;
+}
+
+.os-team-toggle {
+  margin-top: 4rpx;
+  padding: 16rpx 0 4rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #d8232a;
+}
+
+.os-team-toggle-text {
+  font-size: 26rpx;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.os-team-toggle-arrow {
+  margin-left: 8rpx;
+  font-size: 20rpx;
+  line-height: 1.4;
+  transition: transform 0.2s ease;
+}
+
+.os-team-toggle-arrow-up {
+  transform: rotate(180deg);
 }
 
 .entry-hero {
@@ -114,6 +539,24 @@
   font-weight: 700;
   line-height: 1.4;
   color: #111827;
+}
+
+/* 新增（2026-09-21）：入口卡标题行 —— 标题 + 右侧待确认徽标同行排列 */
+.entry-action-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.entry-action-badge {
+  flex-shrink: 0;
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+  background: #fff1f2;
+  color: #d9485f;
+  font-size: 22rpx;
+  font-weight: 600;
 }
 
 .entry-action-desc {

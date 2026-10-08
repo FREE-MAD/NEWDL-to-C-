@@ -1,15 +1,66 @@
+<!-- ============================================================
+  publish 页面（壳）：顶部 Tab + 流转 tab + 三个表单组件 + 课节管理弹窗
+  拆分说明（2026-09-20）：原 selectedTab === 'create'/'summary'/'close' 的内容
+  已分别迁移到 publish_classcreate / publish_dailysummary / publish_classoff 组件。
+  本页面只保留顶部 Tab、流转 tab（说明 Banner/协作码/接取码/权限卡）、
+  课节管理弹窗，并通过 properties 下发数据、通过 bind 接收组件事件。
+  ============================================================ -->
 <view class="page-container">
   <!-- 顶部安全占位 (配合自定义导航或状态栏) -->
   <view class="status-bar-placeholder" style="height: {{topSafe}}px"></view>
 
+  <!-- 共享信息区：跨 tab 展示流转状态与课程基本信息（从流转 tab 迁移） -->
+  <view class="shared-info-bar">
+    <!-- 1. 流转状态：权限说明卡 + 流转进度条 -->
+    <view wx:if="{{orderId && pagePermissionRows.length}}" class="publish-role-card">
+      <view class="publish-role-card-title">{{pageAccessLabel}}</view>
+      <view class="flow-progress">
+        <view class="flow-progress-step {{flowProgressStep > 1 ? 'done' : (flowProgressStep === 1 ? 'active' : '')}}">
+          <view class="flow-progress-dot">{{flowProgressStep > 1 ? '✓' : '1'}}</view>
+          <text class="flow-progress-label">编辑课程信息</text>
+        </view>
+        <view class="flow-progress-line {{flowProgressStep > 1 ? 'done' : ''}}"></view>
+        <view class="flow-progress-step {{flowProgressStep > 2 ? 'done' : (flowProgressStep === 2 ? 'active' : '')}}">
+          <view class="flow-progress-dot">{{flowProgressStep > 2 ? '✓' : '2'}}</view>
+          <text class="flow-progress-label">等待教练接单</text>
+        </view>
+        <view class="flow-progress-line {{flowProgressStep > 2 ? 'done' : ''}}"></view>
+        <view class="flow-progress-step {{flowProgressStep === 3 ? 'active' : ''}}">
+          <view class="flow-progress-dot">3</view>
+          <text class="flow-progress-label">教练执行课程</text>
+        </view>
+      </view>
+      <view class="publish-role-row" wx:for="{{pagePermissionRows}}" wx:key="label">
+        <text class="publish-role-label">{{item.label}}</text>
+        <text class="publish-role-value">{{item.value}}</text>
+      </view>
+    </view>
+
+    <!-- 2. 课程基本信息：协作参考信息（已回填/已关联） -->
+    <view class="collaboration-preview" wx:if="{{collaborationMatchedOrderId}}">
+      <view class="collaboration-preview-title">已参考协作信息（已回填表单，仅供复用）</view>
+      <text class="collaboration-preview-item">课程码：{{collaborationCode}}</text>
+      <text class="collaboration-preview-item" wx:if="{{collaborationParentName}}">家长：{{collaborationParentName}}</text>
+      <text class="collaboration-preview-item">孩子数量：{{collaborationChildCount || 0}} 个</text>
+      <text class="collaboration-preview-item" wx:if="{{collaborationLocationText}}">上课地点：{{collaborationLocationText}}</text>
+      <text class="collaboration-preview-item" wx:if="{{collaborationContactText}}">联系方式：{{collaborationContactText}}</text>
+      <text class="collaboration-preview-tip">参考完成后，继续修改标题、计划和内部备注，确认后发布新课程。</text>
+    </view>
+    <view class="collaboration-preview collaboration-preview-readonly" wx:if="{{orderId && !collaborationMatchedOrderId && collaborationCode}}">
+      <view class="collaboration-preview-title">已关联协作信息</view>
+      <text class="collaboration-preview-item">课程码：{{collaborationCode}}</text>
+      <text class="collaboration-preview-tip">编辑态下协作信息已锁定；如需修改关联，请先在班级管理页关闭或删除后再建课。</text>
+    </view>
+  </view>
+
   <!-- 顶部 Tab 导航 -->
   <view class="tabs-header">
-    <view class="tab-item {{selectedTab === 'create' ? 'active' : ''}} {{orderId && !canViewCreateTab ? 'disabled' : ''}}" data-tab="create" bindtap="switchTab">
-      <text>创建班课程</text>
+    <view class="tab-item {{selectedTab === 'flow' ? 'active' : ''}} {{orderId && !canViewFlowTab ? 'disabled' : ''}}" data-tab="flow" bindtap="switchTab">
+      <text>流转</text>
       <view class="tab-indicator"></view>
     </view>
-    <view class="tab-item {{selectedTab === 'manage' ? 'active' : ''}} {{orderId && !canViewManageTab ? 'disabled' : ''}}" data-tab="manage" bindtap="switchTab">
-      <text>课节管理</text>
+    <view class="tab-item {{selectedTab === 'create' ? 'active' : ''}} {{orderId && !canViewCreateTab ? 'disabled' : ''}}" data-tab="create" bindtap="switchTab">
+      <text>创建班课程</text>
       <view class="tab-indicator"></view>
     </view>
     <view class="tab-item {{selectedTab === 'summary' ? 'active' : ''}} {{orderId && !canViewSummaryTab ? 'disabled' : ''}}" data-tab="summary" bindtap="switchTab">
@@ -22,775 +73,244 @@
     </view>
   </view>
 
-  <!-- 主要内容滚动区 -->
-  <scroll-view class="main-scroll" scroll-y="true" enable-back-to-top="true">
+  <!-- 主要内容区：不用 scroll-view，让页面自身滚动 -->
+  <view class="main-scroll">
 
-    <!-- 顶部提示 Banner -->
-    <view class="banner-box {{showBannerBoxExpanded ? '' : 'collapsed'}}">
-          <!-- 新增标题栏点击展开/收起：默认 5 秒自动收起，收起后仍可点标题重新展开 -->
+    <view class="content-section fade-in">
+
+      <!-- 【创建班课程】tab：迁移为 publish_classcreate 组件 -->
+      <view wx:if="{{selectedTab === 'create'}}">
+        <publish-classcreate
+          order="{{order}}"
+          order-id="{{orderId}}"
+          is-edit-mode="{{isEditMode}}"
+          can-edit-course-info="{{canEditCourseInfo}}"
+          can-delete-course="{{canDeleteCourse}}"
+          can-adjust-lesson-plan="{{canAdjustLessonPlan}}"
+          lesson-plan-locked="{{lessonPlanLocked}}"
+          has-generated-pickup-code="{{hasGeneratedPickupCode}}"
+          confirm-publish-loading="{{confirmPublishLoading}}"
+          collaboration-form-data="{{collaborationFormData}}"
+          collaboration-trace="{{collaborationTrace}}"
+          bind:submitted="onCreateSubmitted"
+          bind:publish-ready="onPublishReady"
+          bind:confirm-publish-loading="onConfirmPublishLoading"
+          bind:course-deleted="onCourseDeleted"
+          bind:open-set-total-modal="onOpenSetTotalModal"
+          bind:open-sync-modal="onOpenSyncModal"
+        />
+      </view>
+
+      <!-- 【流转】tab：保留在父页面（说明 Banner + 协作码 + 权限卡 + 接取码） -->
+      <view wx:if="{{selectedTab === 'flow'}}">
+        <view class="banner-box {{showBannerBoxExpanded ? '' : 'collapsed'}}">
           <view class="banner-box-header" bindtap="toggleBannerBox">
             <text class="banner-box-title">{{orderId ? '课程管理说明' : '创建课程说明'}}</text>
             <text class="banner-box-status">{{showBannerBoxExpanded ? '默认5秒收起' : '点击展开'}}</text>
           </view>
-          <!-- 顶部说明 Banner：进入页面先完整展开，5 秒后自动折叠成标题栏，减少持续占位 -->
           <view class="banner-box-body">
             <view class="banner-content">
-            <!-- 创建课程页详细说明：按“创建前 / 创建后”拆分状态说明，减少用户理解成本 -->
-            <view class="guide-title">{{orderId ? '课程管理' : '创建课程'}}</view>
-
-            <!-- 创建前 -->
-            <block wx:if="{{!orderId}}">
-              <view class="guide-row">
-                <text class="guide-label">当前状态</text>
-                <!-- 压缩 Banner 长文案：保留关键语义 -->
-                <text class="guide-value">尚未建课，课节管理/每日总结等创建后开启。</text>
-              </view>
-
-              <view class="guide-row">
-                <text class="guide-label">需要完成</text>
-                <text class="guide-value">填写课程基础信息、学员信息与内部备注，即可创建班级。</text>
-              </view>
-
-              <!-- 新增必填提示：提醒用户优先完成必填项 -->
-              <text class="banner-tip">红色 * 为必填，其余信息用于补充展示。</text>
-            </block>
-
-            <!-- 创建后 -->
-            <block wx:if="{{orderId}}">
-              <view class="guide-row">
-                <text class="guide-label">当前状态</text>
-                <text class="guide-value">班级已创建，可进行课节管理与每日总结。</text>
-              </view>
-
-              <view class="guide-row">
-                <text class="guide-label">接下来</text>
-                <text class="guide-value">按授课情况安排课节，并及时记录每日训练总结。</text>
-              </view>
-
-              <!-- 新增创建后提示：说明课程信息仍可继续完善 -->
-              <text class="banner-tip">课程信息仍可完善，课节与每日总结将作为教学记录保留。</text>
-            </block>
-          </view>
-    </view>
-    <!-- 新增重要操作提示：折叠后仍能一眼看到下一步 -->
-    <view wx:if="{{orderId}}" class="banner-important-action">
-      <!-- 压缩重要操作提示：精简动作描述 -->
-      <text class="banner-action-tip">创建完成后，进入家长展示页把课程内容展示给家长。</text>
-      <button class="banner-action-btn" bindtap="handleToProgressDisplay">进入家长展示页</button>
-    </view>
-    </view>
-
-    <!-- 新增权限说明卡：publish 页同一份页面给管理层和执行教练共用时，这里直接告诉当前是谁、能做什么。 -->
-    <view wx:if="{{orderId && pagePermissionRows.length}}" class="publish-role-card">
-      <view class="publish-role-card-title">{{pageAccessLabel}}</view>
-      <view class="publish-role-row" wx:for="{{pagePermissionRows}}" wx:key="label">
-        <text class="publish-role-label">{{item.label}}</text>
-        <text class="publish-role-value">{{item.value}}</text>
-      </view>
-    </view>
-
-    <view class="content-section fade-in">
-      <!-- 协作辅助块：已降级为"快速参考已有协作单"的次要入口。
-           主流程（B 家长约课登记成功后，教练继续修改）不应该从这里的"新建课程"重新走一遍，
-           而是去 pages/task/progress/progress 的班级/进度列表找到对应班级进入编辑态。
-           因此本区块视觉上会更淡、边框更弱、引导文案更明确，避免用户误以为 B 约课的处理起点在这里。 -->
-      <view wx:if="{{selectedTab === 'create'}}" class="section-card collaboration-card collaboration-card-hint {{collaborationCardLocked ? 'collaboration-card-locked' : ''}}">
-        <view class="section-card-title collaboration-title-hint">
-          <text class="collaboration-title-icon">✦</text>
-          快速参考已有协作单
-          <text wx:if="{{collaborationCardLocked}}" class="section-card-tag-locked">已锁定</text>
-        </view>
-        <view class="collaboration-subtitle-hint">
-          <text class="collaboration-subtitle-bullet">›</text>
-          <!-- 压缩协作卡片提示：保留主流程引导与辅助用途 -->
-          <text class="collaboration-subtitle-text">辅助入口：从 B 约课单快速复制信息。B 家长约课后，请直接去【课程管理/进度】列表找对应班级编辑。</text>
-        </view>
-
-        <view class="collaboration-quick-row">
-          <button class="collaboration-quick-btn" bindtap="goCollaborationQuickProgress">去班级管理 / 进度</button>
-          <!-- 压缩快捷行提示：精简推荐说明 -->
-          <text class="collaboration-quick-tip">主流程推荐从这里进入班级编辑</text>
-        </view>
-
-        <view class="collaboration-divider-hint" wx:if="{{!collaborationCardLocked}}">
-          <text class="collaboration-divider-label">或仍想快速复制 B 约课信息 →</text>
-        </view>
-
-        <view class="collaboration-input-row {{collaborationCardLocked ? 'collaboration-input-row-locked' : ''}}">
-          <!-- 压缩 placeholder：减少括号解释 -->
-          <input
-            class="form-input collaboration-code-input {{collaborationCardLocked ? 'collaboration-code-input-locked' : ''}}"
-            placeholder="请输入家长课程码"
-            placeholder-class="input-placeholder"
-            value="{{collaborationCode}}"
-            bindinput="handleCollaborationCodeInput"
-            bindconfirm="pullCollaborativeOrder"
-            disabled="{{collaborationCardLocked}}"
-          />
-          <button
-            class="collaboration-fetch-btn collaboration-fetch-btn-hint {{collaborationCardLocked ? 'collaboration-fetch-btn-locked' : ''}}"
-            bindtap="pullCollaborativeOrder"
-            loading="{{collaborationLoading}}"
-            disabled="{{collaborationCardLocked || collaborationLoading}}"
-          >{{collaborationCardLocked ? '已导入参考信息' : '参考该协作单'}}</button>
-        </view>
-
-        <view class="collaboration-preview" wx:if="{{collaborationMatchedOrderId}}">
-          <!-- 压缩预览标题：去掉长修饰 -->
-          <view class="collaboration-preview-title">已参考协作信息（已回填表单，仅供复用）</view>
-          <text class="collaboration-preview-item">课程码：{{collaborationCode}}</text>
-          <text class="collaboration-preview-item" wx:if="{{collaborationParentName}}">家长：{{collaborationParentName}}</text>
-          <text class="collaboration-preview-item">孩子数量：{{collaborationChildCount || 0}} 个</text>
-          <text class="collaboration-preview-item" wx:if="{{collaborationLocationText}}">上课地点：{{collaborationLocationText}}</text>
-          <text class="collaboration-preview-item" wx:if="{{collaborationContactText}}">联系方式：{{collaborationContactText}}</text>
-          <!-- 压缩协作预览提示：去掉冗长"继续修改..."描述 -->
-          <text class="collaboration-preview-tip">参考完成后，继续修改标题、计划和内部备注，确认后发布新课程。</text>
-        </view>
-        <!-- 已有课程（编辑态）下同样保留只读展示：课程码仍然看得见，但操作锁定。 -->
-        <view class="collaboration-preview collaboration-preview-readonly" wx:if="{{orderId && !collaborationMatchedOrderId && collaborationCode}}">
-          <view class="collaboration-preview-title">已关联协作信息</view>
-          <text class="collaboration-preview-item">课程码：{{collaborationCode}}</text>
-          <!-- 压缩锁定提示：保留动作路径 -->
-          <text class="collaboration-preview-tip">编辑态下协作信息已锁定；如需修改关联，请先在班级管理页关闭或删除后再建课。</text>
-        </view>
-      </view>
-
-      <!-- 新增：教练接取码展示卡。
-           - 仅在已有课程（orderId 存在）下显示；新建课程尚未生成码，不显示。
-           - 展示 8 位班级码 + 4 位确认码 = 12 位完整接取码，发布者可一键复制给执行教练。
-           - 若已有执行教练接取，会显示接取人 + 接取时间；发布者可选择「换码保留教练」或「换码并清空教练」。 -->
-      <view wx:if="{{orderId && pickupCourseCode}}" class="section-card pickup-code-card">
-        <view class="section-card-title pickup-code-title">
-          <text class="collaboration-title-icon">✦</text>
-          教练接取码
-          <text wx:if="{{assignedCoachName}}" class="section-card-tag section-card-tag-success">已被「{{assignedCoachName}}」接取</text>
-          <text wx:elif="{{pickupFullCode}}" class="section-card-tag section-card-tag-warn">待执行教练接取</text>
-          <text wx:else class="section-card-tag section-card-tag-warn">待管理层确认生成</text>
-        </view>
-        <view class="pickup-code-subtitle">
-          <!-- 压缩接取码卡片副标题：四段情景合一，每段精简 -->
-          {{pickupFullCode ? (canOperatePickupCode ? '把「12 位完整接取码」发给执行教练，教练在首页【接取课程】输入即可认领；无论机构内外教练均可接取。' : '执行教练视角，仅展示接取结果，不可改码。') : (canOperatePickupCode ? '当前只有 8 位课程码，需管理层手动确认后才生成 12 位完整接取码。' : '尚未生成 12 位接取码，等待管理层在课程页确认生成。')}}
-        </view>
-
-        <view class="pickup-code-row">
-          <view class="pickup-code-label">班级码（前 8 位）</view>
-          <view class="pickup-code-value pickup-course-code">{{pickupCourseCode}}</view>
-        </view>
-        <view wx:if="{{pickupConfirmCode}}" class="pickup-code-row">
-          <view class="pickup-code-label">确认码（后 4 位）</view>
-          <view class="pickup-code-value pickup-confirm-code">{{pickupConfirmCode}}</view>
-        </view>
-        <view wx:if="{{pickupFullCode}}" class="pickup-code-row pickup-code-full-row">
-          <view class="pickup-code-label">完整接取码（12 位，复制这串）</view>
-          <view class="pickup-code-value pickup-full-code-value">
-            <text class="pickup-full-left">{{pickupFullCode}}</text>
-          </view>
-        </view>
-        <!-- 压缩只读提示：精简生成流程说明 -->
-        <view wx:if="{{!pickupFullCode}}" class="pickup-readonly-tip">尚未生成 12 位接取码；请先确认课程内容，再由管理层手动生成。</view>
-        <view wx:if="{{pickupFinalCode}}" class="pickup-code-row pickup-code-final-row">
-          <view class="pickup-code-label">执行确认码（固定 DL 尾码）</view>
-          <view class="pickup-code-value pickup-final-code">{{pickupFinalCode}}</view>
-        </view>
-
-        <!-- 新增：教练接取码的强制前置门槛 -->
-        <block wx:if="{{canOperatePickupCode}}">
-          <view class="pickup-divider"></view>
-          <view class="pickup-info-ready-section">
-            <view class="pickup-info-ready-title">
-              <text class="collaboration-title-icon">◇</text>
-              第一步：确认课程资料完整
-              <text wx:if="{{pickupCourseInfoReady}}" class="section-card-tag section-card-tag-success">已允许教练接单</text>
-              <text wx:else class="section-card-tag section-card-tag-warn">待管理层确认</text>
-            </view>
-            <view class="pickup-info-ready-desc">
-              <!-- 压缩第一步说明：保留关键动作 + 效果 -->
-              {{pickupCourseInfoReady ? '课程信息已确认，下一步生成 12 位接取码并放入【待接取】队列。' : '请检查标题、电话、地点、课时数是否完善。确认无误后，点击下方按钮允许教练接单。'}}
-              <text wx:if="{{pickupCourseInfoReady && pickupCourseInfoReadyAt}}" class="pickup-ready-time">（{{pickupCourseInfoReadyAt}}）</text>
-            </view>
-            <view wx:if="{{!pickupCourseInfoReady}}" class="pickup-code-actions">
-              <!-- 修复点击无反应：统一用 catchtap 阻止冒泡到外层 scroll-view；
-                   显式 disabled 配合 loading，重复点击时按钮灰掉而非静默 return 造成"点了没反应"的错觉。 -->
-              <button class="pickup-btn pickup-btn-strong" catchtap="onMarkCourseInfoReady" loading="{{isMarkingCourseInfoReady}}" disabled="{{isMarkingCourseInfoReady || isResettingPickupCode}}">完成课程信息编辑，允许教练接单</button>
-            </view>
-            <view wx:else class="pickup-code-actions">
-              <button class="pickup-btn pickup-btn-sub" catchtap="onMarkCourseInfoReady" loading="{{isMarkingCourseInfoReady}}" disabled="{{isMarkingCourseInfoReady || isResettingPickupCode}}">资料有修改，重新确认允许教练接单</button>
-            </view>
-          </view>
-        </block>
-
-        <!-- 压缩按钮文字：第一步/第二步标签保留，但避免整段长文案挤进按钮 -->
-        <view wx:if="{{canOperatePickupCode && !pickupFullCode}}" class="pickup-code-actions">
-          <button class="pickup-btn {{pickupCourseInfoReady ? 'pickup-btn-primary' : 'pickup-btn-disabled'}}" catchtap="onConfirmGeneratePickupCode" loading="{{isResettingPickupCode}}" disabled="{{!pickupCourseInfoReady || isResettingPickupCode || isMarkingCourseInfoReady}}">{{pickupCourseInfoReady ? '第二步：生成 12 位接取码' : '请先完成上一步「允许教练接单」'}}</button>
-        </view>
-        <view wx:if="{{canOperatePickupCode && pickupFullCode}}" class="pickup-code-actions">
-          <button class="pickup-btn pickup-btn-primary" catchtap="onCopyPickupFullCode" loading="{{isResettingPickupCode}}" disabled="{{isResettingPickupCode || isMarkingCourseInfoReady}}">复制 12 位完整接取码</button>
-          <button class="pickup-btn pickup-btn-warn" catchtap="onResetPickupConfirmCode" data-keep-coach="{{false}}" loading="{{isResettingPickupCode}}" disabled="{{isResettingPickupCode || isMarkingCourseInfoReady}}">重置并换一组新码</button>
-          <button wx:if="{{assignedCoachName}}" class="pickup-btn pickup-btn-sub" catchtap="onResetPickupConfirmCode" data-keep-coach="{{true}}" loading="{{isResettingPickupCode}}" disabled="{{isResettingPickupCode || isMarkingCourseInfoReady}}">保留教练，仅换确认码</button>
-        </view>
-        <!-- 压缩只读提示：精简身份说明 -->
-        <view wx:if="{{!canOperatePickupCode}}" class="pickup-readonly-tip">执行教练只读视角；接取码生成与换码由管理层处理。</view>
-
-        <view wx:if="{{assignedCoachName}}" class="pickup-code-meta">
-          <text class="pickup-meta-row">接取教练：{{assignedCoachName}}</text>
-          <text class="pickup-meta-row" wx:if="{{assignedCoachAt}}">接取时间：{{assignedCoachAt}}</text>
-        </view>
-        <view wx:else class="pickup-code-tip">
-          <!-- 压缩提示：保留换码后果核心 -->
-          提示：若接取码发错人，点「重置并换一组新码」可立即作废旧码并生成新确认码。
-        </view>
-      </view>
-
-      <view wx:if="{{selectedTab === 'create'}}">
-        <view class="section-header">
-          <text class="section-title">创建班课程</text>
-          <!-- 压缩分组标题副标题：精简为信息分组说明 -->
-          <text class="section-subtitle">按三类分组填写课程信息，结构清晰。</text>
-        </view>
-
-        <view class="form-container">
-          <!-- 新增课程目标分组：课程类型选择和课程定位相关字段统一收口 -->
-          <view class="section-card create-group-card">
-            <view class="section-card-title">第一类：课程目标</view>
-            <!-- 压缩分组副标题：保留核心动作 -->
-            <view class="group-subtitle">选课程方向，再填标题、介绍和价格。</view>
-
-            <scroll-view class="class-scroll-view" scroll-x="true" enable-flex="true">
-              <block wx:for="{{classTypes}}" wx:key="id">
-                <view class="class-card {{currentClassId === item.id ? 'active' : ''}}"
-                      bindtap="onSelectClass"
-                      data-id="{{item.id}}">
-
-                  <!-- 卡片主体内容 -->
-                  <view class="class-card-main">
-                    <view class="class-icon">{{item.name[0]}}</view>
-                    <view class="class-info">
-                      <text class="class-title">{{item.name}}</text>
-                      <text class="class-desc">{{item.brief}}</text>
-                    </view>
-                    <view class="class-check" wx:if="{{currentClassId === item.id}}">
-                      <icon type="success_no_circle" size="20" color="#1976d2"/>
-                    </view>
-                  </view>
-
-                  <!-- 展开的子项区域 (默认显示) -->
-                  <view class="class-sub-area">
-                    <view class="sub-tags-wrapper">
-                      <block wx:if="{{item.subItems && item.subItems.length}}">
-                        <view class="sub-tag {{selectedSubName === sub && currentClassId === item.id ? 'selected' : ''}}"
-                              wx:for="{{item.subItems}}"
-                              wx:for-item="sub"
-                              wx:key="*this"
-                              catchtap="onSelectSubItem"
-                              data-parent-id="{{item.id}}"
-                              data-name="{{sub}}">
-                          {{sub}}
-                        </view>
-                      </block>
-                      <block wx:else>
-                        <view class="sub-tag selected">默认项目</view>
-                      </block>
-                    </view>
-                  </view>
+              <view class="guide-title">{{orderId ? '课程管理' : '创建课程'}}</view>
+              <block wx:if="{{!orderId}}">
+                <view class="guide-row">
+                  <text class="guide-label">当前状态</text>
+                  <text class="guide-value">尚未建课，课节管理/每日总结等创建后开启。</text>
                 </view>
+                <view class="guide-row">
+                  <text class="guide-label">需要完成</text>
+                  <text class="guide-value">填写课程基础信息、学员信息与内部备注，即可创建班级。</text>
+                </view>
+                <text class="banner-tip">红色 * 为必填，其余信息用于补充展示。</text>
               </block>
-              <!-- 尾部占位，确保最后一个卡片能完全划出并有间距 -->
-              <view class="scroll-spacer"></view>
-            </scroll-view>
-
-            <!-- 选中课程的详细介绍卡片 -->
-            <view class="course-detail-card group-inner-card" wx:if="{{currentClass}}">
-              <view class="detail-header">
-                <text class="detail-title">课程计划</text>
-                <text class="detail-tag">{{currentClass.name}} · 可编辑</text>
-              </view>
-              <view class="detail-content">
-                <!-- 新增课程计划可编辑输入：默认带出模板内容，允许继续手动润色 -->
-                <textarea
-                  class="detail-edit-textarea"
-                  placeholder="可以在默认课程计划基础上继续补充、更改"
-                  placeholder-class="input-placeholder"
-                  value="{{form.course_plan}}"
-                  data-field="course_plan"
-                  bindinput="onInput"
-                  auto-height
-                ></textarea>
-              </view>
-              <scroll-view class="detail-imgs" scroll-x="true">
-                <image class="detail-img" wx:for="{{currentClass.images}}" wx:key="*this" src="{{item}}" mode="aspectFill"></image>
-              </scroll-view>
-            </view>
-
-            <view class="form-group">
-              <view class="form-label">课程标题</view>
-              <input class="form-input" placeholder="例如 少儿体能启蒙班" placeholder-class="input-placeholder" value="{{form.title}}" data-field="title" bindinput="onInput"/>
-            </view>
-
-            <!-- 按当前需求先注释课程介绍输入框：课程介绍节点暂时保留注释方便后续恢复 -->
-            <!--
-            <view class="form-group">
-              <view class="form-label">课程介绍</view>
-              <textarea class="form-textarea" placeholder="填写班级介绍、适合人群、训练目标..." placeholder-class="input-placeholder" value="{{form.description}}" data-field="description" bindinput="onInput" auto-height></textarea>
-            </view>
-            -->
-
-          </view>
-
-          <!-- 新增课程基本信息分组：电话、地址、时间归到一个外边框里 -->
-          <view class="section-card create-group-card">
-            <view class="section-card-title">第二类：课程基本信息</view>
-            <!-- 压缩分组副标题：去掉冗余"这些" -->
-            <view class="group-subtitle">填写电话、地址、时间等基础信息。</view>
-
-            <!-- 新增课程人数：用于区分 1对1 和 1对多 -->
-            <view class="form-group">
-              <view class="form-label">课程人数</view>
-              <radio-group class="choice-row" bindchange="onCourseSizeModeChange">
-                <label class="choice-chip {{form.course_size_mode === '1对1' ? 'active' : ''}}">
-                  <radio value="1对1" checked="{{form.course_size_mode === '1对1'}}" color="#1976d2" />
-                  <text>1对1</text>
-                </label>
-                <label class="choice-chip {{form.course_size_mode === '1对多' ? 'active' : ''}}">
-                  <radio value="1对多" checked="{{form.course_size_mode === '1对多'}}" color="#1976d2" />
-                  <text>1对多</text>
-                </label>
-              </radio-group>
-            </view>
-
-            <view class="form-group">
-              <view class="form-label">上课时间</view>
-              <input class="form-input" placeholder="例如 每周二、四 19:00-20:00" placeholder-class="input-placeholder" value="{{form.frequency}}" data-field="frequency" bindinput="onInput"/>
-            </view>
-
-            <view class="form-group">
-              <view class="form-label required">任务位置</view>
-              <view class="form-input-box" bindtap="chooseLocation">
-                 <text class="{{form.location ? 'input-val' : 'input-placeholder'}}">{{form.location || '点击选择上课地点'}}</text>
-                 <text class="input-icon">�</text>
-              </view>
-            </view>
-            <view class="form-group no-margin">
-              <view class="form-label required">联系方式</view>
-              <input class="form-input" type="number" maxlength="11" placeholder="请输入11位手机号" placeholder-class="input-placeholder" value="{{form.contact}}" data-field="contact" bindinput="onInput"/>
-            </view>
-
-            <!-- 新增安全与规范确认：发布前必须强制勾选 -->
-            <!-- 临时注释 agreement-card：注意这里原本是必填项目，当前按需求先隐藏但不删除，后续如需恢复可直接取消注释 -->
-            <!--
-            <view class="agreement-card">
-              <view class="form-label required">安全与规范</view>
-              <view class="agreement-row">
-                <view class="agreement-text">
-                  <text class="agreement-title">我已确认课程安排、安全要求与沟通规范</text>
-                  <text class="agreement-desc">未勾选时不能发布或保存课程。</text>
+              <block wx:if="{{orderId}}">
+                <view class="guide-row">
+                  <text class="guide-label">当前状态</text>
+                  <text class="guide-value">班级已创建，可进行课节管理与每日总结。</text>
                 </view>
-                <checkbox-group bindchange="onSafetyConfirmedChange">
-                  <checkbox value="agreed" checked="{{form.safety_confirmed}}" color="#1976d2" />
-                </checkbox-group>
-              </view>
-            </view>
-            -->
-          </view>
-
-          <!-- 新增孩子信息块：记录孩子基础画像 -->
-          <view class="section-card create-group-card">
-            <view class="section-card-title">第三类：孩子信息</view>
-            <!-- 压缩孩子信息副标题：去掉冗余分句，保留孩子数量动态展示 -->
-            <view class="group-subtitle">记录孩子基础信息，便于教练判断课程安排；当前已添加 {{form.child_profiles.length || 0}} 个孩子。</view>
-
-            <!-- 新增多孩子录入：同一门课下可以连续新增多个孩子卡片 -->
-            <block wx:for="{{form.child_profiles}}" wx:key="index">
-              <view class="child-profile-card">
-                <view class="child-profile-head">
-                  <text class="child-profile-title">孩子{{index + 1}}</text>
-                  <text class="child-profile-remove" data-index="{{index}}" bindtap="removeChildProfile">删除这个孩子</text>
+                <view class="guide-row">
+                  <text class="guide-label">接下来</text>
+                  <text class="guide-value">按授课情况安排课节，并及时记录每日训练总结。</text>
                 </view>
-
-                <!-- 新增孩子昵称：方便教练和家长沟通时快速对应孩子 -->
-                <view class="form-group">
-                  <view class="form-label">孩子昵称</view>
-                  <input class="form-input" placeholder="请输入孩子昵称" placeholder-class="input-placeholder" value="{{item.nickname}}" data-index="{{index}}" data-field="nickname" bindinput="onChildProfileInput"/>
-                </view>
-
-                <view class="form-group">
-                  <view class="form-label">年龄</view>
-                  <input class="form-input" type="number" placeholder="请输入孩子年龄" placeholder-class="input-placeholder" value="{{item.age}}" data-index="{{index}}" data-field="age" bindinput="onChildProfileInput"/>
-                </view>
-
-                <view class="form-group">
-                  <view class="form-label">性别</view>
-                  <radio-group class="choice-row" data-index="{{index}}" bindchange="onChildGenderChange">
-                    <label class="choice-chip {{item.gender === '男' ? 'active' : ''}}">
-                      <radio value="男" checked="{{item.gender === '男'}}" color="#1976d2" />
-                      <text>男</text>
-                    </label>
-                    <label class="choice-chip {{item.gender === '女' ? 'active' : ''}}">
-                      <radio value="女" checked="{{item.gender === '女'}}" color="#1976d2" />
-                      <text>女</text>
-                    </label>
-                  </radio-group>
-                </view>
-
-                <view class="form-group">
-                  <view class="form-label">身高</view>
-                  <view class="form-input-with-unit">
-                    <input class="unit-value-input" type="digit" placeholder="请输入身高，例如 135" placeholder-class="input-placeholder" value="{{item.height}}" data-index="{{index}}" data-field="height" bindinput="onChildProfileInput"/>
-                    <text class="input-unit">cm</text>
-                  </view>
-                </view>
-
-                <view class="form-group no-margin">
-                  <view class="form-label">体重</view>
-                  <view class="form-input-with-unit">
-                    <input class="unit-value-input" type="digit" placeholder="请输入体重，例如 32.5" placeholder-class="input-placeholder" value="{{item.weight}}" data-index="{{index}}" data-field="weight" bindinput="onChildProfileInput"/>
-                    <text class="input-unit">kg</text>
-                  </view>
-                </view>
-              </view>
-            </block>
-
-            <!-- 新增空态提示：默认 0 个孩子时，只展示提示和新增按钮，不先塞空白卡片 -->
-            <view class="empty-state" wx:if="{{!form.child_profiles || form.child_profiles.length === 0}}">
-              <text>当前还没有添加孩子，点下面按钮开始录入。</text>
-            </view>
-
-            <!-- 新增添加孩子按钮：让教练继续往下补录更多孩子 -->
-            <view class="child-profile-add" bindtap="addChildProfile">+ 再添加一个孩子</view>
-          </view>
-
-          <!-- 新增教练私有信息块：只做内部表单收集，不在展示层显示 -->
-          <view class="section-card private-form-card create-group-card">
-            <view class="section-card-title">第四类：教练内部信息</view>
-            <!-- 压缩内部信息副标题：保留可见性关键 -->
-            <view class="group-subtitle">仅供内部记录，不在展示层显示。</view>
-            <view class="form-group">
-              <view class="form-label">价格区间</view>
-              <picker range="{{priceOptions}}" bindchange="onPriceChange">
-                <view class="form-input-box">
-                  <text class="{{form.price_interval ? 'input-val' : 'input-placeholder'}}">{{form.price_interval || '请选择课程价格'}}</text>
-                  <text class="input-icon">💰</text>
-                </view>
-              </picker>
-            </view>
-            <view class="form-group">
-              <view class="form-label">课程备注</view>
-              <textarea
-                class="form-textarea"
-                placeholder="填写特殊要求、内部提醒、家长沟通注意事项"
-                placeholder-class="input-placeholder"
-                value="{{form.coach_private_note}}"
-                data-field="coach_private_note"
-                bindinput="onInput"
-                auto-height
-              ></textarea>
-            </view>
-            <view class="private-switch-row no-margin">
-              <view class="private-switch-text">
-                <text class="form-label no-margin">是否会流转给其他教练</text>
-                <text class="private-switch-desc">仅供内部判断是否允许后续教练接手</text>
-              </view>
-              <switch color="#1976d2" checked="{{form.allow_transfer_to_other_coach}}" bindchange="onPrivateTransferChange" />
+                <text class="banner-tip">课程信息仍可完善，课节与每日总结将作为教学记录保留。</text>
+              </block>
             </view>
           </view>
+          <view wx:if="{{orderId}}" class="banner-important-action">
+            <text class="banner-action-tip">创建完成后，进入家长展示页把课程内容展示给家长。</text>
+            <button class="banner-action-btn" bindtap="handleToProgressDisplay">进入家长展示页</button>
+          </view>
+        </view>
 
-          <view class="create-actions">
-            <button class="btn-secondary" bindtap="handleDeleteCourse" disabled="{{!canDeleteCourse}}">删除课程</button>
-            <button class="btn-submit create-submit" bindtap="onSubmit" disabled="{{!canEditCourseInfo}}">{{isEditMode ? '修改课程并保存' : '发布课程'}}</button>
+        <!-- 协作单参考卡 -->
+        <view class="section-card collaboration-card collaboration-card-hint {{collaborationCardLocked ? 'collaboration-card-locked' : ''}}">
+          <view class="section-card-title collaboration-title-hint">
+            <text class="collaboration-title-icon">✦</text>
+            快速参考已有协作单
+            <text wx:if="{{collaborationCardLocked}}" class="section-card-tag-locked">已锁定</text>
+          </view>
+          <view class="collaboration-subtitle-hint">
+            <text class="collaboration-subtitle-bullet">›</text>
+            <text class="collaboration-subtitle-text">辅助入口：从 B 约课单快速复制信息。B 家长约课后，请直接去【课程管理/进度】列表找对应班级编辑。</text>
+          </view>
+          <view class="collaboration-quick-row">
+            <button class="collaboration-quick-btn" bindtap="goCollaborationQuickProgress">去班级管理 / 进度</button>
+            <text class="collaboration-quick-tip">主流程推荐从这里进入班级编辑</text>
+          </view>
+          <view class="collaboration-divider-hint" wx:if="{{!collaborationCardLocked}}">
+            <text class="collaboration-divider-label">或仍想快速复制 B 约课信息 →</text>
+          </view>
+          <view class="collaboration-input-row {{collaborationCardLocked ? 'collaboration-input-row-locked' : ''}}">
+            <input
+              class="form-input collaboration-code-input {{collaborationCardLocked ? 'collaboration-code-input-locked' : ''}}"
+              placeholder="请输入家长课程码"
+              placeholder-class="input-placeholder"
+              value="{{collaborationCode}}"
+              bindinput="handleCollaborationCodeInput"
+              bindconfirm="pullCollaborativeOrder"
+              disabled="{{collaborationCardLocked}}"
+            />
+            <button
+              class="collaboration-fetch-btn collaboration-fetch-btn-hint {{collaborationCardLocked ? 'collaboration-fetch-btn-locked' : ''}}"
+              bindtap="pullCollaborativeOrder"
+              loading="{{collaborationLoading}}"
+              disabled="{{collaborationCardLocked || collaborationLoading}}"
+            >{{collaborationCardLocked ? '已导入参考信息' : '参考该协作单'}}</button>
+          </view>
+          <!-- collaboration-preview 已迁移至顶部共享信息区 shared-info-bar -->
+        </view>
+
+        <!-- publish-role-card 已迁移至顶部共享信息区 shared-info-bar -->
+
+        <!-- 教练接取码展示卡 -->
+        <view wx:if="{{orderId && pickupCourseCode}}" class="section-card pickup-code-card">
+          <view class="section-card-title pickup-code-title">
+            <text class="collaboration-title-icon">✦</text>
+            教练接取码
+            <text wx:if="{{assignedCoachName}}" class="section-card-tag section-card-tag-success">已被「{{assignedCoachName}}」接取</text>
+            <text wx:elif="{{displayPickupCode || pickupFullCode}}" class="section-card-tag section-card-tag-warn">待执行教练接取</text>
+            <text wx:else class="section-card-tag section-card-tag-warn">待管理层确认生成</text>
+          </view>
+          <view class="pickup-code-subtitle">
+            {{(displayPickupCode || pickupFullCode) ? (canOperatePickupCode ? '完整接取码已生成。复制发给执行教练，他在首页【接取课程】输入后只是提交接取申请，需你在下方「接取申请待确认」卡片确认后才算接取成功。' : '执行教练视角，仅展示接取结果，不可改码。') : (canOperatePickupCode ? '接取码尚未生成：到「创建班课程」tab 点「完成创建，允许接单」后才会生成，再复制发给执行教练。' : '尚未生成接取码，等待管理层点「完成创建，允许接单」后生成。')}}
+          </view>
+          <view wx:if="{{displayPickupCode}}" class="pickup-code-row pickup-code-full-row">
+            <view class="pickup-code-label">完整接取码（{{displayPickupCode.length}} 位，复制这串）</view>
+            <view class="pickup-code-value pickup-full-code-value">
+              <text class="pickup-full-left">{{displayPickupCode}}</text>
+            </view>
+          </view>
+          <view wx:if="{{canOperatePickupCode && (displayPickupCode || pickupFullCode)}}" class="pickup-code-actions">
+            <button class="pickup-btn pickup-btn-primary" catchtap="onCopyPickupFullCode">复制完整接取码</button>
+          </view>
+          <view wx:if="{{!canOperatePickupCode}}" class="pickup-readonly-tip">执行教练只读视角；接取码生成与换码由管理层处理。</view>
+          <view wx:if="{{assignedCoachName}}" class="pickup-code-meta">
+            <text class="pickup-meta-row">接取教练：{{assignedCoachName}}</text>
+            <text class="pickup-meta-row" wx:if="{{assignedCoachAt}}">接取时间：{{assignedCoachAt}}</text>
+          </view>
+          <view wx:else class="pickup-code-tip">
+            提示：若接取码发错人，请联系系统管理员处理换码操作。
+          </view>
+        </view>
+
+        <!-- 【2026-09-21 新流程·接取需管理确认】绑定申请卡片（管理者视角）-->
+        <!-- 渲染条件：当前用户是管理者 + 课程处于 awaiting 态 + 有 pending 申请；
+             列出所有 pending 申请，提供「确认接取 / 拒绝」按钮，调 handleConfirmBinding / handleRejectBinding。 -->
+        <view wx:if="{{hasPendingCoachRequest && canConfirmCoachBinding}}" class="section-card binding-request-card">
+          <view class="section-card-title binding-request-title">
+            <text class="collaboration-title-icon">✦</text>
+            接取申请待确认
+            <text class="section-card-tag section-card-tag-warn">{{pendingCoachRequestCount}} 个待处理</text>
+          </view>
+          <view class="binding-request-subtitle">
+            执行教练在首页输入了接取码，按新流程需管理者在这里确认后才会真正写入「已接取」状态。请核对申请人信息后处理。
+          </view>
+          <view class="binding-request-item" wx:for="{{pendingCoachBindingRequests}}" wx:key="requestId" wx:for-item="req">
+            <view class="binding-request-row">
+              <text class="binding-request-label">申请人</text>
+              <text class="binding-request-value">{{req.coachNameText}}</text>
+            </view>
+            <view class="binding-request-row" wx:if="{{req.coachUserId}}">
+              <text class="binding-request-label">用户标识</text>
+              <text class="binding-request-value">{{req.coachUserId}}</text>
+            </view>
+            <view class="binding-request-row" wx:if="{{req.requestedAtText}}">
+              <text class="binding-request-label">申请时间</text>
+              <text class="binding-request-value">{{req.requestedAtText}}</text>
+            </view>
+            <view class="binding-request-actions">
+              <button
+                class="pickup-btn pickup-btn-primary"
+                catchtap="handleConfirmBinding"
+                data-request-id="{{req.requestId}}"
+                loading="{{coachBindingActionLoading}}"
+                disabled="{{coachBindingActionLoading}}"
+              >确认接取</button>
+              <button
+                class="pickup-btn pickup-btn-secondary"
+                catchtap="handleRejectBinding"
+                data-request-id="{{req.requestId}}"
+                loading="{{coachBindingActionLoading}}"
+                disabled="{{coachBindingActionLoading}}"
+              >拒绝</button>
+            </view>
+          </view>
+        </view>
+
+        <!-- 【2026-09-21 新流程】教练视角 · 自己的申请待确认时单独提示 -->
+        <!-- 渲染条件：当前用户在 pending 列表里（myPendingRequest 存在）+ 不是管理者（不能自己确认自己）；
+             教练在此看到「等待管理者确认」即可，按钮由管理者侧卡片处理。 -->
+        <view wx:if="{{myPendingRequest && !canConfirmCoachBinding}}" class="section-card my-pending-request-card">
+          <view class="section-card-title my-pending-request-title">
+            <text class="collaboration-title-icon">✦</text>
+            你的接取申请已提交
+            <text class="section-card-tag section-card-tag-warn">待管理者确认</text>
+          </view>
+          <view class="my-pending-request-subtitle">
+            管理者确认后，本课程会自动进入「进行中」状态，你就可以在「每日总结」tab 填写训练总结了。若被拒绝，可重新提交接取码。
+          </view>
+          <view class="my-pending-request-meta" wx:if="{{myPendingRequest.requestedAtText}}">
+            <text class="my-pending-request-meta-row">提交时间：{{myPendingRequest.requestedAtText}}</text>
           </view>
         </view>
       </view>
 
-      <view wx:if="{{selectedTab === 'manage'}}">
-        <!-- 新增课节管理头部包裹层 -->
-        <view class="manage-header-card">
-          <view class="section-header manage-section-header">
-            <text class="section-title">课节管理</text>
-            <!-- 压缩课节管理副标题：精简默认课节数+半途接入含义 -->
-            <text class="section-subtitle">新班级默认生成 10 节课；「半途接入」指前面已在线下上过几节，现从中间接入系统。</text>
-          </view>
-          <view class="manage-actions" wx:if="{{orderId && canAdjustLessonPlan}}">
-            <button class="manage-btn {{lessonPlanLocked ? 'ghost disabled' : ''}}" bindtap="openSetTotalModal" disabled="{{lessonPlanLocked}}">设置总课时</button>
-            <button class="manage-btn {{lessonPlanLocked ? 'ghost disabled' : ''}}" bindtap="openSyncModal" disabled="{{lessonPlanLocked}}">半途接入</button>
-          </view>
-          <!-- 压缩执行教练操作说明：精简身份与权限说明 -->
-          <view class="sync-note operation-guide-note" wx:if="{{orderId && !canAdjustLessonPlan}}">当前阶段课表结构由管理层控制；执行教练仅可查看课节并记录总结。</view>
-          <!-- 压缩三节锁定强提醒：保留关键后果+锁定规则 -->
-          <view class="sync-note operation-guide-note strong-warning" wx:if="{{orderId}}">强提醒：{{lessonPlanLockText}} 累计记录满 3 节后，「设置总课时 / 半途接入」将自动锁定，请先确认课表结构。</view>
-        </view>
-
-            <view class="empty-state" wx:if="{{!orderId}}">
-              <!-- 压缩空态提示：合并重复动作说明 -->
-              <text>请先发布课程再管理课节；已有班级请从底部【课程管理】进入。</text>
-        </view>
-
-        <view wx:if="{{orderId}}">
-          <!-- 课节展示顺序说明：这里会把待记录课节放前面，已完成课节自动沉到底部，方便教练优先处理还没记录的课 -->
-          <view class="section-card">
-            <view class="section-card-title">课程进度表 ({{order.progress_done || 0}}/{{order.progress_total || 0}})</view>
-            <view class="sync-tip" wx:if="{{order.progress_done > 0}}">已补录前 {{order.progress_done}} 节历史课，下面会先显示一个历史汇总框，再显示剩余课节框</view>
-            <view class="section-card-title minor">右划或者下拉选择操作课节，记录完的课程放在最下面</view>
-            <view class="lesson-picker-row">
-              <scroll-view class="lesson-picker-scroll" scroll-x="true" scroll-into-view="{{manageLessonScrollIntoView}}">
-                <view
-                  id="manage-lesson-{{index}}"
-                  class="lesson-picker-chip {{selectedLessonIndex === index ? 'active' : ''}}"
-                  wx:for="{{schedule}}"
-                  wx:key="index"
-                  data-index="{{index}}"
-                  bindtap="selectManageLesson"
-                >
-                  第 {{item.lesson || (index + 1)}} 课
-                </view>
-              </scroll-view>
-            </view>
-
-            <view class="selected-lesson-panel" wx:if="{{schedule[selectedLessonIndex]}}">
-              <view class="manage-lesson-main">
-                <text class="manage-lesson-title">当前操作：第 {{schedule[selectedLessonIndex].lesson || (selectedLessonIndex + 1)}} 课</text>
-                <text class="manage-lesson-status {{schedule[selectedLessonIndex].displayStatusClass}}">{{schedule[selectedLessonIndex].statusText}}</text>
-              </view>
-              <view class="manage-lesson-meta">
-                <text wx:if="{{schedule[selectedLessonIndex].startedAtText}}">上课：{{schedule[selectedLessonIndex].startedAtText}}</text>
-                <text wx:if="{{schedule[selectedLessonIndex].completedAtText}}">下课：{{schedule[selectedLessonIndex].completedAtText}}</text>
-              </view>
-              <view class="manage-lesson-actions">
-                <!-- 新增逻辑裁剪：这里不再提供开始上课/下课入口，只保留写总结，不改数据库已有状态 -->
-                <!-- 新增记录入口按钮：这里直接引导去写当前课节记录，不再显示状态词干扰操作 -->
-                <button
-                  class="mini-btn ghost lesson-record-btn {{schedule[selectedLessonIndex].isCompleted ? 'done' : 'pending'}}"
-                  data-index="{{selectedLessonIndex}}"
-                  bindtap="selectSummaryLesson"
-                  disabled="{{!canWriteSummary}}"
-                >
-                  {{canWriteSummary ? '去记录' : '仅执行教练可记录'}}
-                </button>
-              </view>
-            </view>
-
-            <view class="section-card-title minor">全部课节</view>
-            <block wx:for="{{displaySchedule}}" wx:key="index">
-              <view
-                class="manage-lesson-item {{item.isHistorySummary ? 'history-summary-item' : ''}} {{selectedLessonIndex === item.actualIndex && !item.isHistorySummary ? 'selected' : ''}}"
-                data-index="{{item.actualIndex}}"
-                data-history="{{item.isHistorySummary ? 1 : 0}}"
-                bindtap="selectManageLesson"
-              >
-                <view class="manage-lesson-main">
-                  <text class="manage-lesson-title">{{item.isHistorySummary ? ('第 ' + item.title + ' 课') : ('第 ' + (item.lesson || (index + 1)) + ' 课')}}</text>
-                  <text class="manage-lesson-status {{item.displayStatusClass}}">{{item.statusText}}</text>
-                </view>
-                <view class="manage-lesson-meta" wx:if="{{!item.isHistorySummary}}">
-                  <text wx:if="{{item.startedAtText}}">上课：{{item.startedAtText}}</text>
-                  <text wx:if="{{item.completedAtText}}">下课：{{item.completedAtText}}</text>
-                </view>
-                <view class="manage-lesson-meta" wx:if="{{item.isHistorySummary}}">
-                  <text>这是半途接入前的历史课节汇总框，不参与直接操作。</text>
-                </view>
-              </view>
-            </block>
-          </view>
-        </view>
-      </view>
-
+      <!-- 【每日总结】tab：迁移为 publish_dailysummary 组件 -->
       <view wx:if="{{selectedTab === 'summary'}}">
-        <view class="section-header">
-          <text class="section-title">每日总结</text>
-          <!-- 压缩每日总结副标题：精简 -->
-          <text class="section-subtitle">选择课节后填写当天总结；进度展示页仅用于查看。</text>
-        </view>
-
-            <view class="empty-state" wx:if="{{!orderId}}">
-              <text>请先发布课程再填每日总结；已有班级请从底部【课程管理】进入。</text>
-        </view>
-
-        <view wx:if="{{orderId}}">
-          <view class="section-card">
-            <view class="section-card-title">选择课节</view>
-            <scroll-view class="summary-lessons" scroll-x="true" scroll-into-view="{{summaryLessonScrollIntoView}}">
-              <view id="summary-lesson-{{index}}" class="summary-lesson-chip {{summaryLessonIndex === index ? 'active' : ''}}" wx:for="{{schedule}}" wx:key="index" data-index="{{index}}" bindtap="selectSummaryLesson">
-                第 {{item.lesson || (index + 1)}} 课
-              </view>
-            </scroll-view>
-
-            <view class="summary-meta" wx:if="{{schedule[summaryLessonIndex]}}">
-              <text>当前课节：第 {{schedule[summaryLessonIndex].lesson || (summaryLessonIndex + 1)}} 课</text>
-            </view>
-
-            <!-- 新增多维评分：每个维度用 view 卡片承载 -->
-            <view class="form-group">
-              <view class="form-label required">多维评分</view>
-              <!-- 压缩评分提示：精简说明 -->
-              <view class="summary-rating-tip">按实际训练情况打分，至少选一个维度。</view>
-              <view class="summary-dimension-list">
-                <view class="summary-dimension-card" wx:for="{{summaryDimensionCardList}}" wx:for-item="cardItem" wx:key="label">
-                  <view class="summary-dimension-head">
-                    <text class="summary-dimension-label">{{cardItem.label}}</text>
-                    <text class="summary-dimension-value {{cardItem.hasValue ? 'has-value' : ''}}">{{cardItem.displayValue}}</text>
-                  </view>
-                  <!-- 旧的加减分结构保留注释，不删除；当前改为固定分值直选 -->
-                  <!--
-                  <view class="summary-dimension-tabbar">
-                    <view class="summary-dimension-tab left">-</view>
-                    <view class="summary-dimension-center">{{cardItem.hasValue ? (cardItem.value + '分') : '左右切换评分'}}</view>
-                    <view class="summary-dimension-tab right">+</view>
-                  </view>
-                  -->
-                  <!-- 旧的固定分值按钮结构保留注释，不删除；当前改为手动输入，方便精确录分 -->
-                  <!--
-                  <view class="summary-dimension-score-list">
-                    <view class="summary-dimension-score-chip">1分</view>
-                    <view class="summary-dimension-score-chip">2分</view>
-                    <view class="summary-dimension-score-chip">3分</view>
-                    <view class="summary-dimension-score-chip">4分</view>
-                    <view class="summary-dimension-score-chip">5分</view>
-                  </view>
-                  -->
-                  <view class="summary-dimension-input-row">
-                    <input
-                      class="summary-dimension-input"
-                      type="digit"
-                      maxlength="4"
-                      placeholder="请输入0-5分，可填小数"
-                      value="{{cardItem.inputValue}}"
-                      data-label="{{cardItem.label}}"
-                      bindinput="handleSummaryDimensionInput"
-                      bindblur="handleSummaryDimensionBlur"
-                    />
-                    <view
-                      class="summary-dimension-clear-chip {{cardItem.hasValue ? '' : 'disabled'}}"
-                      data-label="{{cardItem.label}}"
-                      bindtap="clearSummaryDimensionScore"
-                    >清空</view>
-                  </view>
-                </view>
-              </view>
-              <view class="summary-rating-result">
-                <view class="summary-rating-result-item">
-                  <text class="summary-rating-result-label">已选维度</text>
-                  <text class="summary-rating-result-value">{{summarySelectedDimensionCount}}项</text>
-                </view>
-                <view class="summary-rating-result-item">
-                  <text class="summary-rating-result-label">综合评分</text>
-                  <text class="summary-rating-result-value">{{summaryAverageRatingText}}</text>
-                </view>
-              </view>
-            </view>
-
-            <view class="summary-time-grid">
-              <view class="form-group">
-                <view class="form-label required">上课日期</view>
-                <picker mode="date" value="{{summaryDate}}" bindchange="handleSummaryDateChange">
-                  <view class="form-input-box">
-                    <text class="{{summaryDate ? 'input-val' : 'input-placeholder'}}">{{summaryDate || '请选择日期'}}</text>
-                  </view>
-                </picker>
-              </view>
-
-              <view class="form-group">
-                <view class="form-label required">上课时间</view>
-                <picker mode="time" value="{{summaryStartTime}}" bindchange="handleSummaryStartTimeChange">
-                  <view class="form-input-box">
-                    <text class="{{summaryStartTime ? 'input-val' : 'input-placeholder'}}">{{summaryStartTime || '请选择上课时间'}}</text>
-                  </view>
-                </picker>
-              </view>
-
-              <!-- 已停用手动时长输入方案：当前按你的需求恢复为“双时间独立可改，只在首次缺省时补 60 分钟” -->
-
-              <view class="form-group">
-                <view class="form-label required">下课时间</view>
-                <picker mode="time" value="{{summaryEndTime}}" bindchange="handleSummaryEndTimeChange">
-                  <view class="form-input-box">
-                    <text class="{{summaryEndTime ? 'input-val' : 'input-placeholder'}}">{{summaryEndTime || '请选择下课时间'}}</text>
-                  </view>
-                </picker>
-              </view>
-            </view>
-
-            <view class="summary-time-tip">
-              <!-- 压缩时间联动提示：保留必填+首次自动补 60 分钟的关键规则 -->
-              上下课时间均必填；仅首次录入且另一端空缺时，系统自动补 60 分钟；两端已有值后不再联动。
-            </view>
-            <!-- 压缩管理层查看态提示：精简角色与写权限语义 -->
-            <view wx:if="{{!canWriteSummary}}" class="pickup-readonly-tip">管理层查看态；每日总结仅由接取的执行教练填写，此处只可查看。</view>
-
-            <view class="form-label required">课程总结</view>
-            <textarea
-              class="summary-textarea"
-              placeholder="请输入当天上课内容、表现、教练建议..."
-              value="{{summaryInput}}"
-              bindinput="handleSummaryInput"
-              disabled="{{!canWriteSummary}}"
-            ></textarea>
-            <button class="btn-submit" bindtap="saveSummary" disabled="{{!canWriteSummary}}">保存每日总结</button>
-          </view>
-        </view>
+        <publish-dailysummary
+          order-id="{{orderId}}"
+          schedule="{{schedule}}"
+          display-schedule="{{displaySchedule}}"
+          can-write-summary="{{canWriteSummary}}"
+          order-progress="{{order}}"
+          bind:summary-saved="onSummarySaved"
+        />
       </view>
 
+      <!-- 【结课】tab：迁移为 publish_classoff 组件 -->
       <view wx:if="{{selectedTab === 'close'}}">
-        <view class="section-header">
-          <text class="section-title">结课</text>
-          <!-- 压缩结课副标题：精简 -->
-          <text class="section-subtitle">先填结课结语和教练备注，再提交关闭操作。</text>
-        </view>
-
-            <view class="empty-state" wx:if="{{!orderId}}">
-              <text>请先发布课程再进入结课页；已有班级请从底部【课程管理】进入。</text>
-        </view>
-
-        <view wx:if="{{orderId}}">
-          <!-- 新增结课信息区：支持填写结语和仅教练侧可见的内部备注 -->
-          <view class="section-card">
-            <view class="form-group">
-              <view class="form-label required">结课结语</view>
-              <!-- 压缩结语 placeholder：精简目的描述 -->
-              <textarea
-                class="summary-textarea"
-                placeholder="请输入课程结语（给家长或课程收尾使用）"
-                value="{{closeSummaryInput}}"
-                bindinput="handleCloseSummaryInput"
-              ></textarea>
-            </view>
-
-            <view class="form-group no-margin">
-              <view class="form-label">教练备注（自己可见）</view>
-              <!-- 压缩教练备注 placeholder：精简 -->
-              <textarea
-                class="summary-textarea"
-                placeholder="请输入内部备注，仅管理页可查看"
-                value="{{closeCoachNoteInput}}"
-                bindinput="handleCloseCoachNoteInput"
-              ></textarea>
-            </view>
-
-            <!-- 压缩结课前提示：保留核心后果 -->
-            <view class="sync-note">提交后课程进入 closed 状态。结语给家长看，教练备注为内部记录。</view>
-            <button class="btn-submit" bindtap="submitCloseCourse" disabled="{{!canCloseCourse}}">提交结课</button>
-          </view>
-        </view>
+        <publish-classoff
+          order-id="{{orderId}}"
+          can-close-course="{{canCloseCourse}}"
+          initial-close-summary="{{closeSummaryInput}}"
+          initial-close-coach-note="{{closeCoachNoteInput}}"
+          bind:course-closed="onCourseClosed"
+        />
       </view>
 
       <!-- 底部垫高，防止内容被遮挡 -->
       <view class="footer-spacer"></view>
     </view>
-  </scroll-view>
+  </view>
 
+  <!-- 课节管理弹窗（保留在父页面，由 classcreate 组件通过事件触发打开） -->
   <view class="modal-mask" wx:if="{{showSetTotalModal}}">
     <view class="modal-container small-modal-container">
       <view class="modal-header">设置总课时</view>
       <view class="modal-content">
-        <!-- 新增总课时设置：决定生成多少个课节框；当前规则"记录满 3 节课后锁定" -->
         <view class="form-item">
           <text class="form-label">总课时</text>
-          <input
-            class="form-input"
-            type="number"
-            value="{{setTotalLessonsInput}}"
-            placeholder="例如 10"
-            bindinput="handleSetTotalLessonsInput"
-          />
+          <input class="form-input" type="number" value="{{setTotalLessonsInput}}" placeholder="例如 10" bindinput="handleSetTotalLessonsInput" />
         </view>
-        <!-- 压缩设置总课时 Modal 说明：合并成两行关键信息 -->
         <view class="sync-note no-margin">适用：全新班级，无历史课节。保存后一次性生成第 1 到第 N 课的课节框。</view>
         <view class="sync-note strong-warning">重要：累计记录满 3 节课后自动锁定，不再支持重新设置总课时，避免覆盖已有明细。</view>
       </view>
@@ -805,28 +325,14 @@
     <view class="modal-container">
       <view class="modal-header">半途接入课程</view>
       <view class="modal-content">
-        <!-- 新增半途接入表单：设置总课时和前面已经完成的课次 -->
         <view class="form-item">
           <text class="form-label">总课时</text>
-          <input
-            class="form-input"
-            type="number"
-            value="{{syncTotalLessonsInput}}"
-            placeholder="请输入总课时"
-            bindinput="handleSyncTotalLessonsInput"
-          />
+          <input class="form-input" type="number" value="{{syncTotalLessonsInput}}" placeholder="请输入总课时" bindinput="handleSyncTotalLessonsInput" />
         </view>
         <view class="form-item">
           <text class="form-label">前面已上了几节课</text>
-          <input
-            class="form-input"
-            type="number"
-            value="{{syncHistoryCountInput}}"
-            placeholder="例如 6"
-            bindinput="handleSyncHistoryCountInput"
-          />
+          <input class="form-input" type="number" value="{{syncHistoryCountInput}}" placeholder="例如 6" bindinput="handleSyncHistoryCountInput" />
         </view>
-        <!-- 压缩半途接入 Modal 说明：合并成两行关键 -->
         <view class="sync-note">适用：前面已上过一部分，现在从中间接入系统管理。例：总 10、已上 6 → 先显示 0-6 历史汇总，再生成第 7-10 课。</view>
         <view class="sync-note strong-warning">重要：历史课次不计锁定；接入后累计记录满 3 节课自动锁定，不再支持改总课时或补录历史。</view>
       </view>

@@ -1,0 +1,191 @@
+<!-- ============================================================
+  publish_dailysummary 组件：每日总结 tab
+  所属页面：pages/task/publish/publish
+  说明：原 publish 页面 selectedTab === 'summary' 分支整体迁移为本组件。
+       接收 orderId / schedule / displaySchedule / canWriteSummary / orderProgress，
+       内部维护课节选择、多维评分、时间、总结文本等编辑器状态。
+       保存成功后 triggerEvent('summary-saved', { lesson, index, lessonNo, orderId })，
+       宿主页面据此跳转课节详情页并刷新 schedule。
+  拆分说明（2026-09-20）：publish 页面按表单提交职责拆为 classcreate / dailysummary / classoff 三个组件。
+  ============================================================ -->
+<view class="section-header">
+  <text class="section-title">每日总结</text>
+  <text class="section-subtitle">选择课节后填写当天总结；进度展示页仅用于查看。</text>
+</view>
+
+<view class="empty-state" wx:if="{{!orderId}}">
+  <text>请先发布课程再填每日总结；已有班级请从底部【课程管理】进入。</text>
+</view>
+
+<view wx:if="{{orderId}}">
+  <view class="section-card">
+    <view class="section-card-title">选择课节</view>
+    <scroll-view class="summary-lessons" scroll-x="true" scroll-into-view="{{summaryLessonScrollIntoView}}">
+      <view id="summary-lesson-{{index}}" class="summary-lesson-chip {{summaryLessonIndex === index ? 'active' : ''}}" wx:for="{{schedule}}" wx:key="index" data-index="{{index}}" bindtap="selectSummaryLesson">
+        第 {{item.lesson || (index + 1)}} 课
+      </view>
+    </scroll-view>
+
+    <view class="summary-meta" wx:if="{{schedule[summaryLessonIndex]}}">
+      <text>当前课节：第 {{schedule[summaryLessonIndex].lesson || (summaryLessonIndex + 1)}} 课</text>
+    </view>
+
+    <!-- 多维评分 -->
+    <view class="form-group">
+      <view class="form-label required">多维评分</view>
+      <view class="summary-rating-tip">按实际训练情况打分，至少选一个维度。</view>
+      <view class="summary-dimension-list">
+        <view class="summary-dimension-card" wx:for="{{summaryDimensionCardList}}" wx:for-item="cardItem" wx:key="label">
+          <view class="summary-dimension-head">
+            <text class="summary-dimension-label">{{cardItem.label}}</text>
+            <text class="summary-dimension-value {{cardItem.hasValue ? 'has-value' : ''}}">{{cardItem.displayValue}}</text>
+          </view>
+          <view class="summary-dimension-input-row">
+            <input
+              class="summary-dimension-input"
+              type="digit"
+              maxlength="4"
+              placeholder="请输入0-5分，可填小数"
+              value="{{cardItem.inputValue}}"
+              data-label="{{cardItem.label}}"
+              bindinput="handleSummaryDimensionInput"
+              bindblur="handleSummaryDimensionBlur"
+              disabled="{{summaryLocked || !canWriteSummary}}"
+            />
+            <view
+              class="summary-dimension-clear-chip {{cardItem.hasValue ? '' : 'disabled'}} {{summaryLocked || !canWriteSummary ? 'disabled' : ''}}"
+              data-label="{{cardItem.label}}"
+              bindtap="clearSummaryDimensionScore"
+            >清空</view>
+          </view>
+        </view>
+      </view>
+      <view class="summary-rating-result">
+        <view class="summary-rating-result-item">
+          <text class="summary-rating-result-label">已选维度</text>
+          <text class="summary-rating-result-value">{{summarySelectedDimensionCount}}项</text>
+        </view>
+        <view class="summary-rating-result-item">
+          <text class="summary-rating-result-label">综合评分</text>
+          <text class="summary-rating-result-value">{{summaryAverageRatingText}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="summary-time-grid">
+      <view class="form-group">
+        <view class="form-label required">上课日期</view>
+        <picker mode="date" value="{{summaryDate}}" bindchange="handleSummaryDateChange" disabled="{{summaryLocked || !canWriteSummary}}">
+          <view class="form-input-box">
+            <text class="{{summaryDate ? 'input-val' : 'input-placeholder'}}">{{summaryDate || '请选择日期'}}</text>
+          </view>
+        </picker>
+      </view>
+
+      <view class="form-group">
+        <view class="form-label required">上课时间</view>
+        <picker mode="time" value="{{summaryStartTime}}" bindchange="handleSummaryStartTimeChange" disabled="{{summaryLocked || !canWriteSummary}}">
+          <view class="form-input-box">
+            <text class="{{summaryStartTime ? 'input-val' : 'input-placeholder'}}">{{summaryStartTime || '请选择上课时间'}}</text>
+          </view>
+        </picker>
+      </view>
+
+      <view class="form-group">
+        <view class="form-label required">下课时间</view>
+        <picker mode="time" value="{{summaryEndTime}}" bindchange="handleSummaryEndTimeChange" disabled="{{summaryLocked || !canWriteSummary}}">
+          <view class="form-input-box">
+            <text class="{{summaryEndTime ? 'input-val' : 'input-placeholder'}}">{{summaryEndTime || '请选择下课时间'}}</text>
+          </view>
+        </picker>
+      </view>
+    </view>
+
+    <view class="summary-time-tip">
+      上下课时间均必填；仅首次录入且另一端空缺时，系统自动补 60 分钟；两端已有值后不再联动。
+    </view>
+    <view wx:if="{{!canWriteSummary}}" class="pickup-readonly-tip">管理层查看态；每日总结仅由接取的执行教练填写，此处只可查看。</view>
+    <!-- 每日记录之后不可更改：已记录课节禁用所有编辑控件 -->
+    <view wx:if="{{summaryLocked}}" class="pickup-readonly-tip">该课节已完成每日记录，所有内容均不可更改。</view>
+
+    <view class="form-label required">课程总结</view>
+    <textarea
+      class="summary-textarea"
+      placeholder="请输入当天上课内容、表现、教练建议..."
+      value="{{summaryInput}}"
+      bindinput="handleSummaryInput"
+      disabled="{{!canWriteSummary || summaryLocked}}"
+    ></textarea>
+    <button class="btn-submit" bindtap="saveSummary" disabled="{{!canWriteSummary || summaryLocked}}">保存每日总结</button>
+  </view>
+
+  <!-- 课程进度表课节列表 -->
+  <view class="empty-state" wx:if="{{!orderId}}">
+    <text>请先发布课程再管理课节；已有班级请从底部【课程管理】进入。</text>
+  </view>
+
+  <view wx:if="{{orderId}}">
+    <view class="section-card">
+      <view class="section-card-title">课程进度表 ({{orderProgress.progress_done || 0}}/{{orderProgress.progress_total || 0}})</view>
+      <view class="sync-tip" wx:if="{{orderProgress.progress_done > 0}}">已补录前 {{orderProgress.progress_done}} 节历史课，下面会先显示一个历史汇总框，再显示剩余课节框</view>
+      <view class="section-card-title minor">右划或者下拉选择操作课节，记录完的课程放在最下面</view>
+      <view class="lesson-picker-row">
+        <scroll-view class="lesson-picker-scroll" scroll-x="true" scroll-into-view="{{manageLessonScrollIntoView}}">
+          <view
+            id="manage-lesson-{{index}}"
+            class="lesson-picker-chip {{selectedLessonIndex === index ? 'active' : ''}}"
+            wx:for="{{schedule}}"
+            wx:key="index"
+            data-index="{{index}}"
+            bindtap="selectManageLesson"
+          >
+            第 {{item.lesson || (index + 1)}} 课
+          </view>
+        </scroll-view>
+      </view>
+
+      <view class="selected-lesson-panel" wx:if="{{schedule[selectedLessonIndex]}}">
+        <view class="manage-lesson-main">
+          <text class="manage-lesson-title">当前操作：第 {{schedule[selectedLessonIndex].lesson || (selectedLessonIndex + 1)}} 课</text>
+          <text class="manage-lesson-status {{schedule[selectedLessonIndex].displayStatusClass}}">{{schedule[selectedLessonIndex].statusText}}</text>
+        </view>
+        <view class="manage-lesson-meta">
+          <text wx:if="{{schedule[selectedLessonIndex].startedAtText}}">上课：{{schedule[selectedLessonIndex].startedAtText}}</text>
+          <text wx:if="{{schedule[selectedLessonIndex].completedAtText}}">下课：{{schedule[selectedLessonIndex].completedAtText}}</text>
+        </view>
+        <view class="manage-lesson-actions">
+          <button
+            class="mini-btn ghost lesson-record-btn {{schedule[selectedLessonIndex].isCompleted ? 'done' : 'pending'}}"
+            data-index="{{selectedLessonIndex}}"
+            bindtap="goRecordSummary"
+            disabled="{{!canWriteSummary}}"
+          >
+            {{canWriteSummary ? '去记录' : '仅执行教练可记录'}}
+          </button>
+        </view>
+      </view>
+
+      <view class="section-card-title minor">全部课节</view>
+      <block wx:for="{{displaySchedule}}" wx:key="index">
+        <view
+          class="manage-lesson-item {{item.isHistorySummary ? 'history-summary-item' : ''}} {{selectedLessonIndex === item.actualIndex && !item.isHistorySummary ? 'selected' : ''}}"
+          data-index="{{item.actualIndex}}"
+          data-history="{{item.isHistorySummary ? 1 : 0}}"
+          bindtap="selectManageLesson"
+        >
+          <view class="manage-lesson-main">
+            <text class="manage-lesson-title">{{item.isHistorySummary ? ('第 ' + item.title + ' 课') : ('第 ' + (item.lesson || (index + 1)) + ' 课')}}</text>
+            <text class="manage-lesson-status {{item.displayStatusClass}}">{{item.statusText}}</text>
+          </view>
+          <view class="manage-lesson-meta" wx:if="{{!item.isHistorySummary}}">
+            <text wx:if="{{item.startedAtText}}">上课：{{item.startedAtText}}</text>
+            <text wx:if="{{item.completedAtText}}">下课：{{item.completedAtText}}</text>
+          </view>
+          <view class="manage-lesson-meta" wx:if="{{item.isHistorySummary}}">
+            <text>这是半途接入前的历史课节汇总框，不参与直接操作。</text>
+          </view>
+        </view>
+      </block>
+    </view>
+  </view>
+</view>

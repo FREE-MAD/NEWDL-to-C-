@@ -1,0 +1,53 @@
+<!-- ============================================================
+  publish_classoff 组件：结课 tab
+  所属页面：pages/task/publish/publish
+  说明：原 publish 页面 selectedTab === 'close' 分支整体迁移为本组件。
+       接收 orderId / canCloseCourse / initialCloseSummary / initialCloseCoachNote，
+       内部维护 closeSummaryInput / closeCoachNoteInput，结课成功后 triggerEvent('course-closed')。
+  拆分说明（2026-09-20）：publish 页面按表单提交职责拆为 classcreate / dailysummary / classoff 三个组件。
+  ============================================================ -->
+<view class="section-header">
+  <text class="section-title">结课</text>
+  <!-- 压缩结课副标题：精简 -->
+  <text class="section-subtitle">先填结课结语和教练备注，再提交关闭操作。</text>
+</view>
+
+<view class="empty-state" wx:if="{{!orderId}}">
+  <text>请先发布课程再进入结课页；已有班级请从底部【课程管理】进入。</text>
+</view>
+
+<view wx:if="{{orderId}}">
+  <!-- 新增结课信息区：支持填写结语和仅教练侧可见的内部备注 -->
+  <view class="section-card">
+    <!-- 【2026-09-21 权限口径调整】无结课写入权限时（管理层 / 机构 admin 查看态）
+         整块表单锁为只读：textarea 一并 disabled，避免出现「能输入但提交不了」的假可编辑态。 -->
+    <view wx:if="{{!canCloseCourse}}" class="pickup-readonly-tip">只读查看态；结课仅由接取的执行教练提交，此处只可查看。</view>
+    <view class="form-group">
+      <view class="form-label required">结课结语</view>
+      <!-- 压缩结语 placeholder：精简目的描述 -->
+      <textarea
+        class="summary-textarea"
+        placeholder="请输入课程结语（给家长或课程收尾使用）"
+        value="{{closeSummaryInput}}"
+        bindinput="handleCloseSummaryInput"
+        disabled="{{!canCloseCourse}}"
+      ></textarea>
+    </view>
+
+    <view class="form-group no-margin">
+      <view class="form-label">教练备注（自己可见）</view>
+      <!-- 压缩教练备注 placeholder：精简 -->
+      <textarea
+        class="summary-textarea"
+        placeholder="请输入内部备注，仅管理页可查看"
+        value="{{closeCoachNoteInput}}"
+        bindinput="handleCloseCoachNoteInput"
+        disabled="{{!canCloseCourse}}"
+      ></textarea>
+    </view>
+
+    <!-- 压缩结课前提示：保留核心后果 -->
+    <view class="sync-note">提交后课程进入 closed 状态。结语给家长看，教练备注为内部记录。</view>
+    <button class="btn-submit" bindtap="submitCloseCourse" disabled="{{!canCloseCourse}}">提交结课</button>
+  </view>
+</view>

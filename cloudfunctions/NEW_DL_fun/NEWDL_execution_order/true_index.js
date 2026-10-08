@@ -9,7 +9,10 @@ const _ = db.command
 const ORDER_COLLECTION_BASE = 'execution_orders'
 const USER_COLLECTION_BASE = 'users'
 const ORGANIZATION_COLLECTION_BASE = 'organization'
-const CURRENT_RUNTIME_SOURCE = 'dev_index.js'
+// 调整（2026-09-05）：runtimeSource 改为按实际入口文件名动态取值（用 __filename 兼容 Windows/POSIX 路径分隔符，无需引入 path 模块）。
+// 原因：此前硬编码 'dev_index.js'，同步脚本把本文件覆盖到 true_index.js 后，true 的 [runtime_env] 日志仍显示 dev_index.js，
+// 即「dev 覆盖 true 的日志环境区分」问题；改为动态取值后同步复制到哪个文件就自动显示哪个文件名，无需同步脚本特殊保护。
+const CURRENT_RUNTIME_SOURCE = __filename.split(/[\\/]/).pop()
 let CURRENT_ENV_VERSION = 'develop'
 const ACTION_SYNC_PARENT_BOOKING_TO_A = 'syncParentBookingToA'
 const ACTION_SYNC_COACH_RESULT_TO_B = 'syncCoachResultToB'

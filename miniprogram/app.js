@@ -24,14 +24,26 @@ function buildGlobalSharePath(pageInstance) {
   return `/${route}${queryString ? `?${queryString}` : ''}`;
 }
 
+// 2026-09-07 新增：朋友圈分享专用 query 拼装
+// 微信 onShareTimeline 只接受 query 字段（不带 path，朋友圈分享固定用当前页面路径）
+function buildGlobalShareQuery(pageInstance) {
+  const pageOptions = ((pageInstance && pageInstance.options) || {});
+  return Object.keys(pageOptions)
+    .filter(key => pageOptions[key] !== undefined && pageOptions[key] !== null && String(pageOptions[key]).trim() !== '')
+    .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(pageOptions[key])}`)
+    .join('&');
+}
+
 // 新增普通分享菜单展示：页面加载和回显时都补一次，避免部分页面右上角不出现“转发”
+// 2026-09-07 调整：menus 同时声明 'shareTimeline'，让右上角胶囊菜单同时显示“分享给朋友”与“分享到朋友圈”两项
 function ensureGlobalShareMenu() {
   if (!wx.showShareMenu) {
     return;
   }
 
   wx.showShareMenu({
-    menus: ['shareAppMessage']
+    // 新增 'shareTimeline'：开启“分享到朋友圈”能力；仅传 'shareAppMessage' 时朋友圈按钮不会出现
+    menus: ['shareAppMessage', 'shareTimeline']
   });
 }
 
@@ -69,6 +81,25 @@ Page = function(pageOptions = {}) {
     return {
       title: GLOBAL_DEFAULT_SHARE_TITLE,
       path: buildGlobalSharePath(this)
+    };
+  };
+
+  // 2026-09-07 新增：全局兜底 onShareTimeline，让没有自定义朋友圈分享的页面也能分享到朋友圈
+  // 微信文档要求：页面必须定义 onShareTimeline 回调，右上角胶囊菜单的“分享到朋友圈”按钮才会出现
+  // 已自定义 onShareTimeline 的页面继续走原来的业务逻辑，不覆盖
+  const originalOnShareTimeline = wrappedPageOptions.onShareTimeline;
+  wrappedPageOptions.onShareTimeline = function(...args) {
+    if (typeof originalOnShareTimeline === 'function') {
+      const customTimelineConfig = originalOnShareTimeline.apply(this, args);
+      if (customTimelineConfig) {
+        return customTimelineConfig;
+      }
+    }
+
+    // 兜底：朋友圈分享默认只带 title + query（path 在朋友圈分享中由微信自动用当前页面路径）
+    return {
+      title: GLOBAL_DEFAULT_SHARE_TITLE,
+      query: buildGlobalShareQuery(this)
     };
   };
 

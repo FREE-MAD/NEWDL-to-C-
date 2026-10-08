@@ -18,26 +18,31 @@ const {
 
 const TAB_JOIN = 'join'
 const ORGANIZATION_RESULT_CARD_STORAGE_KEY = 'organizationEntryResultCard'
+// 新增（2026-09-21）：本地缓存「我已提交但还没被确认」的加入申请，
+// 用于未正式加入（业务身份里还没有 orgId）时回查机构文档看申请是待确认还是被拒绝
+const ORGANIZATION_JOIN_APPLY_STORAGE_KEY = 'organizationJoinApplyPending'
 
-// 新增机构成员身份枚举（2026-09-05）：主教 / 副教练 / 指导 / 训练分析 / 自定义填写。
-// 身份属于「机构」这一层：只入库 NDLdev_organization（成员项 staff_role），不写入 NDLdev_users。
-const STAFF_ROLE_HEAD_COACH = 'head_coach'
-const STAFF_ROLE_ASSISTANT_COACH = 'assistant_coach'
-const STAFF_ROLE_INSTRUCTOR = 'instructor'
-const STAFF_ROLE_TRAINING_ANALYST = 'training_analyst'
-const STAFF_ROLE_CUSTOM = 'custom'
-const STAFF_ROLE_OPTIONS = [
-  { key: STAFF_ROLE_HEAD_COACH, label: '主教' },
-  { key: STAFF_ROLE_ASSISTANT_COACH, label: '副教练' },
-  { key: STAFF_ROLE_INSTRUCTOR, label: '指导' },
-  { key: STAFF_ROLE_TRAINING_ANALYST, label: '训练分析' }
+// 调整（2026-09-21）：B 教练加入的身份选项由「主教 / 副教练 / 指导 / 训练分析 / 自填」
+// 换成「管理 / 执行」两项 ——
+//   管理（admin）：管理层同意后进入 organization_member.admin_list，成为团队管理层；
+//   执行（coach）：管理层同意后进入 organization_member.coach_list，成为团队执行教练。
+// 身份仍然只归属「机构」这一层：只入库 NDLdev_organization 的成员项，不写入 NDLdev_users
+//（users 侧的 biz_role / organization_profile 由云函数在管理层同意后统一写入）。
+const JOIN_ROLE_ADMIN = 'admin'
+const JOIN_ROLE_COACH = 'coach'
+const JOIN_ROLE_OPTIONS = [
+  { key: JOIN_ROLE_ADMIN, label: '管理' },
+  { key: JOIN_ROLE_COACH, label: '执行' }
 ]
-// 调整（2026-09-05）：机构身份改为「固定文案选项 + 常驻输入框」——
-// ① 选项不再用称呼（昵称）合成，一直就是主教 / 副教练 / 指导 / 训练分析这类固定文案；
-// ② 「其他（自填）」从选项里移除（输入框常驻显示，本身就是自填入口）；
-// ③ 点击选项只把文案回填到输入框，由用户再次编辑，最终落库值 = 输入框文本
-// （统一按 staff_role='custom' + staff_role_custom=文本 提交，云函数 normalizeStaffRole 已支持，云函数零改动）
-const STAFF_ROLE_CUSTOM_MAX_LENGTH = 20
+// 新增加入申请状态：none（没有申请）/ pending（等待创建者确认）/ rejected（已被拒绝，可重新提交）
+const JOIN_APPLY_STATUS_NONE = 'none'
+const JOIN_APPLY_STATUS_PENDING = 'pending'
+const JOIN_APPLY_STATUS_REJECTED = 'rejected'
+
+// 新增加入身份文案：管理 → 团队管理层，执行 → 团队执行教练
+function getJoinRoleLabel(joinRole = '') {
+  return String(joinRole || '').trim() === JOIN_ROLE_ADMIN ? '团队管理层' : '团队执行教练'
+}
 
 // 拆分说明（2026-09-20）：以下常量已下沉到 baseinformation 组件，本组件仅保留注释参考
 // 新增（2026-09-05）：机构展示页区块二/三展示字段的编辑态默认值。
@@ -63,20 +68,20 @@ Component({
    */
   data: {
     joinForm: {
-      invitation_code: ''
+      invitation_code: '',
+      // 新增（2026-09-21）：加入身份 —— 管理（admin）/ 执行（coach），提交前必须选一项
+      join_role: ''
     },
-    // 新增机构身份选项：主教 / 副教练 / 指导 / 训练分析 / 其他（自填）；
-    // 教练资料拉取成功后会替换成「称呼+身份」前缀版本（如「张三主教」），这里是称呼缺失时的兜底纯文本
-    // 调整（2026-09-05）：选项固定为纯文案（不再随称呼变化），点击选项回填输入框由用户再编辑
-    staffRoleOptions: STAFF_ROLE_OPTIONS,
-    // 新增机构身份表单：staff_role 为选中枚举，staff_role_custom 为选「其他」时的填写值
-    // 调整（2026-09-05）：staff_role 固定记为 custom，staff_role_custom 即输入框文本（=最终落库值）
-    staffForm: {
-      staff_role: '',
-      staff_role_custom: ''
-    },
-    // 新增已加入机构标记：B 教练加入侧区分「未加入 → 填邀请码加入」与「已加入 → 只更新身份」
+    // 调整（2026-09-21）：身份选项改为「管理 / 执行」两项（原主教 / 副教练 / 指导 / 训练分析 已移除）
+    joinRoleOptions: JOIN_ROLE_OPTIONS,
+    // 新增已加入机构标记：B 教练加入侧区分「未加入 → 填邀请码提交加入申请」与「已加入 → 只读展示身份」
     hasJoinedOrganization: false,
+    // 新增已加入后的身份文案：团队管理层 / 团队执行教练（来自成员项 member_role）
+    currentMemberRoleLabel: '',
+    // 新增加入申请状态：none / pending / rejected
+    joinApplyStatus: JOIN_APPLY_STATUS_NONE,
+    // 新增加入申请摘要：待确认 / 被拒绝时展示机构名、申请身份、申请时间
+    joinApplyInfo: null,
     joinCodePreview: '',
     isSubmitting: false,
     submitResultCard: null
@@ -100,7 +105,8 @@ Component({
   pageLifetimes: {
     show() {
       // 拆分说明（2026-09-20）：认证状态由外壳 onShow → refreshCertificationState 统一刷新，
-      // 组件只回查机构资料（hasJoinedOrganization / staffForm）
+      // 调整（2026-09-21）：回查字段改为 hasJoinedOrganization / joinForm.join_role / joinApplyStatus
+      // 组件只回查机构资料（原 staffForm 已移除）
       this.refreshCurrentOrganizationCard()
     }
   },
@@ -111,20 +117,27 @@ Component({
     // 头像/称呼通过 profile property 直接渲染
 
     // 新增进页机构回查：当前页仍保留机构资料回查，结果卡片展示改由机构首页承接
-    // 拆分说明（2026-09-20）：本组件只回查 join 相关字段（hasJoinedOrganization / staffForm），
+    // 拆分说明（2026-09-20）：本组件只回查 join 相关字段（hasJoinedOrganization / 加入身份 / 申请状态），
     // isEditMode / currentOrganizationId / createForm / supplementUnlocked / fetchOrganizationQrcodeForEdit
     // 已下沉到 baseinformation 组件
+    // 调整（2026-09-21）：回查的 orgId 不再只取业务身份 —— 提交加入申请后身份里还没有 orgId，
+    // 此时用本地缓存的申请记录里的 orgId 回查，才能展示「等待创建者确认 / 已被拒绝」
     refreshCurrentOrganizationCard() {
       const app = getApp()
       const currentIdentity = app.getBusinessIdentity ? app.getBusinessIdentity() : null
       const organizationProfile = (currentIdentity && currentIdentity.organizationProfile) || {}
-      const orgId = String(organizationProfile.orgId || '').trim()
-      const memberRole = String(organizationProfile.memberRole || '').trim()
+      const identityOrgId = String(organizationProfile.orgId || '').trim()
+      const identityMemberRole = String(organizationProfile.memberRole || '').trim()
+      const cachedApply = wx.getStorageSync(ORGANIZATION_JOIN_APPLY_STORAGE_KEY) || null
+      const cachedOrgId = String((cachedApply && cachedApply.orgId) || '').trim()
+      const orgId = identityOrgId || cachedOrgId
 
       if (!orgId) {
         this.setData({
           submitResultCard: null,
-          hasJoinedOrganization: false
+          hasJoinedOrganization: false,
+          joinApplyStatus: JOIN_APPLY_STATUS_NONE,
+          joinApplyInfo: null
         })
         return Promise.resolve()
       }
@@ -146,45 +159,119 @@ Component({
         }
 
         const organizationBasic = organizationDoc.organization_basic || {}
-        const isAdminRole = memberRole === 'admin'
-        // 新增机构身份回查：身份存在机构成员项（organization_member.*.staff_role）里，
-        // 按当前用户 openid 找出自己那一条，编辑态回填到身份选择区
+        const organizationName = String(organizationBasic.organization_name || '').trim()
+        const invitationCode = String(organizationBasic.invitation_code || '').trim()
         const myOpenid = String(app.globalData.openid || '').trim()
         const organizationMember = organizationDoc.organization_member || {}
-        const memberList = [].concat(
-          Array.isArray(organizationMember.admin_list) ? organizationMember.admin_list : [],
-          Array.isArray(organizationMember.coach_list) ? organizationMember.coach_list : []
-        )
+        const adminList = Array.isArray(organizationMember.admin_list) ? organizationMember.admin_list : []
+        const coachList = Array.isArray(organizationMember.coach_list) ? organizationMember.coach_list : []
+        // 新增（2026-09-21）：先按 openid 判断自己是不是正式成员（在 admin_list / coach_list 里）
+        const memberList = [].concat(adminList, coachList)
         const myMemberItem = myOpenid
           ? memberList.find((item) => String((item && item.openid) || '').trim() === myOpenid)
           : null
-        const savedStaffRole = String((myMemberItem && myMemberItem.staff_role) || '').trim()
-        // 用户已经手动选过身份时保留当前选择，避免编辑中途返回页面被回查覆盖
-        const hasPickedStaffRole = !!String((this.data.staffForm || {}).staff_role || '').trim()
-        const nextStaffForm = hasPickedStaffRole
-          ? this.data.staffForm
-          : this.buildStaffFormFromSaved(savedStaffRole)
+        const hasJoinedOrganization = !!myMemberItem || !!identityOrgId
+        // 身份文案取成员项 member_role 优先，成员项缺失时退回业务身份里的 memberRole
+        const memberRole = String((myMemberItem && myMemberItem.member_role) || '').trim() || identityMemberRole
+        const isAdminRole = memberRole === JOIN_ROLE_ADMIN
 
-        this.setData({
-          // 新增已加入标记：能按 orgId 查到机构文档，说明当前用户已在机构内，
-          // B 教练加入侧据此判断显示「加入」还是「保存我的机构身份」
-          hasJoinedOrganization: true,
-          staffForm: nextStaffForm,
-          submitResultCard: {
+        // 新增加入申请状态回查：还没成为正式成员时，看 pending_list 里有没有自己那一条
+        const pendingList = Array.isArray(organizationMember.pending_list) ? organizationMember.pending_list : []
+        const myPendingItem = (myOpenid && !myMemberItem)
+          ? pendingList.find((item) => String((item && item.openid) || '').trim() === myOpenid)
+          : null
+        let joinApplyStatus = JOIN_APPLY_STATUS_NONE
+        let joinApplyInfo = null
+        if (myMemberItem) {
+          // 已经是正式成员：本地缓存的申请记录可以清掉了
+          wx.removeStorageSync(ORGANIZATION_JOIN_APPLY_STORAGE_KEY)
+          // 新增（2026-09-21）审批通过即时生效：管理层同意后云函数已经把机构归属写进对方 users 文档，
+          // 但对方本地身份（storage / globalData）还是旧的自由教练态。这里就地补写一次本地身份，
+          // 让对方不用重新登录就能直接按机构身份使用；已经有 orgId 时不重复写
+          if (!identityOrgId && app.saveUserIdentity) {
+            app.saveUserIdentity({
+              userRole: 'C',
+              bizRole: isAdminRole ? BIZ_ROLE_ORG_ADMIN : BIZ_ROLE_ORG_COACH,
+              organizationProfile: {
+                orgId,
+                orgName: organizationName,
+                memberRole,
+                inviteCode: invitationCode,
+                joinedAt: String((myMemberItem && myMemberItem.joined_at) || '').trim(),
+                source: 'joinOrganization'
+              },
+              needChooseRole: false
+            })
+          }
+        } else if (myPendingItem) {
+          joinApplyStatus = String(myPendingItem.status || '').trim() === JOIN_APPLY_STATUS_REJECTED
+            ? JOIN_APPLY_STATUS_REJECTED
+            : JOIN_APPLY_STATUS_PENDING
+          joinApplyInfo = {
+            organizationName: organizationName || String((cachedApply && cachedApply.organizationName) || '').trim(),
+            joinRoleLabel: getJoinRoleLabel(myPendingItem.join_role),
+            appliedAtText: this.formatApplyTime(myPendingItem.applied_at),
+            reviewRemark: String(myPendingItem.review_remark || '').trim()
+          }
+        } else {
+          // 既不是成员也没有待审记录（申请被清理 / 缓存过期）：清掉本地缓存回到初始态
+          wx.removeStorageSync(ORGANIZATION_JOIN_APPLY_STORAGE_KEY)
+        }
+
+        // 用户已经手动选过身份时保留当前选择，避免编辑中途返回页面被回查覆盖
+        const nextJoinRole = String((((this.data || {}).joinForm || {}).join_role) || '').trim()
+          || (myMemberItem ? memberRole : '')
+
+        let submitResultCard = null
+        if (hasJoinedOrganization) {
+          submitResultCard = {
             title: '当前已加入机构',
-            organizationName: String(organizationBasic.organization_name || '').trim(),
-            invitationCode: String(organizationBasic.invitation_code || '').trim(),
+            organizationName,
+            invitationCode,
             memberRoleLabel: isAdminRole ? '机构管理层' : '机构执行教练',
             message: isAdminRole
               ? '你当前已经在机构内，下面这张卡展示的是机构最新邀请码和基础信息。'
               : '你当前已经加入机构，下面这张卡展示的是机构最新邀请码和基础信息。'
           }
+        } else if (joinApplyStatus === JOIN_APPLY_STATUS_PENDING) {
+          submitResultCard = {
+            title: '加入申请待确认',
+            organizationName,
+            invitationCode,
+            memberRoleLabel: joinApplyInfo ? joinApplyInfo.joinRoleLabel : '待确认',
+            message: '已提交加入申请，等待团队创建者确认后才会正式成为团队成员。'
+          }
+        }
+
+        this.setData({
+          // 新增已加入标记：在成员列表里（或业务身份里已有机构）才算正式加入
+          hasJoinedOrganization,
+          currentMemberRoleLabel: hasJoinedOrganization
+            ? (isAdminRole ? '团队管理层' : '团队执行教练')
+            : '',
+          joinApplyStatus,
+          joinApplyInfo,
+          'joinForm.join_role': nextJoinRole,
+          submitResultCard
         })
         // 拆分说明（2026-09-20）：updateInviteCodePreview 与 fetchOrganizationQrcodeForEdit
         // 已下沉到 baseinformation 组件，本组件不再调用
       }).catch(() => {
         // 新增查询失败兜底：进页拉取失败时不覆盖当前卡片，避免把已有结果清空
       })
+    },
+
+    // 新增（2026-09-21）：申请时间格式化 —— 云函数返回的可能是 Date 序列化串 / Date 对象 / 时间戳
+    formatApplyTime(rawTime) {
+      if (!rawTime) {
+        return ''
+      }
+      const parsed = new Date(rawTime)
+      if (isNaN(parsed.getTime())) {
+        return ''
+      }
+      const pad = (value) => (value < 10 ? `0${value}` : String(value))
+      return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())} ${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`
     },
 
     // 新增加入机构输入收口：邀请码统一转成大写英数格式，避免前端提交脏值
@@ -213,85 +300,33 @@ Component({
       })
     },
 
-    // 新增身份选项构造：预设四项展示成「称呼+身份」（如「张三主教」「张三副教练」），
-    // 其他（自填）不加称呼前缀；称呼为空时退回纯文本标签。
-    // 仅影响展示文案，落库值始终是枚举 key（head_coach 等），后端 normalizeStaffRole 不受影响
-    // 调整（2026-09-05）：选项改回固定文案，不再用称呼合成；点击选项只负责把文案回填输入框由用户再编辑，
-    // 最终落库值 = 输入框文本（统一按 custom 文本提交），不再落枚举 key
-    buildStaffRoleOptions() {
-      return STAFF_ROLE_OPTIONS
-    },
-
-    // 新增机构身份回填：已存值命中预设枚举直接选中对应项；
-    // 其余值（含自定义身份文本）落到「其他（自填）」并填进输入框
-    // 调整（2026-09-05）：改为常驻输入框回填——历史枚举 key（head_coach 等）翻译成选项固定文案填进输入框，
-    // 文本值原样填进输入框；staff_role 统一记为 custom（提交协议不变），输入框文本即最终落库值
-    buildStaffFormFromSaved(savedStaffRole = '') {
-      const safeSaved = String(savedStaffRole || '').trim()
-      if (!safeSaved) {
-        return {
-          staff_role: '',
-          staff_role_custom: ''
-        }
+    // 新增（2026-09-21）加入身份选择：管理 / 执行 二选一。
+    // 管理 → 同意后进 admin_list（团队管理层）；执行 → 同意后进 coach_list（团队执行教练）。
+    // 已正式加入团队后不允许自己改身份（改身份需要团队管理层在「团队管理」里处理），点击无效。
+    onJoinRoleTap(e) {
+      if (this.data.hasJoinedOrganization) {
+        return
       }
 
-      // 新增历史枚举翻译：旧数据存的枚举 key 翻译回选项固定文案，自定义文本原样回填
-      const matchedPreset = STAFF_ROLE_OPTIONS.find((item) => item.key === safeSaved)
-      const nextStaffRoleCustom = String(matchedPreset ? matchedPreset.label : safeSaved)
-        .slice(0, STAFF_ROLE_CUSTOM_MAX_LENGTH)
-
-      return {
-        staff_role: STAFF_ROLE_CUSTOM,
-        staff_role_custom: nextStaffRoleCustom
-      }
-    },
-
-    // 新增机构身份选择：主教 / 副教练 / 指导 / 训练分析 / 其他（自填），
-    // 选「其他」时才展开自定义输入框，切换回预设项时顺手清掉自定义值，避免脏值提交
-    // 调整（2026-09-05）：输入框常驻显示（不再只限「其他自填」时展开），点击选项把该选项固定文案
-    // 回填进输入框，由用户再次编辑；staff_role 统一记为 custom，最终提交值 = 输入框文本
-    onStaffRoleTap(e) {
       const key = String((e.currentTarget.dataset || {}).key || '').trim()
-      if (!key) {
-        return
-      }
-
-      // 新增文案回填：按 key 找到对应选项，把固定文案填进输入框（用户可在输入框里继续修改）
-      const matchedOption = STAFF_ROLE_OPTIONS.find((item) => item.key === key)
-      if (!matchedOption) {
+      if (key !== JOIN_ROLE_ADMIN && key !== JOIN_ROLE_COACH) {
         return
       }
 
       this.setData({
-        'staffForm.staff_role': STAFF_ROLE_CUSTOM,
-        'staffForm.staff_role_custom': matchedOption.label
+        'joinForm.join_role': key
       })
     },
 
-    // 新增自定义身份输入：限制长度，避免超长文本入库
-    onStaffRoleCustomInput(e) {
-      const value = String((e.detail && e.detail.value) || '').slice(0, STAFF_ROLE_CUSTOM_MAX_LENGTH)
-      this.setData({
-        'staffForm.staff_role_custom': value
-      })
-    },
-
-    // 新增机构身份取值：预设枚举取标签文本，自填取用户输入值；未选择返回空串
-    // 调整（2026-09-05）：统一取输入框文本提交——文本非空按 custom 协议提交（云函数取文本落库），
-    // 文本为空视为未选择身份，不再依赖枚举 key
-    getStaffRolePayload() {
-      const staffForm = this.data.staffForm || {}
-      const staffRoleCustom = String(staffForm.staff_role_custom || '').trim().slice(0, STAFF_ROLE_CUSTOM_MAX_LENGTH)
-
-      if (!staffRoleCustom) {
-        return { staff_role: '', staff_role_custom: '' }
-      }
-
-      return { staff_role: STAFF_ROLE_CUSTOM, staff_role_custom: staffRoleCustom }
+    // 新增（2026-09-21）加入身份取值：未选择返回空串，由提交侧拦截提示
+    getJoinRolePayload() {
+      const joinRole = String((((this.data || {}).joinForm || {}).join_role) || '').trim()
+      return joinRole === JOIN_ROLE_ADMIN ? { join_role: JOIN_ROLE_ADMIN } : { join_role: JOIN_ROLE_COACH }
     },
 
     // 新增机构身份保存（B 教练加入侧）：已经在机构里时，只把身份更新到该机构的成员项，
     // 不带 organization_basic，避免覆盖机构资料；身份仍只入库 NDLdev_organization
+    // 调整（2026-09-21）：身份改为「管理 / 执行」后由管理层审批决定，本按钮不再使用（保留方法不删除）
     onSaveStaffRole() {
       if (!this.data.hasJoinedOrganization) {
         wx.showToast({
@@ -301,24 +336,7 @@ Component({
         return
       }
 
-      const staffRolePayload = this.getStaffRolePayload()
-      // 调整（2026-09-05）：身份统一来自常驻输入框（选项只是回填文案），为空时提示选择或填写
-      if (!staffRolePayload.staff_role) {
-        wx.showToast({
-          title: '请选择或填写机构身份',
-          icon: 'none'
-        })
-        return
-      }
-
-      if (staffRolePayload.staff_role === STAFF_ROLE_CUSTOM && !staffRolePayload.staff_role_custom) {
-        wx.showToast({
-          title: '请填写自定义身份',
-          icon: 'none'
-        })
-        return
-      }
-
+      const staffRolePayload = { staff_role: '', staff_role_custom: '' }
       this.submitOrganizationAction('updateOrganization', staffRolePayload, {
         successTitle: '身份已保存',
         // 新增保存后停留本页：身份只是一条字段，保存完继续留在创建页做别的编辑
@@ -326,7 +344,9 @@ Component({
       })
     },
 
-    // 新增教练加入提交：填写邀请码校验通过后，才会成为机构执行教练
+    // 新增教练加入提交：填写邀请码 + 选择加入身份（管理 / 执行）
+    // 调整（2026-09-21）：校验通过后不再是直接成为机构成员 —— 云函数把申请写进
+    // organization_member.pending_list 置为 pending，等待机构创建者（管理层）在「团队管理」里确认
     onJoinOrganization() {
       if (!this.data.authReady) {
         wx.showToast({
@@ -347,12 +367,12 @@ Component({
         return
       }
 
-      // 新增身份随加入一起提交（B 教练加入侧收集）：云函数把身份写进该机构的
-      // organization_member.coach_list 成员项 staff_role，不写入 NDLdev_users
-      const staffRolePayload = this.getStaffRolePayload()
-      if (staffRolePayload.staff_role === STAFF_ROLE_CUSTOM && !staffRolePayload.staff_role_custom) {
+      // 新增（2026-09-21）：加入身份必选 —— 管理（进管理层）/ 执行（进执行教练），
+      // 二选一必填，未选直接拦下，避免申请进待审列表后管理层不知道要给什么身份
+      const joinRole = String((((this.data || {}).joinForm || {}).join_role) || '').trim()
+      if (joinRole !== JOIN_ROLE_ADMIN && joinRole !== JOIN_ROLE_COACH) {
         wx.showToast({
-          title: '请填写自定义身份',
+          title: '请选择加入身份',
           icon: 'none'
         })
         return
@@ -360,9 +380,9 @@ Component({
 
       this.submitOrganizationAction('joinOrganization', {
         invitation_code: invitationCode,
-        ...staffRolePayload
+        join_role: joinRole
       }, {
-        successTitle: '加入机构成功'
+        successTitle: '申请已提交'
       })
     },
 
@@ -400,6 +420,50 @@ Component({
           return
         }
 
+        // 新增（2026-09-21）：加入申请进入待审 —— 此时还不是团队成员，
+        // ① 不写本地业务身份（orgId 为空会把自由教练误判成机构身份）；
+        // ② 不跳机构首页，停留在本页展示「等待创建者确认」卡片；
+        // ③ 把机构 ID 与申请信息缓存到本地，下次进页用 orgId 回查申请状态
+        if (String(result.joinStatus || '').trim() === JOIN_APPLY_STATUS_PENDING) {
+          const pendingOrgId = String(result.organizationId || '').trim()
+          const pendingJoinRole = String(result.joinRole || result.memberRole || '').trim() || JOIN_ROLE_COACH
+          const nextJoinApplyInfo = {
+            organizationName: String(result.organizationName || '').trim(),
+            joinRoleLabel: getJoinRoleLabel(pendingJoinRole),
+            appliedAtText: this.formatApplyTime(result.appliedAt),
+            reviewRemark: ''
+          }
+
+          if (pendingOrgId) {
+            wx.setStorageSync(ORGANIZATION_JOIN_APPLY_STORAGE_KEY, {
+              orgId: pendingOrgId,
+              organizationName: String(result.organizationName || '').trim(),
+              invitationCode: String(result.invitationCode || '').trim(),
+              joinRole: pendingJoinRole,
+              appliedAt: result.appliedAt || ''
+            })
+          }
+
+          this.setData({
+            hasJoinedOrganization: false,
+            joinApplyStatus: JOIN_APPLY_STATUS_PENDING,
+            joinApplyInfo: nextJoinApplyInfo,
+            submitResultCard: {
+              title: '加入申请待确认',
+              organizationName: String(result.organizationName || '').trim(),
+              invitationCode: String(result.invitationCode || '').trim(),
+              memberRoleLabel: nextJoinApplyInfo.joinRoleLabel,
+              message: '已提交加入申请，等待团队创建者确认后才会正式成为团队成员。'
+            }
+          })
+
+          wx.showToast({
+            title: '已提交，待确认',
+            icon: 'none'
+          })
+          return
+        }
+
         const organizationProfile = {
           orgId: result.organizationId || '',
           orgName: result.organizationName || '',
@@ -409,10 +473,16 @@ Component({
           source: action
         }
 
+        // 调整（2026-09-21）：加入身份可能是管理也可能是执行，业务角色按云函数回传的 memberRole 决定
+        const joinedMemberRole = String(result.memberRole || '').trim()
+        const isJoinedAdmin = joinedMemberRole === JOIN_ROLE_ADMIN
+
         if (app.saveUserIdentity) {
           app.saveUserIdentity({
             userRole: 'C',
-            bizRole: action === 'joinOrganization' ? BIZ_ROLE_ORG_COACH : BIZ_ROLE_ORG_ADMIN,
+            bizRole: action === 'joinOrganization'
+              ? (isJoinedAdmin ? BIZ_ROLE_ORG_ADMIN : BIZ_ROLE_ORG_COACH)
+              : BIZ_ROLE_ORG_ADMIN,
             organizationProfile,
             needChooseRole: false
           })
@@ -423,23 +493,25 @@ Component({
           title: options.successTitle || '提交成功',
           organizationName: result.organizationName || '',
           invitationCode: result.invitationCode || '',
-          memberRoleLabel: action === 'joinOrganization' ? '机构执行教练' : '机构管理层',
+          memberRoleLabel: action === 'joinOrganization' ? getJoinRoleLabel(joinedMemberRole) : '机构管理层',
           message: result.message || '操作成功'
         }
 
         this.setData({
-          submitResultCard: nextSubmitResultCard
+          submitResultCard: nextSubmitResultCard,
+          // 新增（2026-09-21）：加入成功后回填当前身份文案（管理 → 团队管理层 / 执行 → 团队执行教练）
+          hasJoinedOrganization: action === 'joinOrganization' ? true : this.data.hasJoinedOrganization,
+          currentMemberRoleLabel: action === 'joinOrganization' ? getJoinRoleLabel(joinedMemberRole) : this.data.currentMemberRoleLabel
         })
 
         wx.setStorageSync(ORGANIZATION_RESULT_CARD_STORAGE_KEY, nextSubmitResultCard)
 
-        // 新增身份入库回填：云函数返回当前用户在机构成员项里的 staff_role，
-        // 页面据此刷新身份选择区，避免前端选的值和最终落库值不一致
-        if (result.staffRole !== undefined) {
-          this.setData({
-            staffForm: this.buildStaffFormFromSaved(result.staffRole)
-          })
-        }
+        // 新增（2026-09-21）：正式加入后本地缓存的「待确认申请」可以清掉了
+        wx.removeStorageSync(ORGANIZATION_JOIN_APPLY_STORAGE_KEY)
+        this.setData({
+          joinApplyStatus: JOIN_APPLY_STATUS_NONE,
+          joinApplyInfo: null
+        })
 
         // 新增创建成功停留本页：机构入口二维码的生成 + 入库在 NEWDL_ResponseQRCode 云函数侧完成
         // （B 侧生成归属 B 的码 → 图片转存 A 侧云存储 → 入库 organization 文档 entry_qrcode 字段），

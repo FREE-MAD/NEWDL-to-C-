@@ -81,101 +81,11 @@ page {
   color: #3f2ec9;
 }
 
-.header-tools {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 132rpx;
-  height: 60rpx;
-  margin-top: 6rpx;
-  border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 10rpx 24rpx rgba(123, 103, 212, 0.08);
-}
-
-.header-tools-dots {
-  font-size: 26rpx;
-  line-height: 1;
-  color: #1f1f1f;
-  letter-spacing: 2rpx;
-}
-
-.header-tools-divider {
-  width: 2rpx;
-  height: 24rpx;
-  margin: 0 14rpx;
-  background: rgba(31, 31, 31, 0.12);
-}
-
-.header-tools-circle {
-  width: 22rpx;
-  height: 22rpx;
-  border: 4rpx solid #1f1f1f;
-  border-radius: 50%;
-  box-sizing: border-box;
-}
-
 .header-desc {
   margin-top: 16rpx;
   font-size: 30rpx;
   color: #706b8f;
   line-height: 1.4;
-}
-
-/* 展开状态时自动显示（header 没有 collapsed） */
-.header:not(.collapsed) .select-identity {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-}
-/* 展开top=====s */
-/* ===== 顶部身份选择卡片 id_select ===== */
-.id_select {
-  margin: 40rpx auto;
-  width: 80%;
-  background: #ffffff;
-  padding: 40rpx 30rpx;
-  border-radius: 24rpx;
-  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.1);
-  display: flex;
-  flex-direction: column;
-  gap: 30rpx;
-  font-size: 32rpx;
-  color: #333;
-}
-
-/* 标题 */
-.id_select > view:first-child {
-  font-size: 36rpx;
-  font-weight: 600;
-  margin-bottom: 10rpx;
-}
-
-/* 身份项 */
-.id_select > view:not(:first-child) {
-  padding: 24rpx 20rpx;
-  background: #f7f7f7;
-  border-radius: 20rpx;
-  text-align: center;
-  transition: all 0.2s;
-}
-/* 默认身份项样式 */
-.id_select > view:not(:first-child) {
-  padding: 24rpx 20rpx;
-  background: #f7f7f7;
-  border-radius: 20rpx;
-  text-align: center;
-  transition: all 0.25s;
-  color: #333;
-}
-
-/* 选中后的高亮态 */
-.id_select .active {
-  background: #4a90e2 !important;
-  color: #fff !important;
-  transform: scale(1.02);
-  box-shadow: 0 6rpx 18rpx rgba(74,144,226,0.4);
 }
 
 
@@ -490,19 +400,7 @@ page {
 .select-identity .addorout view:nth-child(2):active {
   transform: scale(0.96);
 }
-.form-tip {
-  margin-top: 20rpx;
-  padding: 20rpx 30rpx;
-  background-color: #e8f9e8;
-  border-left: 8rpx solid #07c160;
-  border-radius: 16rpx;
 
-  font-size: 28rpx;
-  color: #07c160;
-  font-weight: 600;
-
-  animation: fadeIn 0.3s ease;
-}
 @keyframes fadeIn {
   from { 
     opacity: 0; 
@@ -532,64 +430,6 @@ page {
 
 .header.collapsed .hello {
   font-size: 56rpx;
-}
-
-.location {
-  margin-top: 6rpx;
-  opacity: 0;
-  height: 0;
-  font-size: 26rpx;
-  transition: opacity 0.5s ease;
-}
-
-.header.collapsed .location {
-  opacity: 0;
-}
-
-/* 身份选择区 */
-.role-selection {
-  margin-top: 40rpx;
-  display: flex;
-  gap: 40rpx;
-  transition: opacity 0.5s ease;
-}
-
-.role-selection.hidden {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.role-selection button {
-  background: #fff;
-  color: #635bff;
-  font-weight: bold;
-  padding: 20rpx 60rpx;
-  border-radius: 40rpx;
-  font-size: 30rpx;
-}
-
-/* 通知铃铛 */
-.bell {
-  width: 60rpx;
-  height: 60rpx;
-  background: #ffffff33;
-  border-radius: 20rpx;
-  position: relative;
-}
-
-.red-dot {
-  background: #ff3b30;
-  color: #fff;
-  width: 40rpx;
-  height: 40rpx;
-  border-radius: 50%;
-  font-size: 22rpx;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  position: absolute;
-  top: -10rpx;
-  right: -10rpx;
 }
 
 /* 四宫格卡片 */
@@ -970,90 +810,31 @@ page {
   font-weight: 600;
 }
 
-.big_view {
-  margin-top: 24rpx;
-}
-
-.section-title {
-  margin: 50rpx 40rpx 20rpx;
-  display: flex;
-  justify-content: space-between;
-  font-size: 32rpx;
-  font-weight: 700;
-}
-
-.view-all {
-  font-size: 26rpx;
-  color: #4b6bff;
-}
-
-.post-card {
-  margin: 12rpx 40rpx;
-  background: #fff;
-  padding: 26rpx;
-  border-radius: 24rpx;
-  box-shadow: 0 6rpx 16rpx rgba(0,0,0,0.06);
-}
-
-.post-header {
-  display: flex;
-  justify-content: space-between;
-  font-size: 28rpx;
-  color: #333;
-}
-
-.post-time {
-  color: #888;
-}
-
-.post-tag {
-  margin-top: 18rpx;
-  background: #fff6c2;
-  color: #a67c00;
-  display: inline-block;
-  padding: 8rpx 24rpx;
-  border-radius: 30rpx;
-  font-size: 24rpx;
-  font-weight: 600;
-}
-
-.post-text {
-  margin-top: 20rpx;
-  color: #555;
-  font-size: 28rpx;
-  line-height: 1.4;
-}
-
-.post-img {
-  width: 100%;
-  height: 300rpx;
-  border-radius: 26rpx;
-  margin-top: 25rpx;
-  object-fit: cover;
-}
-
-.post-footer {
-  margin-top: 30rpx;
-  display: flex;
-  align-items: center;
-}
-
-.details {
-  margin-left: auto;
-  color: #4b6bff;
-  font-size: 28rpx;
-}
-
 /* 首页新增：教练「接取课程」入口卡片样式。 */
+/* 统一与 grid-box 下其他卡片一致：进场动画 + 28rpx 圆角 + 同档阴影，
+   仅保留绿色主题渐变背景作为视觉区分 */
 .pickup-entry-card {
   width: 100%;
-  border-radius: 24rpx;
+  /* 统一圆角：与 .grid-item/.primary-panel 保持 28rpx 一致 */
+  border-radius: 28rpx;
   background: linear-gradient(135deg, #e8f5e9 0%, #ffffff 60%);
   border: 2rpx solid rgba(46, 125, 50, 0.15);
-  box-shadow: 0 10rpx 26rpx rgba(46, 125, 50, 0.06);
-  padding: 24rpx;
-  margin-bottom: 20rpx;
+  /* 统一阴影：与 .grid-item 同档 rgba(0,0,0,0.06) */
+  box-shadow: 0 8rpx 20rpx rgba(0, 0, 0, 0.06);
+  /* 适中内边距：比 .grid-item 略收，避免内容松散 */
+  padding: 32rpx 28rpx;
+  /* 移除固定 margin-bottom，交由 .grid-box 的 gap 统一控制间距 */
   box-sizing: border-box;
+  /* 进场动画初始态：与 .grid-item 保持一致的淡入上移效果 */
+  opacity: 0;
+  transform: translateY(-50rpx);
+  transition: all 0.5s ease;
+}
+
+/* visible 态：与 .grid-item.visible 行为一致，触发进场动画 */
+.pickup-entry-card.visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 .pickup-entry-head {
   display: flex;
@@ -1075,6 +856,8 @@ page {
   font-size: 36rpx;
   font-weight: 800;
   color: #fff;
+  /* 图标背景改为深绿渐变，与卡片主题色一致，替代全局 .green 的青绿渐变 */
+  background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
   box-shadow: 0 6rpx 16rpx rgba(46, 125, 50, 0.18);
 }
 .pickup-entry-copy {
@@ -1083,6 +866,10 @@ page {
 }
 .pickup-entry-title {
   color: #1b5e20;
+}
+/* 副标题覆盖全局 .grid-sub 的灰紫色，统一为绿色系灰 */
+.pickup-entry-copy .grid-sub {
+  color: #5a6b5c;
 }
 .pickup-entry-arrow {
   font-size: 24rpx;
@@ -1099,7 +886,8 @@ page {
 .pickup-entry-hint {
   font-size: 24rpx;
   line-height: 1.7;
-  color: #4a5a6a;
+  /* 提示文字由蓝灰 #4a5a6a 改为绿色系灰，与主题协调 */
+  color: #5a6b5c;
   background: #ffffff;
   padding: 14rpx 18rpx;
   border-radius: 14rpx;
@@ -1107,14 +895,19 @@ page {
 }
 .pickup-entry-input-row {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 14rpx;
 }
-.pickup-entry-input {
+/* 输入框外层：用 flex:1 占满剩余空间，避免 input 原生组件在 flex 中被压缩 */
+.pickup-entry-input-wrap {
   flex: 1;
   min-width: 0;
+}
+/* 输入框：宽度 100% 撑满外层容器 */
+.pickup-entry-input {
+  width: 100%;
   height: 82rpx;
-  padding: 0 20rpx;
+  padding: 0 22rpx;
   border-radius: 14rpx;
   background: #fff;
   border: 2rpx solid #c8e6c9;
@@ -1123,6 +916,7 @@ page {
   letter-spacing: 2rpx;
   color: #1b5e20;
   font-weight: 700;
+  box-sizing: border-box;
 }
 .pickup-entry-input-placeholder {
   color: #a5b3a6;
@@ -1135,17 +929,24 @@ page {
   gap: 10rpx;
   flex-shrink: 0;
 }
+/* 粘贴/清空小按钮：小程序 button 内置 display:block + 默认 min-width，
+   必须用 !important 强制覆盖，否则会撑满整行 */
 .pickup-entry-mini {
-  margin: 0;
-  padding: 0 18rpx;
-  height: 72rpx;
-  line-height: 72rpx;
-  min-width: 0;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  margin: 0 !important;
+  width: 130rpx !important;
+  min-width: 0 !important;
+  height: 82rpx;
+  line-height: 82rpx;
+  padding: 0 !important;
   border-radius: 14rpx;
-  font-size: 24rpx;
+  font-size: 26rpx;
   background: #fff;
   color: #2e7d32;
   border: 2rpx solid #c8e6c9;
+  box-sizing: border-box;
 }
 .pickup-entry-mini::after {
   border: none;
@@ -1154,7 +955,8 @@ page {
   margin-top: 12rpx;
   text-align: right;
   font-size: 22rpx;
-  color: #6d7d8d;
+  /* 字符计数提示由蓝灰 #6d7d8d 改为绿色系灰，与主题协调 */
+  color: #7a8a7c;
 }
 .pickup-entry-char-num {
   color: #2e7d32;

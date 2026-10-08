@@ -1,30 +1,34 @@
 // 云函数入口文件
-const cloud = require('wx-server-sdk')
+// 调整（2026-10-08）：cloud.init / 集合名 / 运行日志 / 内容安全统一走公共层 _shared（源在 NEW_DL_fun/_shared/，副本只读）。
+const { initRuntime, dbHandle, runInContext, currentIsDev } = require('./_shared/runtime')
+const { normalizeCollectionName, prefix } = require('./_shared/collections')
+const { make: makeLogger } = require('./_shared/logger')
+const {
+  isSecurityCheckPassed,
+  isSecurityViolationError,
+  isOpenAPIPermissionError,
+  isImageSizeLimitError,
+  permissionError,
+  buildSafeResult,
+  buildBlockedResult,
+  buildImageTooLargeResult,
+  callMsgSecCheck,
+  callImgSecCheck
+} = require('./_shared/security')
+const db = dbHandle()
 
-cloud.init({ env:'cloud1-6gh7jgl8c5b16a83' }) // 使用当前云环境
-const db = cloud.database()
+const FUNCTION_NAME = 'NEWDL_mine_user'
 
-// 新增集合前缀规则：develop 使用 NDLdev_，trial/release 使用 NDLreal_
-const CURRENT_RUNTIME_SOURCE = 'dev_index.js'
-let CURRENT_ENV_VERSION = 'develop'
-
+// 集合前缀规则已下沉到 _shared/collections.js（develop → NDLdev_，trial/release → NDLreal_）。
+// 调整（2026-10-08）：环境不再存模块级变量 —— 改由 _shared/runtime.js 的请求上下文提供。
+// main 里用 runInContext(ctx, ...) 包裹后，任意深度的调用都能通过 currentIsDev() 读到本次请求的
+// envVersion，并发请求互不干扰（AsyncLocalStorage 可用时；不可用则退化为现状，见 runtime.js 注释）。
 function getCollectionPrefix() {
-  return CURRENT_ENV_VERSION === 'develop' ? 'NDLdev_' : 'NDLreal_'
+  return prefix(currentIsDev())
 }
 
 function getCollectionName(baseName) {
-  return `${getCollectionPrefix()}${baseName}`
-}
-
-// 新增运行环境日志：用于快速判断当前资料云函数这次按什么环境、什么源码文件在执行
-function logRuntimeEnvInfo(extra = {}) {
-  console.log('[runtime_env]', {
-    functionName: 'NEWDL_mine_user',
-    runtimeSource: CURRENT_RUNTIME_SOURCE,
-    envVersion: CURRENT_ENV_VERSION,
-    collectionPrefix: getCollectionPrefix(),
-    ...extra
-  })
+  return normalizeCollectionName(baseName, currentIsDev())
 }
 
 // 新增资料分享日志读取：用户档案里单独维护资料分享访问轨迹，结构与课程 share_visibility.entry_logs 保持接近
@@ -94,20 +98,7 @@ function normalizeProfile(profile = {}) {
   }
 }
 
-// 新增图片类型识别：头像和资料佐证图统一按文件后缀推断 MIME，方便内容安全接口识别
-function guessImageContentType(fileID = '') {
-  const lowerFileId = String(fileID || '').toLowerCase()
-  if (lowerFileId.endsWith('.png')) {
-    return 'image/png'
-  }
-  if (lowerFileId.endsWith('.webp')) {
-    return 'image/webp'
-  }
-  if (lowerFileId.endsWith('.gif')) {
-    return 'image/gif'
-  }
-  return 'image/jpeg'
-}
+// 注：guessImageContentType 已下沉到 _shared/security.js（imgSecCheck 内部推断 contentType 时使用）。
 
 // 新增多块资料解析：把证书/荣誉字段中的 JSON 字符串转成结构化数组，便于分别提取文本和图片
 function parseMultiBlockValue(rawValue) {
@@ -180,93 +171,9 @@ function collectProfileImageList(profile = {}) {
   )]
 }
 
-// 新增内容安全结果判断：兼容 openapi 新旧返回结构，统一按 suggest 是否为 pass 判断
-function isSecurityCheckPassed(checkResult) {
-  const errorCode = Number(
-    checkResult && (checkResult.errCode || checkResult.errcode || 0)
-  )
-  if (errorCode === 0) {
-    return true
-  }
-
-  const suggest = checkResult && checkResult.result && checkResult.result.suggest
-    ? checkResult.result.suggest
-    : checkResult && checkResult.suggest
-  return suggest === 'pass'
-}
-
-// 新增内容违规错误识别：微信安全接口命中违规内容时，统一拦截为通用提示
-function isSecurityViolationError(error) {
-  if (!error) {
-    return false
-  }
-
-  const errorCode = Number(error.errCode || error.errcode || error.code || 0)
-  const errorMessage = String(error.errMsg || error.errmsg || error.message || '')
-  return errorCode === 87014 || /risky|block|违规|违法|敏感/.test(errorMessage)
-}
-
-// 新增权限缺失识别：资料云函数如果缺少云调用权限，统一输出可读报错方便继续定位
-function isOpenAPIPermissionError(error) {
-  if (!error) {
-    return false
-  }
-
-  const errorCode = Number(error.errCode || error.errcode || error.code || 0)
-  const errorMessage = String(error.errMsg || error.errmsg || error.message || '')
-  return errorCode === -604101 || /has no permission to call this api/i.test(errorMessage)
-}
-
-// 新增图片超限识别：图片安全接口超出内容大小上限时，统一转成用户能直接看懂的提示
-function isImageSizeLimitError(error) {
-  if (!error) {
-    return false
-  }
-
-  const errorCode = Number(error.errCode || error.errcode || error.code || 0)
-  const errorMessage = String(error.errMsg || error.errmsg || error.message || '')
-  return errorCode === 45002 || /content size out of limit/i.test(errorMessage)
-}
-
-// 新增独立日志集合说明：当前资料分享访问记录不再单独落独立集合，统一写入 users 文档字段中维护
-// function isCollectionNotFoundError(error) {
-//   if (!error) {
-//     return false
-//   }
-//
-//   const errorCode = Number(error.errCode || error.errcode || error.code || 0)
-//   const errorMessage = String(error.errMsg || error.errmsg || error.message || '')
-//   return errorCode === -502005 || /Db or Table not exist|collection not exists/i.test(errorMessage)
-// }
-
-// 新增安全通过结果封装：资料保存链路统一按 safe / message 结构返回，便于前端直接展示
-function buildSafeResult(extra = {}) {
-  return {
-    safe: true,
-    message: '内容检查通过',
-    ...extra
-  }
-}
-
-// 新增内容违规结果封装：文本或图片命中违规时统一返回现有通用提示
-function buildBlockedResult(extra = {}) {
-  return {
-    safe: false,
-    message: '您发布的内容含违规信息',
-    reason: 'security_blocked',
-    ...extra
-  }
-}
-
-// 新增图片超限结果封装：资料图过大时直接提示压缩后再上传，减少用户反复试错
-function buildImageTooLargeResult(extra = {}) {
-  return {
-    safe: false,
-    message: '图片过大，请压缩后再上传',
-    reason: 'image_too_large',
-    ...extra
-  }
-}
+// 注：isSecurityCheckPassed / isSecurityViolationError / isOpenAPIPermissionError /
+// isImageSizeLimitError / buildSafeResult / buildBlockedResult / buildImageTooLargeResult
+// 已全部下沉到 _shared/security.js（本文件顶部 require），原实现与 NEWDL_login_fun 逐字重复。
 
 // 新增文本安全检测：资料页所有可发布文本统一按资料场景进行审核
 async function checkTextSecurity(content = '', openid = '') {
@@ -280,7 +187,7 @@ async function checkTextSecurity(content = '', openid = '') {
 
   // 新增直接云调用：资料文本审核改为在首层业务云函数内直接调用，避免二次云函数转发导致权限不生效
   try {
-    const result = await cloud.openapi.security.msgSecCheck({
+    const result = await callMsgSecCheck({
       content: text,
       version: 2,
       scene: 1,
@@ -304,7 +211,7 @@ async function checkTextSecurity(content = '', openid = '') {
       })
     }
     if (isOpenAPIPermissionError(error)) {
-      throw new Error('NEWDL_mine_user 缺少 OpenAPI 权限，请重新上传云函数并确认 config.json 已生效')
+      throw permissionError(FUNCTION_NAME)
     }
     throw error
   }
@@ -320,16 +227,11 @@ async function checkImageSecurity(fileID = '') {
     })
   }
 
-  // 新增直接云调用：资料图片审核改为在首层业务云函数内直接调用，避免二次云函数转发导致权限不生效
+  // 新增直接云调用：资料图片审核改为在首层业务云函数内直接调用，避免二次云函数转发导致权限不生效。
+  // 下载文件与 contentType 推断已收进 callImgSecCheck，业务侧只给 fileID。
   try {
-    const downloadResult = await cloud.downloadFile({
+    const result = await callImgSecCheck({
       fileID: trimmedFileId
-    })
-    const result = await cloud.openapi.security.imgSecCheck({
-      media: {
-        contentType: guessImageContentType(trimmedFileId),
-        value: downloadResult.fileContent
-      }
     })
     if (isSecurityCheckPassed(result)) {
       return buildSafeResult({
@@ -357,7 +259,7 @@ async function checkImageSecurity(fileID = '') {
       })
     }
     if (isOpenAPIPermissionError(error)) {
-      throw new Error('NEWDL_mine_user 缺少 OpenAPI 权限，请重新上传云函数并确认 config.json 已生效')
+      throw permissionError(FUNCTION_NAME)
     }
     throw error
   }
@@ -573,11 +475,15 @@ async function getCurrentUserDoc(usersCollection, openid) {
 
 // 云函数入口函数
 exports.main = async (event, context) => {
-  const wxContext = cloud.getWXContext()
-  const { OPENID, APPID, UNIONID } = wxContext
-  const { action = 'getStats', profile = {}, reviewProfile = null, shareLog = {}, targetOpenid = '', envVersion = 'develop' } = event || {}
-  CURRENT_ENV_VERSION = envVersion
-  logRuntimeEnvInfo({
+  // 公共层：一次 initRuntime 拿到本次请求的 env / db / openid / appid / unionid / traceId
+  const ctx = initRuntime(event || {})
+  const { OPENID, APPID, UNIONID } = { OPENID: ctx.openid, APPID: ctx.appid, UNIONID: ctx.unionid }
+  const { action = 'getStats', profile = {}, reviewProfile = null, shareLog = {}, targetOpenid = '' } = event || {}
+  // 请求上下文包裹（2026-10-08）：把后续整条 await 链绑定到本次请求的 env，
+  // 深层 helper 里的 getCollectionName 通过 currentIsDev() 读到的就是本次请求的环境。
+  // 注：包裹块内的缩进沿用了包裹前的层次，未整体重排 —— 为的是把 diff 压到最小、便于逐行核对。
+  return await runInContext(ctx, async () => {
+  makeLogger(ctx).runtimeEnv({
     action,
     targetOpenid: String(targetOpenid || '').trim(),
     hasOpenid: !!OPENID
@@ -827,4 +733,5 @@ exports.main = async (event, context) => {
       error
     }
   }
+  }) // ← runInContext 包裹结束
 }
