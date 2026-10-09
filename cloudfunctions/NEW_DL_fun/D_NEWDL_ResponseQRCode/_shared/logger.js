@@ -6,8 +6,8 @@
  *   2. 日志没有 traceId，一次请求跨函数（A → B → A）无法串起来。
  *
  * 约定：
- *   - 每条日志都带 { t, fn, env, traceId, src }，src 是 dev_index.js / true_index.js
- *     （由 runtime.js 的 detectRuntimeSource 识别，同步后自动跟随，不需要同步脚本保护）。
+ *   - 每条日志都带 { t, fn, env, traceId, src }，src 是入口文件名（拆双函数后统一为 index.js），
+ *     环境由 env 字段（ctx.envVersion）提供，D_/T_ 靠目录隔离而非文件分流。
  *   - tag 用点分域：'course.state.transition'、'gateway.inbound' 这类，便于检索。
  *
  * 用法：

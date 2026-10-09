@@ -650,11 +650,11 @@ Page({
   },
 
   // ================== 查看详情 ==================
-  // 【2026-10-05 修复】原详情页 /pages/task/detail/task_detail 已删除，
-  // 改为 toast 提示，避免 navigateTo 指向不存在页面导致编译报错。
   onOrderDetail(e) {
     const orderId = e.currentTarget.dataset.id
-    wx.showToast({ title: '详情功能开发中', icon: 'none' })
+    wx.navigateTo({
+      url: `/pages/task/detail/task_detail?id=${orderId}`
+    })
   },
 
   // ================== 进入查看页 ==================

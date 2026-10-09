@@ -13,15 +13,15 @@ NEW_DL_fun/
 
 ## 四条纪律（缺一条就等于没抽）
 
-1. **副本只读**：`NEWDL_execution_order/_shared/runtime.js` 这类文件**永远不手工编辑**。
+1. **副本只读**：`D_NEWDL_execution_order/_shared/runtime.js` 这类文件**永远不手工编辑**。
    改公共逻辑 = 改 `NEW_DL_fun/_shared/` → 跑 `node sync_shared.js`。
    脚本以源为准无脑覆盖，手改副本下次同步必丢。
 2. **require 路径统一写 `./_shared/xxx`**，不要写 `'../_shared/...'`。
    路径统一是将来换 Layer / npm 包时唯一需要改的地方。
 3. **上传前先跑一次同步**：`node sync_shared.js && node sync_shared.js --check`（第二条应输出「一致」）。
 4. **`_shared` 里不许有 envVersion 分支 / dev-true 判断**。
-   脚本把同一份副本喂给 `dev_index.js` 和 `true_index.js`，
-   `_shared` 内部不做环境判断，所以它**不会引入新的 dev/true 分裂**。
+   拆双函数（2026-10-09）后，`sync_shared.js` 把同一份副本喂给 7 个 D_ 目录 + `twowaybinding_1_DLforC`，
+   `_shared` 内部不做环境判断，所以它**不会引入新的 D_/T_ 分裂**（D_/T_ 靠目录物理隔离）。
 
 ## 已落地模块
 
@@ -45,7 +45,7 @@ NEW_DL_fun/
 **解法**：`runtime.js` 提供请求级上下文，业务侧在入口包裹一次即可，深层 helper 零改动。
 
 ```js
-// dev_index.js / true_index.js 的入口
+// D_xxx/index.js 的入口（拆双前为 dev_index.js / true_index.js）
 const ctx = initRuntime(event)
 return await runInContext(ctx, async () => {
   ...原逻辑（含 try/catch 整体）...
@@ -83,7 +83,7 @@ function getCollectionName(baseName) {
    （`execution_order` 的 main 有 150 行，重排就没法 review 了）。
 
 **已接入**：`execution_order` / `ResponseQRCode`（含 HTTP 9000 路径，它也走 `handleMain`）/ `login_fun`
-/ `mine_user` / `ForOrganizationDo`，共 5 个 dev_index.js，`CURRENT_ENV_VERSION` 代码内归零。
+/ `mine_user` / `ForOrganizationDo`，共 5 个函数（拆双后为 D_/T_ 两套目录），`CURRENT_ENV_VERSION` 代码内归零。
 `twowaybinding_1_DLforC` 本来就是显式传参（`getCollectionName(base, envVersion)`），无此问题，未动。
 
 ## 关于 http.js 的两条口径（不要混用）
@@ -127,6 +127,5 @@ function getCollectionName(baseName) {
 各函数接入 `_shared` 时要逐个替换、逐个验证，因为现有返回口径有 3 种、前端依赖 `.msg` 21 处。
 `errors.ok()` 支持 `options.code` 覆盖，就是为了接入时能做到「前端零改动」。
 
-**红线（用户明确约定）**：AI 只改 `dev_index.js`，**不碰 `true_index.js`、不执行 `sync-dev-to-true.js`**。
-dev → true 只能由用户手动跑同步脚本。因此 `true_index.js` 里的 `CURRENT_ENV_VERSION` 等旧写法
-会一直保留到用户同步为止 —— 这是预期状态，不是漏改。
+**红线（用户明确约定）**：AI 只改 `D_` 目录（开发版），**不执行 `sync-dev-to-true.js`**。
+D_ → T_ 只能由用户手动跑同步脚本（密码 NEWDL123）。`T_` 目录是同步产物、只读，不手工编辑。

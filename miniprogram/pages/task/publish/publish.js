@@ -911,8 +911,8 @@ Page({
           console.error('[publish] [pullCollaborativeOrder] 云函数返回 未知操作:', { sentAction: 'get_order_by_course_code', receivedAction, supportedActions, parsed, actionDiagnostic, buildId: debug.buildId, hasDebugPayload, rawResult: result, rawCallFunctionRes: res });
           const contentLines = [];
           if (!hasDebugPayload || !hasBuildId) {
-            contentLines.push('云端版本未同步(缺get_order_by_course_code等action)，请重新上传 NEWDL_execution_order');
-            contentLines.push('提示：入口文件 cloudfunctions/NEW_DL_fun/NEWDL_execution_order/index.js 已改为 require(\'./dev_index.js\')，重新上传部署后生效。');
+            contentLines.push('云端版本未同步(缺get_order_by_course_code等action)，请重新上传 D_NEWDL_execution_order / T_NEWDL_execution_order');
+            contentLines.push('提示：拆双函数后入口为 D_xxx/T_xxx 目录的 index.js（环境靠目录区分），重新上传部署后生效。');
             wx.showModal({ title: '协作查询入口异常', content: contentLines.join('\n'), showCancel: false });
             return;
           }

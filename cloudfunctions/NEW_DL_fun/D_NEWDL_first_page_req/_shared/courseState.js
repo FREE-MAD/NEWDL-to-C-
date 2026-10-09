@@ -2,7 +2,7 @@
  * _shared/courseState.js —— L2 领域层：课程生命周期状态（fulfill_state）唯一真源
  *
  * 治的病（现状实测）：
- *   - fulfill_state 在 NEWDL_execution_order/dev_index.js 里出现 66 次，其中**写入 22 处**，
+ *   - fulfill_state 在新 NEWDL_execution_order（拆三前 dev_index.js）里出现 66 次，其中**写入 22 处**，
  *     状态值全是裸字符串：「'in_progress'」写了 7 遍、「'editing'」写了 6 遍、「'awaiting'」4 遍……
  *     新增/改名一个状态要改 22 个字面量，漏一处就是「progress 页 Tab 落错档、publish 页按钮不出现」。
  *   - 「是否终态」的三连或（closed || cancelled || completed）在 4 个函数里各写一遍，
@@ -81,7 +81,7 @@ const COURSE_FLOW_FIELD = 'course_flow_info';
 // ---------------------------------------------------------------------------
 
 /**
- * 现状实际发生的流转（从 dev_index.js 逐个写入点抄下来，不是理想模型）。
+ * 现状实际发生的流转（从拆三前 dev_index.js 逐个写入点抄下来，不是理想模型）。
  * 含同态（awaiting→awaiting）与回退（in_progress→awaiting），所以不能直接拿来做校验。
  */
 const TRANSITIONS = {
@@ -232,7 +232,7 @@ function normalizeIncomingState(value, fallback = COURSE_STATE.EDITING, allowed 
 // ---------------------------------------------------------------------------
 //
 // 为什么要有 owner：
-//   - fulfill_state 在 dev_index.js 里有 22 处各自直写 DB（顶层 / 内层 / 双写混杂），
+//   - fulfill_state 曾在新 NEWDL_execution_order（拆三前 dev_index.js）里有 22 处各自直写 DB（顶层 / 内层 / 双写混杂），
 //     谁可以推状态、哪些迁移合法，全部散在各函数自己的 if 里 —— 教练凭接取码直接把自己
 //     推成 in_progress 的后门、双写导致两处读出来不一致，都是"散写"的产物。
 //   - 本函数是今后全工程唯一允许写 course_flow_info.fulfill_state 的位置，
@@ -249,7 +249,7 @@ const { fail } = require('./errors');
 const { normalizeCollectionName } = require('./collections');
 const { currentContext, currentEnvVersion, initRuntime } = require('./runtime');
 
-/** 订单集合基础名（与 dev_index.js 的 ORDER_COLLECTION_BASE 保持一致，含 NDLdev_/NDLreal_ 前缀归一） */
+/** 订单集合基础名（与 NEWDL_execution_order/_constants.js 的 ORDER_COLLECTION_BASE 保持一致，含 NDLdev_/NDLreal_ 前缀归一） */
 const ORDER_BASE_NAME = 'execution_orders';
 
 /** 操作者角色常量（权限判定用） */

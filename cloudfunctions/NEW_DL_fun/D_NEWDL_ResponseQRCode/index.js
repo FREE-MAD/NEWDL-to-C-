@@ -45,23 +45,22 @@ const db = dbHandle()
 const A_ENV_ID = 'cloud1-6gh7jgl8c5b16a83'
 const ORGANIZATION_COLLECTION_BASE = 'organization'
 const USER_COLLECTION_BASE = 'users'
-// 调整（2026-09-05）：runtimeSource 改为按实际入口文件名动态取值，同步覆盖到 true_index.js 后日志自动显示 true_index.js，
-// 修复「dev 覆盖 true 的日志环境区分」问题（原硬编码 'dev_index.js' 同步后误导排障）。
+// 调整（2026-09-05 → 2026-10-09 拆双函数）：runtimeSource 按实际入口文件名动态取值。
+// 拆双后入口统一为 index.js（D_/T_ 是两套独立目录），不再有 dev_index.js/true_index.js 文件名之分。
 const CURRENT_RUNTIME_SOURCE = __filename.split(/[\\/]/).pop()
 // 调整（2026-10-08）：CURRENT_ENV_VERSION 已删除 —— 环境改由 _shared/runtime.js 的请求上下文提供
 // （见下方 getCollectionName / resolveBEnvVersion / handleMain 的 runInContext 包裹）。
 
 // 新增（2026-09-05）：HTTP 请求级分流的真实环境目标模块。
-// 背景：HTTP 请求的 envVersion 在请求体内、服务器启动时未知，因此 9000 端口服务固定由 dev 模块启动，
-// 非 develop 的 HTTP 请求在下方处理器内转发给 true 模块处理（callFunction 路径由 index.js 分流）。
-// 仅当本文件以 dev_index.js 身份运行且 true_index.js 已由同步脚本生成时才加载；
-// true 自身运行时（runtimeSource === 'true_index.js'）不加载，避免自引用循环。
+// 拆双函数（2026-10-09）后，dev_index.js / true_index.js 已删除，统一入口为 index.js，
+// D_/T_ 环境靠目录物理隔离。下方 TRUE_HTTP_ENTRY 加载逻辑已失效（CURRENT_RUNTIME_SOURCE
+// 恒为 'index.js'，不会命中 'dev_index.js' 分支），保留仅为历史兼容，TRUE_HTTP_ENTRY 恒为 null。
 let TRUE_HTTP_ENTRY = null
 if (CURRENT_RUNTIME_SOURCE === 'dev_index.js') {
   try {
     TRUE_HTTP_ENTRY = require('./true_index.js')
   } catch (trueEntryError) {
-    // true_index.js 尚未由同步脚本生成时保持 null：所有 HTTP 请求仍由 dev 处理（与历史行为一致，不报错）。
+    // 拆双后 true_index.js 已不存在，这里恒走 catch 保持 null（HTTP 请求全部由本文件处理，与现状一致）。
     TRUE_HTTP_ENTRY = null
   }
 }
@@ -1910,7 +1909,7 @@ async function buildHttpEvent(req, rawBody = '') {
 }
 
 // 启动 9000 端口 HTTP 服务：由 scf_bootstrap 执行 `node index.js` 触发，
-// 也由本文件被直接 `node dev_index.js` 调试时触发。
+// 也由本文件被直接 `node index.js` 调试时触发。
 function startHttpServer() {
   const port = Number(process.env.PORT || 9000) || 9000
 
@@ -2000,7 +1999,7 @@ function startHttpServer() {
   })
 }
 
-// 本地直接 `node dev_index.js` 调试时自启动；线上由 index.js 在 require.main === module 时启动。
+// 本地直接 `node index.js` 调试时自启动；线上由 index.js 在 require.main === module 时启动。
 if (require.main === module) {
   startHttpServer()
 }

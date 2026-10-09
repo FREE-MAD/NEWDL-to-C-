@@ -286,34 +286,32 @@ Page({
     wx.showToast({ title: '钱包功能开发中', icon: 'none' })
   },
 
-  // 【2026-10-05 修复】orders/favorites/history/certificate/settings/help/about 子页面已删除，
-  // 原 navigateTo 指向不存在的页面会导致编译报错；统一改为 toast 提示，保留菜单入口不报错。
   openOrders() {
-    wx.showToast({ title: '订单功能开发中', icon: 'none' })
+    wx.navigateTo({ url: '/pages/mine/orders/orders' })
   },
 
   openFavorites() {
-    wx.showToast({ title: '收藏功能开发中', icon: 'none' })
+    wx.navigateTo({ url: '/pages/mine/favorites/favorites' })
   },
 
   openHistory() {
-    wx.showToast({ title: '历史记录功能开发中', icon: 'none' })
+    wx.navigateTo({ url: '/pages/mine/history/history' })
   },
 
   openCertificate() {
-    wx.showToast({ title: '证书功能开发中', icon: 'none' })
+    wx.navigateTo({ url: '/pages/mine/certificate/certificate' })
   },
 
   openSettings() {
-    wx.showToast({ title: '设置功能开发中', icon: 'none' })
+    wx.navigateTo({ url: '/pages/mine/settings/settings' })
   },
 
   openHelp() {
-    wx.showToast({ title: '帮助功能开发中', icon: 'none' })
+    wx.navigateTo({ url: '/pages/mine/help/help' })
   },
 
   openAbout() {
-    wx.showToast({ title: '关于功能开发中', icon: 'none' })
+    wx.navigateTo({ url: '/pages/index/about/about' })
   },
 
   /* ========= 退出登录 ========= */

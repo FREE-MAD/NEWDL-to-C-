@@ -1,12 +1,14 @@
-// 云函数业务入口（开发版）。
-// ai不可以操作true_index.js只可以操作dev_index.js
-// 唯一操作途径是通过 sync-dev-to-true.js 迁移
+// 云函数业务入口（开发版 D_ 目录）。
+// ai不可以操作 T_ 目录（正式版），只可以操作 D_ 目录（开发版）
+// 唯一操作途径是通过 sync-dev-to-true.js 把 D_ 目录镜像复制到 T_ 目录
 // ai不允许执行迁移
 // 这个注释绝对不允许删除
 //
-// 说明（2026-10-09 拆模块）：原 3883 行单文件按依赖域拆成 _constants/_common/_db/_sync/_state/_lesson 六个模块，
-// 本文件只保留 exports.main（入口）+ routeTable（路由表）+ 订单 CRUD（getOneOrder/getOrderByCourseCode/listMyself/
-// publishOrder/updateOrder）。所有状态推进走 _state（内部经 _shared/courseState 的 applyCourseStateTransition）。
+// 说明（2026-10-09 拆模块 + 拆双函数）：
+//   1. 原 3883 行单文件按依赖域拆成 _constants/_common/_db/_sync/_state/_lesson 六个模块，
+//      本文件只保留 exports.main（入口）+ routeTable（路由表）+ 订单 CRUD（getOneOrder/getOrderByCourseCode/listMyself/
+//      publishOrder/updateOrder）。所有状态推进走 _state（内部经 _shared/courseState 的 applyCourseStateTransition）。
+//   2. 拆双函数后本目录为 D_ 版（开发环境），T_ 版由 sync-dev-to-true.js 复制生成、只读。
 const { initRuntime, runInContext } = require('./_shared/runtime')
 const { normalizeRequestEvent } = require('./_shared/request')
 const { make: makeLogger } = require('./_shared/logger')

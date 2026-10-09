@@ -1,8 +1,7 @@
 /**
  * _shared/request.js —— L0 底座：入参归一化
  *
- * 从 NEWDL_execution_order/dev_index.js:1198 的 normalizeRequestEvent 原样迁出
- * （该函数已被 :1287 调用；true_index.js:964 是它的同步副本）。
+ * 从 NEWDL_execution_order/index.js（拆双前 dev_index.js:1198）的 normalizeRequestEvent 原样迁出。
  *
  * 背景：本函数既会被 wx.cloud.callFunction 直调（action 挂 event 顶层），
  * 也会走 HTTP 云函数 / SCF 网关 / HTTP 访问服务（action 在 queryStringParameters
@@ -17,7 +16,7 @@
 
 /**
  * HTTP 查询字符串兼容：B 侧经 GET 中转时，数组和对象会先变成 JSON 字符串，这里统一回收成对象。
- * 原实现位于 NEWDL_execution_order/dev_index.js:56。
+ * 原实现位于 NEWDL_execution_order/index.js（拆双前 dev_index.js:56）。
  */
 function parseJsonLike(value, fallbackValue) {
   if (value === null || typeof value === 'undefined' || value === '') {

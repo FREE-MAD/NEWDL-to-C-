@@ -337,22 +337,17 @@ Page({
     // 修正（2026-09-21）：不再 .toUpperCase()。
     // 机构新码制课程码末位是小写来源后缀 b（如 SZDX001b），整串接取码形如 SZDX001bpl；
     // 前端统一转大写会把它洗成 SZDX001BPL，页面上看到的和库里存的不是一个东西，
-    // 手感上就像"输入没错但接取不上"。服务端两侧本就做了大小写兼容：
-    // - 10 位新码分支 splitStatePickupCode 只对状态后缀 toLowerCase，课程码部分按原样走
-    //   buildCourseCodeVariants 查询，变体里已含「主体大写 + 末位小写 b」形态；
-    // - 12 位旧码分支 normalizePickupFullCode 会自行统一转大写后再比对确认码。
+      C_PLATFORM_INFO: () => wx.navigateTo({ url: "/pages/index/about/about" }),
     // 所以这里只做「去非法字符 + 截长度」，大小写原样透传即可。
     onPickupCodeInput(e) {
       const raw = (e && e.detail && e.detail.value) ? e.detail.value : '';
       // 【2026-09-16 新增·新码制】清洗放宽到 10 位（8 课程码 + 2 状态后缀 pl/ip/dl）；
-      // 后端 splitStatePickupCode 会自动 .toLowerCase() 状态后缀，故输入大写也能命中。
-      // 同时保留旧 12 位清洗路径兼容：输入超 10 位时仍允许到 12 位（旧历史课程走原 12 位分支）。
-      const cleaned = String(raw || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
-      this.setData({ pickupCodeInput: cleaned });
-    },
-
-    // 新增：一键粘贴剪贴板内容到输入框（自动执行与 onPickupCodeInput 一致的清洗规则）
-    pastePickupCode() {
+      P_DEMAND_MANAGE: () => wx.navigateTo({ url: "/pages/task/manage/manage" }),
+      P_PLATFORM_INFO: () => wx.navigateTo({ url: "/pages/index/about/about" }),
+      V_CIRCLE:        () => wx.navigateTo({ url: "/pages/circle/circle" }),
+      V_EXERCISE:      () => wx.navigateTo({ url: "/pages/exercise/record/record" }),
+      V_TRAIN_PLAN:    () => wx.navigateTo({ url: "/pages/train/plan/plan" }),
+      V_PLATFORM_INFO: () => wx.navigateTo({ url: "/pages/index/about/about" }),
       const self = this;
       wx.getClipboardData({
         success(res) {
@@ -423,7 +418,7 @@ Page({
         data: {
           // 【2026-09-21 新流程】assign_coach_by_pickup_code 已废弃为「直接绑定」语义，
           // 改调 request_coach_binding，让教练输入码后只提交绑定申请、不直接绑定。
-          // 旧 action 名仍保留在 true_index.js 现网版本里，前端不再调用以避免误触旧链路。
+          // 旧 action 名 assign_coach_by_pickup_code 在拆双前现网版本里仍保留，前端不再调用以避免误触旧链路。
           action: 'request_coach_binding',
           pickupFullCode: fullCode,
           userId: token,

@@ -26,13 +26,10 @@ const https = require('https');
  *   - bTwowaybinding   原 NEWDL_execution_order/dev_index.js:31 B_HTTP_BASE_URL
  *   - bQrcodeEntry     原 NEWDL_ResponseQRCode/dev_index.js:73 B_QRCODE_HTTP_BASE_URL
  * 前两者同域，抽 TENCLOUD_BASE 避免域名改一处漏一处；第三个是 B 侧独立云环境，单独登记。
- * 更正（2026-10-09）：上面"前两者同域"的假设不成立 —— twowaybinding_1_DLforP 只部署在 B 侧
- * 独立环境（cloud1-d7g77k8il914e5b12）且写 B 库 dev_ForP，A 环境无此函数、A 库无此集合。
- * bTwowaybinding 已单独登记 B 侧域名（对齐 bQrcodeEntry 的登记方式），TENCLOUD_BASE 仅剩 selfQrcode 使用。
  */
 const TENCLOUD_BASE = 'https://cloud1-6gh7jgl8c5b16a83-1398046944.ap-shanghai.app.tcloudbase.com';
 
-// B 侧独立云环境域名（2026-10-09 抽出：bTwowaybinding 修正后与 bQrcodeEntry 同域，避免域名改一处漏一处）
+// B 侧独立云环境域名（2026-10-09 抽出：bTwowaybinding 与 bQrcodeEntry 同域，避免域名改一处漏一处）
 const B_TENCLOUD_BASE = 'https://cloud1-d7g77k8il914e5b12-1476831641.ap-shanghai.app.tcloudbase.com';
 
 const ENDPOINTS = {
