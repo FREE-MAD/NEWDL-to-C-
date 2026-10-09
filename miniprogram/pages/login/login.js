@@ -359,7 +359,8 @@ Page({
               title: "登录中..."
             });
             wx.cloud.callFunction({
-              name: "NEWDL_login_fun",
+              // 拆双函数（2026-10-09）：云函数名统一走 getFnName 按 develop/trial|release 选 D_/T_ 前缀
+              name: getApp().getFnName('NEWDL_login_fun'),
               data: {
                 phoneCode: detail.code,
                 nickname: userInfo.nickName,

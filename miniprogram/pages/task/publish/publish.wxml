@@ -283,6 +283,7 @@
           can-write-summary="{{canWriteSummary}}"
           order-progress="{{order}}"
           bind:summary-saved="onSummarySaved"
+          bind:lesson-completed="onLessonCompleted"
         />
       </view>
 

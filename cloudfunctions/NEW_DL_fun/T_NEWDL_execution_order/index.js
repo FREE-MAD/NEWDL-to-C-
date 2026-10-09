@@ -69,7 +69,8 @@ exports.main = async (event, context) => {
   }
 
   const $event = parsed.event;
-  const ctx = initRuntime($event)
+  // 环境钉死（2026-10-09 拆双函数）：T_xxx 只服务 trial/release，忽略调用方透传的 envVersion，防止误写对侧环境集合
+  const ctx = initRuntime(Object.assign({}, $event, { envVersion: 'release' }))
 
   return await runInContext(ctx, async () => {
   const openid = ctx.openid

@@ -162,6 +162,18 @@
           >
             {{canWriteSummary ? '去记录' : '仅执行教练可记录'}}
           </button>
+          <!-- 新增（2026-10-09 · 课程流转 T1-d）：课节「完成」的前端唯一入口。
+               口径：教练显式点完成，后端写信 schedule[i].status='DONE' 并把 progress_done +1。
+               前置条件是该课节已保存每日记录（lessonCompletable）；已完成（lessonDone）后按钮置灰。 -->
+          <button
+            wx:if="{{canWriteSummary}}"
+            class="mini-btn lesson-complete-btn {{schedule[selectedLessonIndex].lessonDone ? 'ghost' : 'finish'}}"
+            data-index="{{selectedLessonIndex}}"
+            bindtap="completeLesson"
+            disabled="{{lessonCompleteSubmitting || !schedule[selectedLessonIndex].lessonCompletable}}"
+          >
+            {{schedule[selectedLessonIndex].lessonDone ? '本节课已完成' : (schedule[selectedLessonIndex].lessonCompletable ? '标记本节课完成' : '先保存记录再标记')}}
+          </button>
         </view>
       </view>
 

@@ -180,7 +180,8 @@ async function checkNicknameSecurity(content = '', openid = '') {
 exports.main = async (event, context) => {
   const { nickname, phone, role, forceNewUser, address, latitude, longitude, avatarUrl, phoneCode, firstLoginFrom } = event || {};
   // 公共层：一次 initRuntime 拿到本次请求的 env / db / openid / traceId
-  const ctx = initRuntime(event || {});
+  // 环境钉死（2026-10-09 拆双函数）：T_xxx 只服务 trial/release，忽略调用方透传的 envVersion，防止误写对侧环境集合
+  const ctx = initRuntime(Object.assign({}, event || {}, { envVersion: 'release' }));
   // 请求上下文包裹（2026-10-08）：把后续整条 await 链绑定到本次请求的 env，
   // 深层 helper 里的 getCollectionName 通过 currentIsDev() 读到的就是本次请求的环境。
   // 注：包裹块内的缩进沿用了包裹前的层次，未整体重排 —— 为的是把 diff 压到最小、便于逐行核对。

@@ -7,6 +7,8 @@ const {
   BIZ_ROLE_ORG_COACH,
   getBizRoleLabel
 } = require('../../../utils/bizRole')
+// 调整（2026-10-09 · 课程流转 T8-a）：课程状态 / 课节完成口径收敛到统一模块
+const courseState = require('../../../utils/courseState')
 
 Page({
   flowTipAutoHideTimer: null,
@@ -33,33 +35,18 @@ Page({
     manageActionText: '班级管理'
   },
 
-  // 新增列表进度计算：和课节详情页保持同一口径，按“总结+日期”判断是否已完成
+  // 新增列表进度计算：与课节详情页、publish 页统一走 utils/courseState 的完成口径
   buildProgressText(order = {}) {
-    const progressStats = this.buildProgressStats(order)
-
-    return `${progressStats.completedCount}/${progressStats.totalCount}`
+    return courseState.buildLessonProgress(order).progressText
   },
 
-  // 新增课程进度统计：统一给 Tab 分类和卡片展示复用同一套完成口径，避免一处改了另一处还在走旧规则
+  // 新增课程进度统计：完成口径收敛到 utils/courseState.buildLessonProgress
+  // 调整（2026-10-09 · 课程流转 T8-c）：原来按「有没有写 summary」算完成数，
+  // 与后端 progress_done / 课节 status 都不是一回事 —— 这正是
+  // 「Tab 显示进行中、进度条却已经满了」这类不一致的来源。现统一为
+  // history_sync.syncedCount + schedule 里 status === 'DONE' 的课节数。
   buildProgressStats(order = {}) {
-    const schedule = Array.isArray(order.schedule) ? order.schedule : []
-    const historyCount = Number((((order || {}).history_sync || {}).syncedCount) || 0)
-    const completedScheduleCount = schedule.filter(item => {
-      const hasSummary = !!((item.summary || '').trim())
-      const hasSummaryDate = !!(item.summaryDate || item.startedAt || item.completedAt)
-      return hasSummary && hasSummaryDate
-    }).length
-    const fallbackTotalCount = historyCount + schedule.length
-    const totalCount = Number(order.progress_total || fallbackTotalCount || 0)
-    const safeTotalCount = totalCount > 0 ? totalCount : fallbackTotalCount
-    const completedCount = Math.min(historyCount + completedScheduleCount, safeTotalCount)
-
-    return {
-      schedule,
-      historyCount,
-      totalCount: safeTotalCount,
-      completedCount
-    }
+    return courseState.buildLessonProgress(order)
   },
 
   // 新增课程生命周期归类：progress 页的四个 Tab 全部走这里，确保“待编辑 / 待接取 / 进行中 / 已完成”口径一致。
@@ -78,34 +65,12 @@ Page({
   //  - 「待编辑 / 待接取」但非管理者 → 也只能查看，不能进入管理编辑。
   buildOrderLifecycleMeta(order = {}, currentUser = {}) {
     const progressStats = this.buildProgressStats(order)
-    const courseFlow = order.course_flow_info || {}
-    // 新增：优先读 course_flow_info.fulfill_state（后端同步更新的位置），
-    // 没有再退回顶层 fulfill_state，兼容历史上只写了其中一个位置的情况。
-    const fulfillStateRaw = String(
-      courseFlow.fulfill_state
-      || order.fulfill_state
-      || order.status
-      || 'pending'
-    ).trim()
-    // 【2026-09-16 新增·新码制状态后缀优先】新码制下 state_history 数组累积 pl/ip/dl，
-    // 末尾元素代表当前态：pl → awaiting、ip → in_progress、dl → completed。
-    // state_history 有值时优先于 fulfill_state 进行分类，保证新流程下的 Tab 划分与后端动作对齐；
-    // 无 state_history 时 fallback 到 fulfill_state，保留对老课程的兼容。
-    const stateHistory = Array.isArray(order.state_history)
-      ? order.state_history
-      : (Array.isArray(courseFlow.state_history) ? courseFlow.state_history : [])
-    const currentStateSuffix = stateHistory.length
-      ? String(stateHistory[stateHistory.length - 1] || '').toLowerCase()
-      : ''
-    // 新增：把 state_history 末尾后缀映射成 fulfill_state 等价值，方便复用下方已有显式状态判断。
-    let explicitState = fulfillStateRaw
-    if (currentStateSuffix === 'pl') {
-      explicitState = 'awaiting'
-    } else if (currentStateSuffix === 'ip') {
-      explicitState = 'in_progress'
-    } else if (currentStateSuffix === 'dl') {
-      explicitState = 'completed'
-    }
+    // 调整（2026-10-09 · 课程流转 T8-b）：状态读取与后缀映射收敛到 utils/courseState.js。
+    // 口径：内层 course_flow_info.fulfill_state 优先 → 回退顶层 fulfill_state → 回退 order.status；
+    // state_history 末尾后缀（pl/ip/dl）优先映射成等价 fulfill_state（新码制）；
+    // 都取不到时才用 'pending' 这个前端专用「未知」哨兵，走下方按排课/接取情况的兜底推断分支。
+    const stateHistory = courseState.getStateHistory(order)
+    const explicitState = courseState.normalizeExplicitState(order)
     const hasAssignedCoach = !!String(
       order.assignedCoachName
       || order.assigned_coach_name

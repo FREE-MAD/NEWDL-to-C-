@@ -38,6 +38,7 @@ const {
   getPublisherOpenid,
   getAcceptorOpenid,
   findMyPendingBindingRequest,
+  currentSafeNumber,
   isPublisher
 } = require('./_common')
 const {
@@ -71,7 +72,8 @@ exports.main = async (event, context) => {
   }
 
   const $event = parsed.event;
-  const ctx = initRuntime($event)
+  // 环境钉死（2026-10-09 拆双函数）：D_xxx 只服务 develop，忽略调用方透传的 envVersion，防止误写对侧环境集合
+  const ctx = initRuntime(Object.assign({}, $event, { envVersion: 'develop' }))
 
   return await runInContext(ctx, async () => {
   const openid = ctx.openid
@@ -112,6 +114,7 @@ exports.main = async (event, context) => {
     ACTION_SYNC_PARENT_BOOKING_TO_A,
     'update_order',
     'update_lesson_content',
+    'complete_lesson',
     'add_lesson',
     'sync_lesson_progress',
     'add_entry_log',
@@ -225,6 +228,11 @@ const routeTable = {
   update_lesson_content: async ({ orderId, openid, userId, event }) => {
     if (!orderId) return { code: 1, msg: '缺少订单ID' };
     return await lesson.updateLessonContent(orderId, openid, userId, event.lessonIndex, event.content);
+  },
+  // 新增（2026-10-09 · 课程流转 T1-b）：「课节完成」的唯一存活入口。教练显式点「完成」走这里。
+  complete_lesson: async ({ orderId, openid, userId, event }) => {
+    if (!orderId) return { code: 1, msg: '缺少订单ID' };
+    return await lesson.completeLesson(orderId, openid, userId, event.lessonIndex);
   },
   add_lesson: async ({ orderId }) => {
     if (!orderId) return { code: 1, msg: '缺少订单ID' };
@@ -463,6 +471,16 @@ async function publishOrder(submitForm, openid, userId) {
     publish_type: publishType,
     publish_state: publishState,
     fulfill_state: INITIAL_COURSE_STATE,
+    // 新增（2026-10-09 · 课程流转 T4）：建单是状态链的起点，此前不写流转日志，
+    // 导致 owner 里的 from 永远只能靠 readCourseState 兜底。补一条初始记录，让日志链有始。
+    state_transition_log: [{
+      from: '',
+      to: INITIAL_COURSE_STATE,
+      at: now,
+      actor: { role: courseState.ACTOR_ROLE.PUBLISHER, userId, openid },
+      role: courseState.ACTOR_ROLE.PUBLISHER,
+      reason: 'created:publish'
+    }],
     progress_total: classCount,
     progress_done: 0,
     schedule
@@ -503,7 +521,9 @@ async function publishOrder(submitForm, openid, userId) {
     assignedCoachOpenid: '',
     assignedCoachName: '',
     assignedCoachAt: null,
-    fulfill_state: INITIAL_COURSE_STATE,
+    // 调整（2026-10-09 · 课程流转 T4）：去掉顶层 fulfill_state 双写，状态只落 course_flow_info 一份。
+    // 读侧统一走 readCourseState（内层优先、回退顶层）+ normalizeOrderForClient（:686 会把内层提到顶层），
+    // 老数据（只有顶层）仍可正常读，故删掉新建订单的冗余顶层字段是安全的。
     createdAt: now,
     updatedAt: now
   }
@@ -565,10 +585,28 @@ async function updateOrder(orderId, submitForm, openid, userId) {
     create_time: getOrderBaseInfo(data).create_time || data.create_time || groupedPayload.order_base_info.create_time || '',
     updatedAt: new Date()
   }
+  // 修复（2026-10-09 · 课程流转 T3）：本函数下方会把顶层的 fulfill_state / publish_state /
+  // progress_total / progress_done / schedule / history_sync 用 _.remove() 删掉（它们已迁入 course_flow_info）。
+  // 但**老订单这些字段只存在于顶层、内层为空**，直接删会被读成默认值 —— readCourseState 是
+  // 「内层优先、回退顶层」，删完兜底成 editing，closed / in_progress 直接丢失。
+  // 因此先把顶层值兜底搬进内层，再让下方的 _.remove() 生效。
+  const existingCourseFlowInfo = getCourseFlowInfo(data)
   const courseFlowInfo = {
-    ...getCourseFlowInfo(data),
+    ...existingCourseFlowInfo,
+    fulfill_state: courseState.pickState(
+      existingCourseFlowInfo.fulfill_state,
+      data.fulfill_state,
+      INITIAL_COURSE_STATE
+    ),
+    publish_state: existingCourseFlowInfo.publish_state || data.publish_state || '',
+    progress_total: currentSafeNumber(existingCourseFlowInfo.progress_total || data.progress_total || 0),
+    progress_done: currentSafeNumber(existingCourseFlowInfo.progress_done || data.progress_done || 0),
+    schedule: Array.isArray(existingCourseFlowInfo.schedule)
+      ? existingCourseFlowInfo.schedule
+      : (Array.isArray(data.schedule) ? data.schedule : []),
+    history_sync: existingCourseFlowInfo.history_sync || data.history_sync || null,
     allow_transfer_to_other_coach: groupedPayload.course_flow_info.allow_transfer_to_other_coach,
-    publish_type: submitForm.publish_type || getCourseFlowInfo(data).publish_type || data.publish_type || '发布看看'
+    publish_type: submitForm.publish_type || existingCourseFlowInfo.publish_type || data.publish_type || '发布看看'
   }
 
   const updateData = {

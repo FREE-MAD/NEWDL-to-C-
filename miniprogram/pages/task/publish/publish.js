@@ -10,6 +10,8 @@
 // ============================================================
 const app = getApp();
 const { isCourseCreatorRole, BIZ_ROLE_ORG_ADMIN } = require('../../../utils/bizRole');
+// 调整（2026-10-09 · 课程流转 T8-a）：课程状态 / 课节完成口径收敛到统一模块
+const courseState = require('../../../utils/courseState');
 
 // 旧课节状态文案映射保留注释，不删除；当前链路已不再依赖“开始上课/下课”状态推进
 // const LESSON_STATUS_TEXT_MAP = {
@@ -321,7 +323,14 @@ Page({
     const isOrgAdminOfThisCourse = myBizRole === BIZ_ROLE_ORG_ADMIN && !!myOrgId && !!orderOrgId && myOrgId === orderOrgId;
     const isManagerialUser = isOwner || isOrgAdminOfThisCourse;
     const courseFlow = orderData.course_flow_info || {};
-    const explicitFulfillState = String(courseFlow.fulfill_state || orderData.fulfill_state || orderData.status || 'editing').trim();
+    // 调整（2026-10-09 · 课程流转 T8-b）：状态读取收敛到 utils/courseState
+    // （内层 course_flow_info.fulfill_state 优先 → 回退顶层 → 回退 order.status；
+    //   state_history 末尾后缀 pl/ip/dl 优先映射成等价状态，新码制下这才读得准）。
+    // 兜底保持原来的 'editing'：读不出状态时按「待编辑」处理，不把管理层的编辑权锁掉。
+    const rawExplicitState = courseState.normalizeExplicitState(orderData);
+    const explicitFulfillState = rawExplicitState === courseState.COURSE_STATE.PENDING
+      ? courseState.COURSE_STATE.EDITING
+      : rawExplicitState;
     const stageIsEditing = explicitFulfillState === 'editing';
     const stageIsAwaiting = explicitFulfillState === 'awaiting';
     const stageIsInProgress = explicitFulfillState === 'in_progress';
@@ -527,13 +536,15 @@ Page({
   },
 
   buildLessonDisplayMeta(lesson = {}) {
-    const hasSummary = !!((lesson.summary || '').trim());
-    const hasSummaryDate = !!(lesson.summaryDate || lesson.startedAt || lesson.completedAt);
-    const isCompleted = hasSummary && hasSummaryDate;
+    // 调整（2026-10-09 · 课程流转 T8）：判定口径收敛到 utils/courseState.buildLessonMeta，不再本地重写。
+    // 字段映射：isCompleted ← isRecorded（写了每日记录，仍用于排序 / 课表锁定判据）、
+    //           lessonDone ← isDone（后端 status === 'DONE'）、lessonCompletable ← canComplete。
+    const meta = courseState.buildLessonMeta(lesson);
     return {
-      isCompleted,
-      statusText: isCompleted ? '已完成' : '待记录',
-      displayStatusClass: isCompleted ? 'done' : 'pending'
+      ...meta,
+      isCompleted: meta.isRecorded,
+      lessonDone: meta.isDone,
+      lessonCompletable: meta.canComplete
     };
   },
 
@@ -1136,6 +1147,18 @@ Page({
   // dailysummary: 每日总结保存成功 → 刷新课表（组件内部已跳转详情页，此处兜底刷新）
   onSummarySaved() {
     if (this.data.orderId) this.fetchOrderDetails(this.data.orderId);
+  },
+
+  // 新增（2026-10-09 · 课程流转 T1-d）：课节标记完成成功 → 重新拉订单。
+  // progress_done / fulfill_state / schedule[i].status 都会变；全部课节完成时整单转 completed，
+  // 顶部流转 tab 的档位也要跟着刷新。
+  onLessonCompleted(e) {
+    const orderId = (e && e.detail && e.detail.orderId) || this.data.orderId;
+    if (!orderId) return;
+    if (e && e.detail && e.detail.allDone) {
+      wx.showToast({ title: '全部课节已完成，课程已结课', icon: 'none' });
+    }
+    this.fetchOrderDetails(orderId);
   },
 
   // classoff: 结课成功 → 刷新订单详情

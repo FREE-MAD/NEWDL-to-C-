@@ -337,17 +337,18 @@ Page({
     // 修正（2026-09-21）：不再 .toUpperCase()。
     // 机构新码制课程码末位是小写来源后缀 b（如 SZDX001b），整串接取码形如 SZDX001bpl；
     // 前端统一转大写会把它洗成 SZDX001BPL，页面上看到的和库里存的不是一个东西，
-      C_PLATFORM_INFO: () => wx.navigateTo({ url: "/pages/index/about/about" }),
     // 所以这里只做「去非法字符 + 截长度」，大小写原样透传即可。
     onPickupCodeInput(e) {
       const raw = (e && e.detail && e.detail.value) ? e.detail.value : '';
-      // 【2026-09-16 新增·新码制】清洗放宽到 10 位（8 课程码 + 2 状态后缀 pl/ip/dl）；
-      P_DEMAND_MANAGE: () => wx.navigateTo({ url: "/pages/task/manage/manage" }),
-      P_PLATFORM_INFO: () => wx.navigateTo({ url: "/pages/index/about/about" }),
-      V_CIRCLE:        () => wx.navigateTo({ url: "/pages/circle/circle" }),
-      V_EXERCISE:      () => wx.navigateTo({ url: "/pages/exercise/record/record" }),
-      V_TRAIN_PLAN:    () => wx.navigateTo({ url: "/pages/train/plan/plan" }),
-      V_PLATFORM_INFO: () => wx.navigateTo({ url: "/pages/index/about/about" }),
+      // 【2026-09-16 新增·新码制】清洗上限保留 12 位，兼容新 10 位（8 课程码 + 2 状态后缀 pl/ip/dl）
+      // 与旧 12 位（8 课程码 + 4 位随机确认码）两种格式。
+      const cleaned = String(raw || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
+      this.setData({ pickupCodeInput: cleaned });
+      return cleaned;
+    },
+
+    // 新增：从剪贴板粘贴接取码，避免手敲 10/12 位长码出错
+    pastePickupCode() {
       const self = this;
       wx.getClipboardData({
         success(res) {

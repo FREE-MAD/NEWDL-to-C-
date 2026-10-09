@@ -15,7 +15,7 @@ const { dbHandle } = require("./_shared/runtime");
 const { normalizeCollectionName, prefix } = require("./_shared/collections");
 const { parseJsonLike } = require("./_shared/request");
 // 调整（2026-10-08）：B 侧透传的 fulfill_state 白名单归一化走公共层（源在 _shared/courseState.js）。
-const { normalizeIncomingState } = require("./_shared/courseState");
+const { normalizeIncomingState, ACTOR_ROLE } = require("./_shared/courseState");
 
 // 注：本函数沿用 cloud.DYNAMIC_CURRENT_ENV（与其余写死 env 的函数不同），显式传给公共层保持行为不变。
 const db = dbHandle({ env: cloud.DYNAMIC_CURRENT_ENV });
@@ -467,6 +467,18 @@ function buildImportedOrder(event = {}, organizationDoc = null, envVersion = "de
       // 修复：桥接课程默认 fulfill_state 改为从 B 侧传来的 normalizedFulfillState（兜底 editing），
       // 不再硬写 pending，确保 A 端 publish.js / progress.js 的阶段权限判断正确落在 editing/awaiting。
       fulfill_state: normalizedFulfillState,
+      // 新增（2026-10-09 · 课程流转 T4）：桥接建单补一条起点记录，否则这单在 owner 的日志链上「无始」。
+      // 纯新增字段，不改动上面任何现有赋值。
+      state_transition_log: [
+        {
+          from: "",
+          to: normalizedFulfillState,
+          at: now,
+          actor: { role: ACTOR_ROLE.SYSTEM, userId: "", openid: "" },
+          role: ACTOR_ROLE.SYSTEM,
+          reason: "created:twowaybinding_from_b",
+        },
+      ],
       progress_total: classCount,
       progress_done: 0,
       schedule: buildSchedule(classCount),

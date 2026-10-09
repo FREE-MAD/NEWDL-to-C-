@@ -476,7 +476,8 @@ async function getCurrentUserDoc(usersCollection, openid) {
 // 云函数入口函数
 exports.main = async (event, context) => {
   // 公共层：一次 initRuntime 拿到本次请求的 env / db / openid / appid / unionid / traceId
-  const ctx = initRuntime(event || {})
+  // 环境钉死（2026-10-09 拆双函数）：D_xxx 只服务 develop，忽略调用方透传的 envVersion，防止误写对侧环境集合
+  const ctx = initRuntime(Object.assign({}, event || {}, { envVersion: 'develop' }))
   const { OPENID, APPID, UNIONID } = { OPENID: ctx.openid, APPID: ctx.appid, UNIONID: ctx.unionid }
   const { action = 'getStats', profile = {}, reviewProfile = null, shareLog = {}, targetOpenid = '' } = event || {}
   // 请求上下文包裹（2026-10-08）：把后续整条 await 链绑定到本次请求的 env，

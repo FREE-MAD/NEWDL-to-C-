@@ -7,7 +7,8 @@ const { make: makeLogger } = require('./_shared/logger');
 
 exports.main = async (event, context) => {
   // 公共层：一次 initRuntime 拿到本次请求的 env / openid / traceId；环境不再存模块级全局变量
-  const ctx = initRuntime(event);
+  // 环境钉死（2026-10-09 拆双函数）：T_xxx 只服务 trial/release，忽略调用方透传的 envVersion，防止误写对侧环境集合
+  const ctx = initRuntime(Object.assign({}, event, { envVersion: 'release' }));
   const log = makeLogger(ctx);
   log.runtimeEnv({
     hasOpenid: !!ctx.openid

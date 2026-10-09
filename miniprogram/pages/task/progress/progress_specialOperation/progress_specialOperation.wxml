@@ -207,7 +207,7 @@
           </view>
 
           <view class="schedule-action">
-            <text class="action-text {{item.displayStatusClass === 'done' ? 'done' : 'pending'}}">{{item.isHistorySummary ? '历史汇总' : (item.isCompleted ? '已完成' : '待记录')}}</text>
+            <text class="action-text {{item.displayStatusClass === 'done' ? 'done' : 'pending'}}">{{item.isHistorySummary ? '历史汇总' : item.statusText}}</text>
             <text class="iconfont icon-right" wx:if="{{!item.isHistorySummary}}"></text>
           </view>
         </view>

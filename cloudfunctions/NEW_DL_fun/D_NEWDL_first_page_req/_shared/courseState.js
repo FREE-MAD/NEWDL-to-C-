@@ -240,8 +240,9 @@ function normalizeIncomingState(value, fallback = COURSE_STATE.EDITING, allowed 
 //
 // 校验两档（重要）：
 //   - enforce=false（默认）：只收口「单写内层 + 追加 state_transition_log + 去重追加
-//     state_history 后缀 + completed 自增 progress_done」，不做合法性/权限拦截，
+//     state_history 后缀」，不做合法性/权限拦截，
 //     保证 22 处替换期间线上行为零变化。全部替换、逐一核对后，再逐函数打开 enforce。
+//     （progress_done 自增 2026-10-09 已移出本函数，见 :403 注释）
 //   - enforce=true：assertTransition（迁移合法性 + 终态冻结）+ assertActorPermission
 //     （操作者角色）。未登记的迁移默认只放行 admin。
 
@@ -326,7 +327,8 @@ function resolveCtx(ctx) {
 /**
  * 课程状态迁移的唯一写入口。
  * 在一个事务里完成：读当前订单 → 合法性 / 权限断言（enforce 时）→ 只写内层一份 →
- * 追加 state_transition_log → 去重追加 state_history 后缀 → completed 时 progress_done 自增。
+ * 追加 state_transition_log → 去重追加 state_history 后缀。
+ * 注意：progress_done 自增**不在本函数**，由课节完成入口通过 extra 传入（2026-10-09 起）。
  *
  * @param {Object} ctx   initRuntime() 返回的请求上下文；可传 null（自动回退到本次请求上下文）
  * @param {String} orderId  订单 _id
@@ -400,12 +402,13 @@ async function applyCourseStateTransition(ctx, orderId, opts = {}) {
       }
     }
 
-    // 课时进度：只有「完成」这一档自增，与迁移绑定，不可能漏也有可能不重复
-    if (to === COURSE_STATE.COMPLETED) {
-      patch[`course_flow_info.progress_done`] = _.inc(1);
-    }
+    // 调整（2026-10-09 · 课程流转 T1-c）：progress_done 的自增**已移出本函数**。
+    // 原实现在 to === COMPLETED 时 _.inc(1)，但「完成」的真实粒度是「一节课」——
+    // 最后一节课完成时既要 inc 一次、又要顺带把状态推到 completed，
+    // 若自增留在这里就会「每次完成 +2」。现在自增只由课节完成入口
+    // （_lesson.completeLesson）通过 extra 传入，owner 只负责状态字段本身。
 
-    // 调用方传入的非状态副作用字段，与状态同事务原子提交
+    // 调用方传入的非状态副作用字段（含课节完成时的 progress_done 自增），与状态同事务原子提交
     if (extra && typeof extra === 'object') Object.assign(patch, extra);
 
     await ref.update({ data: patch });

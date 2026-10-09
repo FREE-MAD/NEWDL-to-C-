@@ -148,6 +148,15 @@ async function syncParentBookingToA(event = {}) {
     publish_type: '发布看看',
     publish_state: 'bridged_from_b',
     fulfill_state: INITIAL_COURSE_STATE,
+    // 新增（2026-10-09 · 课程流转 T4）：桥接建单同样要有一条起点记录，否则 owner 的 from 只能靠兜底。
+    state_transition_log: [{
+      from: '',
+      to: INITIAL_COURSE_STATE,
+      at: now,
+      actor: { role: courseState.ACTOR_ROLE.SYSTEM, userId: '', openid: String(event.from_b_openid || '').trim() },
+      role: courseState.ACTOR_ROLE.SYSTEM,
+      reason: 'created:sync_parent_booking_to_a'
+    }],
     progress_total: classCount,
     progress_done: 0,
     schedule
@@ -200,7 +209,7 @@ async function syncParentBookingToA(event = {}) {
     assignedCoachOpenid: '',
     assignedCoachName: '',
     assignedCoachAt: null,
-    fulfill_state: INITIAL_COURSE_STATE,
+    // 调整（2026-10-09 · 课程流转 T4）：去掉顶层 fulfill_state 双写，状态只落 course_flow_info 一份。
     course_info_ready_at: null,
     createdAt: now,
     updatedAt: now

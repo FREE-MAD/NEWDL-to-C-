@@ -1,5 +1,7 @@
 // pages/task/progress/progress_specialOperation/progress_specialOperation.js
 const app = getApp();
+// 调整（2026-10-09 · 课程流转 T8）：课程状态 / 课节完成口径收敛到统一模块
+const courseState = require('../../../utils/courseState');
 
 // 旧课节状态文案映射保留注释，不删除；当前展示页不再依赖“待上课/上课中/已完成”驱动显示
 // const LESSON_STATUS_TEXT_MAP = {
@@ -158,16 +160,15 @@ Page({
     return filteredList;
   },
 
-  // 新增课节展示状态：统一按“是否已经记录完成”来决定展示状态
+  // 课节展示状态：口径收敛到 utils/courseState.buildLessonMeta
+  // 调整（2026-10-09 · 课程流转 T8-d）：「已完成」改看后端 status === 'DONE'（教练显式点完成写入）。
+  // 原来按「有没有写 summary」判定，会把「记了记录但还没点完成」的课节误显示成已完成。
+  // 保留 isCompleted 字段名是为了少改调用点，它的语义是「已写每日记录」（meta.isRecorded），不是「已完成」。
   buildLessonDisplayMeta(lesson = {}) {
-    const hasSummary = !!((lesson.summary || '').trim());
-    const hasSummaryDate = !!(lesson.summaryDate || lesson.startedAt || lesson.completedAt);
-    const isCompleted = hasSummary && hasSummaryDate;
-
+    const meta = courseState.buildLessonMeta(lesson);
     return {
-      isCompleted,
-      statusText: isCompleted ? '已完成' : '待记录',
-      displayStatusClass: isCompleted ? 'done' : 'pending'
+      ...meta,
+      isCompleted: meta.isRecorded
     };
   },
 
@@ -198,19 +199,21 @@ Page({
     return displaySchedule;
   },
 
-  // 新增表头计算：让卡片标题区和下面的课节状态使用同一套统计口径
+  // 表头计算：口径收敛到 utils/courseState.buildLessonProgress
+  // 调整（2026-10-09 · 课程流转 T8-c）：完成数不再数「写了 summary 的课节」，
+  // 改为数 status === 'DONE' 的课节 + 半途接入的历史课节数，与后端 progress_done 同一算法。
   buildProgressSummary(orderData = {}, schedule = []) {
-    const historyCount = Number((((orderData || {}).history_sync || {}).syncedCount) || 0);
-    const scheduleCompletedCount = (schedule || []).filter(item => item.isCompleted).length;
-    const totalCount = Number((orderData || {}).progress_total || (historyCount + (schedule || []).length) || 0);
-    const completedCount = Math.min(historyCount + scheduleCompletedCount, totalCount);
-    const pendingCount = Math.max(totalCount - completedCount, 0);
+    const progress = courseState.buildLessonProgress({
+      ...(orderData || {}),
+      schedule: Array.isArray(schedule) ? schedule : ((orderData || {}).schedule || [])
+    });
+    const pendingCount = Math.max(progress.totalCount - progress.completedCount, 0);
 
     return {
-      historySyncedCount: historyCount,
-      progressCompletedCount: completedCount,
+      historySyncedCount: progress.historyCount,
+      progressCompletedCount: progress.completedCount,
       progressPendingCount: pendingCount,
-      progressTotalCount: totalCount
+      progressTotalCount: progress.totalCount
     };
   },
 
@@ -370,7 +373,8 @@ Page({
         ...progressSummary
       });
 
-      this.updateUIByState(orderData.fulfill_state);
+      // 调整（2026-10-09 · 课程流转 T8-b）：状态读取收敛到 utils/courseState（内层优先、回退顶层）
+      this.updateUIByState(courseState.readCourseState(orderData));
       this.recordEntryLog({
         sourcePage: this.data.entryFrom || 'normal'
       });
@@ -430,7 +434,8 @@ Page({
     let statusText = '课程信息展示页';
     let currentStep = 0;
 
-    if (fulfillState === 'cancelled' || fulfillState === 'closed') {
+    // 调整（2026-10-09 · 课程流转 T8-b）：判断收敛到 courseState.isClosedState
+    if (courseState.isClosedState(fulfillState)) {
       statusText = '当前课程已关闭';
     }
 

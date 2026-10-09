@@ -8,6 +8,8 @@
 // ============================================================
 
 const app = getApp();
+// 调整（2026-10-09 · 课程流转 T8-a）：课程状态 / 课节完成口径收敛到统一模块
+const courseState = require('../../../utils/courseState');
 
 Component({
   // 组件外部入参：由宿主页面 publish 下发
@@ -41,7 +43,9 @@ Component({
     summarySelectedDimensionCount: 0,
     summaryAverageRatingText: '未生成',
     // 每日记录之后不可更改：当前课节已记录则锁定所有编辑控件
-    summaryLocked: false
+    summaryLocked: false,
+    // 新增（2026-10-09 · 课程流转 T1-d）：「标记本节课完成」的并发锁，避免连点导致重复自增 progress_done
+    lessonCompleteSubmitting: false
   },
 
   // 监听 schedule 变化：重新同步编辑器到当前课节
@@ -262,13 +266,15 @@ Component({
     },
 
     buildLessonDisplayMeta(lesson = {}) {
-      const hasSummary = !!((lesson.summary || '').trim());
-      const hasSummaryDate = !!(lesson.summaryDate || lesson.startedAt || lesson.completedAt);
-      const isCompleted = hasSummary && hasSummaryDate;
+      // 调整（2026-10-09 · 课程流转 T8）：判定口径收敛到 utils/courseState.buildLessonMeta，不再本地重写。
+      // 字段映射：isCompleted ← isRecorded（写了每日记录，用于锁定编辑器 / 排序 / 课表锁定判据）、
+      //           lessonDone ← isDone（后端 status === 'DONE'）、lessonCompletable ← canComplete。
+      const meta = courseState.buildLessonMeta(lesson);
       return {
-        isCompleted,
-        statusText: isCompleted ? '已完成' : '待记录',
-        displayStatusClass: isCompleted ? 'done' : 'pending'
+        ...meta,
+        isCompleted: meta.isRecorded,
+        lessonDone: meta.isDone,
+        lessonCompletable: meta.canComplete
       };
     },
 
@@ -549,6 +555,87 @@ Component({
         wx.hideLoading();
         console.error('[publish_dailysummary] [saveSummary] 失败:', error);
         wx.showToast({ title: '保存失败', icon: 'none' });
+      }
+    },
+
+    // ============================================================
+    // 新增（2026-10-09 · 课程流转 T1-d）：「标记本节课完成」。
+    // 口径（Q1 已定）：教练显式点完成，后端 complete_lesson 写 schedule[i].status='DONE'
+    // 并把 progress_done +1；全部课节完成后整单自动转 completed。
+    // 前置条件：该课节已保存过每日记录（lessonCompletable）。
+    // 幂等由后端保证；这里再加一道并发锁，避免连点。
+    // ============================================================
+    async completeLesson() {
+      if (this.data.lessonCompleteSubmitting) return;
+      if (!this.data.canWriteSummary) {
+        wx.showToast({ title: '仅执行教练可标记课节完成', icon: 'none' });
+        return;
+      }
+      if (!this.data.orderId) {
+        wx.showToast({ title: '请先发布课程', icon: 'none' });
+        return;
+      }
+      const index = Number(this.data.selectedLessonIndex || 0);
+      const lesson = (this.data.schedule || [])[index];
+      if (!lesson) {
+        wx.showToast({ title: '请选择课节', icon: 'none' });
+        return;
+      }
+      const meta = this.buildLessonDisplayMeta(lesson);
+      if (meta.lessonDone) {
+        wx.showToast({ title: '本节课已完成', icon: 'none' });
+        return;
+      }
+      if (!meta.lessonCompletable) {
+        wx.showToast({ title: '请先保存本节课的每日记录，再标记完成', icon: 'none' });
+        return;
+      }
+      const lessonNo = lesson.lesson || (index + 1);
+      const confirmed = await new Promise((resolve) => {
+        wx.showModal({
+          title: '标记本节课完成',
+          content: `确认第 ${lessonNo} 课已完成？标记后课时进度 +1，不可撤销。`,
+          confirmText: '确认完成',
+          cancelText: '再想想',
+          success: (res) => resolve(!!res.confirm),
+          fail: () => resolve(false)
+        });
+      });
+      if (!confirmed) return;
+
+      this.setData({ lessonCompleteSubmitting: true });
+      wx.showLoading({ title: '标记中' });
+      try {
+        const result = await wx.cloud.callFunction({
+          name: getApp().getFnName('NEWDL_execution_order'),
+          data: {
+            action: 'complete_lesson',
+            orderId: this.data.orderId,
+            lessonIndex: lessonNo,
+            envVersion: app.globalData.miniEnvVersion || 'develop'
+          }
+        });
+        wx.hideLoading();
+        const payload = (result && result.result) || {};
+        if (payload.code === 0) {
+          wx.showToast({ title: payload.msg || '本节课已完成', icon: 'success' });
+          // 通知宿主页重新拉取订单：进度、状态、课节 status 都会变
+          this.triggerEvent('lesson-completed', {
+            orderId: this.data.orderId,
+            lessonIndex: lessonNo,
+            allDone: !!payload.allDone,
+            fulfillState: payload.fulfill_state || ''
+          });
+          return;
+        }
+        console.warn('[publish_dailysummary] [completeLesson] 后端拒绝:', payload);
+        wx.showToast({ title: payload.msg || '标记失败', icon: 'none' });
+      } catch (error) {
+        wx.hideLoading();
+        console.error('[publish_dailysummary] [completeLesson] 失败:', error);
+        wx.showToast({ title: '网络错误，请稍后重试', icon: 'none' });
+      } finally {
+        this.setData({ lessonCompleteSubmitting: false });
       }
     }
   }

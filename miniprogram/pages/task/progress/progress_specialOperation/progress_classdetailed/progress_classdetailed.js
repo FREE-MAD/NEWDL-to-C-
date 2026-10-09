@@ -1,4 +1,6 @@
 const app = getApp();
+// 调整（2026-10-09 · 课程流转 T8-a）：课程状态 / 课节完成口径收敛到统一模块
+const courseState = require('../../../../../utils/courseState');
 
 // 旧课节状态文案映射保留注释，不删除；当前详情页不再依赖课程状态决定内容显示
 // const LESSON_STATUS_TEXT_MAP = {
@@ -274,6 +276,8 @@ Page({
     const recordDateText = this.formatDateOnly(safeLesson.summaryUpdatedAt || safeLesson.completedAt || safeLesson.startedAt);
     const dimensionRatingList = this.buildDimensionRatingList(safeLesson.dimensionRatings);
     const ratingText = safeRatingValue > 0 ? safeRatingValue.toFixed(1) : '暂无';
+    // 调整（2026-10-09 · 课程流转 T8-d）：课节完成口径收敛到 utils/courseState
+    const lessonMeta = courseState.buildLessonMeta(safeLesson);
 
     return {
       ...safeLesson,
@@ -288,7 +292,9 @@ Page({
       lessonDateText: lessonDateText || '未记录',
       recordDateText: recordDateText || '未记录',
       durationText: this.buildDurationText(safeLesson),
-      completeStatusText: safeLesson.summary ? '已完成' : '未填写',
+      // 调整（2026-10-09 · 课程流转 T8-d）：原来只看 summary 有没有内容，
+      // 与「教练显式点完成才写 status='DONE'」的口径不符，会把「记了记录但没点完成」显示成已完成。
+      completeStatusText: lessonMeta.isDone ? '已完成' : (lessonMeta.isRecorded ? '待确认完成' : '未填写'),
       ratingValue: safeRatingValue,
       ratingText,
       ratingStars: this.buildRatingStars(safeRatingValue),

@@ -10,7 +10,6 @@ const courseState = require('./_shared/courseState')
 const {
   COURSE_STATE,
   isTerminalState,
-  isClosedState,
   readCourseState,
   terminalBlockedMessage,
   appendStateSuffix,
@@ -117,8 +116,11 @@ async function assignCoachByPickupCode(rawPickupFullCode, coachOpenid, coachUser
   }
 
   const fulfillState = readCourseState(matchedOrder, '')
-  if (isClosedState(fulfillState)) {
-    return { code: 403, msg: '该课程已关闭，无法再接取' }
+  // 调整（2026-10-09 · 课程流转 T6-a，Q3 已定）：本入口原用 isClosedState（只挡 closed/cancelled），
+  // 与其它入口的 isTerminalState（closed/cancelled/completed）口径不一致 —— 「已完成但未结课」的课程
+  // 仍可被接取码直接认领并把状态打回 in_progress。现统一挡三个终态。
+  if (isTerminalState(fulfillState)) {
+    return { code: 403, msg: terminalBlockedMessage('无法再接取') }
   }
 
   if (isNewCodeSystem) {
