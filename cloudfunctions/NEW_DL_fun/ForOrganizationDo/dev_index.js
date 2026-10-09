@@ -13,6 +13,8 @@ const { make: makeLogger } = require('./_shared/logger')
 const { ENDPOINTS, postJson } = require('./_shared/http')
 // 调整（2026-10-09）：users 集合写入口收口到 userRepo（源在 _shared/repos/userRepo.js，副本只读）。
 const userRepo = require('./_shared/repos/userRepo')
+// 调整（2026-10-09）：organization 集合「写机构 + 写身份」两笔收口到 organizationRepo 一个事务。
+const orgRepo = require('./_shared/repos/organizationRepo')
 
 const db = dbHandle()
 const ORGANIZATION_COLLECTION_BASE = 'organization'
@@ -370,21 +372,6 @@ async function getCurrentOrganizationDoc(userDoc = {}, organizationCollectionNam
   return organizationDoc
 }
 
-async function updateUserOrganizationProfile(usersCollectionName = '', userDoc = {}, organizationDoc = {}, memberRole = 'coach') {
-  const organizationBasic = organizationDoc.organization_basic || {}
-  await userRepo.updateUserDoc(usersCollectionName, userDoc._id, {
-    biz_role: memberRole === 'admin' ? 'org_admin' : 'org_coach',
-    organization_profile: {
-      orgId: String(organizationBasic.organization_id || '').trim(),
-      orgName: String(organizationBasic.organization_name || '').trim(),
-      memberRole,
-      inviteCode: String(organizationBasic.invitation_code || '').trim(),
-      joinedAt: new Date(),
-      updatedAt: new Date()
-    }
-  })
-}
-
 async function createOrganization(event = {}, openid = '', usersCollectionName = '', organizationCollectionName = '') {
   const userDoc = await getCurrentUserDoc(openid, usersCollectionName)
   ensureCertifiedCoach(userDoc)
@@ -464,6 +451,8 @@ async function createOrganization(event = {}, openid = '', usersCollectionName =
   const adminItem = buildMemberItem(userDoc, openid, 'admin')
   const now = new Date()
   const organizationDoc = {
+    // 预生成 _id：organizationRepo.createOrganizationWithIdentity 事务内用 set 建档需要稳定 _id（替代 add 自动生成）
+    _id: orgRepo.generateOrganizationId(),
     organization_basic: {
       organization_id: organizationId,
       organization_name: organizationName,
@@ -511,25 +500,28 @@ async function createOrganization(event = {}, openid = '', usersCollectionName =
     diyInDocType: typeof organizationDoc.organization_basic.diy_qrcode_image,
   })
 
-  // 新增：捕获 DB add 返回值，取 _id（docId）用于与 NEWDL_ResponseQRCode 日志里的 docId 对账，
-  // 确认「创建时写入的文档」和「生成二维码时读取的文档」是同一条。
-  const addRes = await db.collection(organizationCollectionName).add({
-    data: organizationDoc
-  })
+  // 调整（2026-10-09）：add(机构) + updateUserOrganizationProfile(users) 两笔独立写收口为
+  // organizationRepo.createOrganizationWithIdentity 一个事务 —— 任何一笔失败整体回滚，不再产生孤儿机构。
+  // add 改为「预生成 _id + 事务内 set」，事务提交前 _id 稳定（organizationDoc._id）。
+  await orgRepo.createOrganizationWithIdentity(
+    organizationCollectionName,
+    usersCollectionName,
+    organizationDoc,
+    String(userDoc._id || '').trim(),
+    'admin'
+  )
 
   // 新增（诊断日志 - DIY 字段落库核对 3/3）：写 DB 成功后打印一次，确认这次创建没有抛异常且字段已在内存里存在。
   // 若后续 NEWDL_ResponseQRCode 仍显示 orgBasicTopKeys 里没有 diy_qrcode_image，则问题不在 ForOrganizationDo，
   // 而是 DB add 返回成功但实际没持久化 / 读到了冷数据。
   console.log('[ForOrganizationDo][INFO] createOrganization.create_ok', {
     organizationId,
-    docId: addRes && addRes._id ? addRes._id : '',
+    docId: organizationDoc._id,
     organizationName,
     invitationCode: String(invitationCode || '').slice(0, 8) + '...',
     diyFieldInDoc: (organizationDoc.organization_basic.diy_qrcode_image || '').slice(0, 60),
     collection: organizationCollectionName,
   })
-
-  await updateUserOrganizationProfile(usersCollectionName, userDoc, organizationDoc, 'admin')
 
   return {
     status: 'success',
@@ -717,9 +709,24 @@ async function updateOrganization(event = {}, openid = '', usersCollectionName =
       coach_list: nextOrganizationMember.coach_list
     }
   }
-  const updateRes = await db.collection(organizationCollectionName).doc(organizationDoc._id).update({
-    data: updateData
-  })
+  // 调整（2026-10-09）：hasBasicInput=true 时「写机构 + 写身份」两笔收口为一个事务（不再产生孤儿机构）；
+  // hasBasicInput=false（只改 staff_role）时仍只写 organization 一笔，users 保持不动。
+  let updateRes = null
+  if (hasBasicInput) {
+    updateRes = await orgRepo.updateOrganizationWithIdentity(
+      organizationCollectionName,
+      usersCollectionName,
+      organizationDoc._id,
+      updateData,
+      String(userDoc._id || '').trim(),
+      'admin',
+      { organization_basic: nextOrganizationBasic }
+    )
+  } else {
+    updateRes = await db.collection(organizationCollectionName).doc(organizationDoc._id).update({
+      data: updateData
+    })
+  }
 
   // 新增（诊断日志 - DIY 空值一次性补传核对 3/3）：DB update 成功后再次确认，避免出现「云函数 update 返回 OK 但字段实际没写进去」的情况。
   console.log('[ForOrganizationDo][INFO] updateOrganization.update_ok', {
@@ -741,11 +748,8 @@ async function updateOrganization(event = {}, openid = '', usersCollectionName =
     }
   }
 
-  // 只更新身份时不刷 users 的机构归属信息：避免把 joinedAt / biz_role 一起改动，
-  // 身份只落在 organization 文档里，users 文档保持不动
-  if (hasBasicInput) {
-    await updateUserOrganizationProfile(usersCollectionName, userDoc, nextOrganizationDoc, 'admin')
-  }
+  // 调整（2026-10-09）：hasBasicInput=true 时的「写身份」已并入上方 orgRepo.updateOrganizationWithIdentity 事务，
+  // 这里不再单独调 updateUserOrganizationProfile；hasBasicInput=false 时本就只写 organization、users 不动。
 
   // 新增（A 侧机构展示信息同步）：编辑保存成功后顺推 B 侧展示信息（名称/简介/地址/轮播图等可能已变更）。
   await pushOrgShowToB(nextOrganizationDoc, 'updateOrganization')
@@ -850,18 +854,26 @@ async function joinOrganization(event = {}, openid = '', usersCollectionName = '
       ? applyStaffRoleToMemberList(organizationMember, openid, staffRole)
       : organizationMember
 
+    // 调整（2026-10-09）：改身份时「写机构成员 + 写 users 身份」两笔收口为一个事务（不再产生孤儿）；
+    // 只重复提交（无 staffRole 变更）时仅写 users 身份一笔，保持幂等。
     if (staffRole && nextOrganizationMember.changed) {
-      await db.collection(organizationCollectionName).doc(organizationDoc._id).update({
-        data: {
+      await orgRepo.updateOrganizationWithIdentity(
+        organizationCollectionName,
+        usersCollectionName,
+        organizationDoc._id,
+        {
           organization_member: {
             admin_list: nextOrganizationMember.admin_list,
             coach_list: nextOrganizationMember.coach_list
           }
-        }
-      })
+        },
+        String(userDoc._id || '').trim(),
+        'coach',
+        organizationDoc
+      )
+    } else {
+      await userRepo.updateUserDoc(usersCollectionName, userDoc._id, orgRepo.buildIdentityPatch(organizationDoc, 'coach'))
     }
-
-    await updateUserOrganizationProfile(usersCollectionName, userDoc, organizationDoc, 'coach')
     return {
       status: 'success',
       message: staffRole ? '你的机构身份已更新' : '你已经加入该机构',
@@ -1070,16 +1082,20 @@ async function reviewJoinRequest(event = {}, openid = '', usersCollectionName = 
     }
   }
 
-  await db.collection(organizationCollectionName).doc(organizationDoc._id).update({
-    data: {
-      organization_member: nextOrganizationDoc.organization_member
-    }
-  })
-
   // 申请人 users 文档：写 biz_role（org_admin / org_coach）与 organization_profile，
   // 这一步做完对方下次进入机构页才会真正切换到机构身份
   const applicantUserDoc = await getCurrentUserDoc(applyOpenid, usersCollectionName)
-  await updateUserOrganizationProfile(usersCollectionName, applicantUserDoc, nextOrganizationDoc, joinRole)
+
+  // 调整（2026-10-09）：审批同意时「写机构成员 + 写申请人身份」两笔收口为一个事务（不再产生孤儿成员）。
+  await orgRepo.updateOrganizationWithIdentity(
+    organizationCollectionName,
+    usersCollectionName,
+    organizationDoc._id,
+    { organization_member: nextOrganizationDoc.organization_member },
+    String((applicantUserDoc && applicantUserDoc._id) || applyOpenid || '').trim(),
+    joinRole,
+    nextOrganizationDoc
+  )
 
   // 成员列表变化 → 顺推 B 侧家长端展示信息（与 joinOrganization 同一推送点，幂等覆盖）
   await pushOrgShowToB(nextOrganizationDoc, 'reviewJoinRequest.approve')
