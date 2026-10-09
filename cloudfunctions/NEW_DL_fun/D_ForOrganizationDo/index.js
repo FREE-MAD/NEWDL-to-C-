@@ -276,7 +276,8 @@ function findPendingApplyIndex(pendingList = [], openid = '') {
 // 网络错误 / 超时直接 reject，由调用方静默 catch（同步失败不阻断机构操作主流程）。
 // 调整（2026-10-08）：https 请求体与超时的具体实现下沉到 _shared/http.js 的 postJson，判定口径与超时（20s）不变。
 function postToSelfHttp(action = '', payload = {}) {
-  return postJson(ENDPOINTS.selfQrcode, { ...payload, action }, {
+  // 调整（2026-10-09 拆双函数）：按当前请求环境选 D_/T_ 二维码服务。
+  return postJson(currentIsDev() ? ENDPOINTS.selfQrcodeD : ENDPOINTS.selfQrcodeT, { ...payload, action }, {
     timeoutMessage: '调用 A 侧二维码服务超时'
   })
 }

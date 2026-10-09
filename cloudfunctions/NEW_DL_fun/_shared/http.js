@@ -36,8 +36,10 @@ const TENCLOUD_BASE = 'https://cloud1-6gh7jgl8c5b16a83-1398046944.ap-shanghai.ap
 const B_TENCLOUD_BASE = 'https://cloud1-d7g77k8il914e5b12-1476831641.ap-shanghai.app.tcloudbase.com';
 
 const ENDPOINTS = {
-  // A 侧本环境（cloud1-6gh7jgl8c5b16a83）
-  selfQrcode: `${TENCLOUD_BASE}/NEWDL_ResponseQRCode`,
+  // A 侧本环境（cloud1-6gh7jgl8c5b16a83）—— 拆双函数后按 D_/T_ 前缀区分，
+  // 调用方（ForOrganizationDo）用 currentIsDev() 选择，本文件不判断环境（遵守硬约束）。
+  selfQrcodeD: `${TENCLOUD_BASE}/D_NEWDL_ResponseQRCode`,
+  selfQrcodeT: `${TENCLOUD_BASE}/T_NEWDL_ResponseQRCode`,
   // B 侧独立云环境（cloud1-d7g77k8il914e5b12）
   // 调整（2026-10-09）：原 `${TENCLOUD_BASE}/twowaybinding_1_DLforP` 打到了 A 自己环境，
   // 但该函数只部署在 B 仓库（写 B 库 dev_ForP），指向 A 环境必然 404 静默失败。
