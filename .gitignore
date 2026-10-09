@@ -9,3 +9,7 @@ True
 
 # 依赖目录：云端部署时由本地磁盘直接上传，入库只保留 package.json / package-lock.json
 node_modules/
+
+# 拆双函数后残留的原目录（git mv 因文件被占用 Permission denied，已用 robocopy 复制到 D_ 替代；
+# 文件系统残留待关闭 IDE 后手动删除，git 先忽略避免重复追踪）
+cloudfunctions/NEW_DL_fun/NEWDL_execution_order/
