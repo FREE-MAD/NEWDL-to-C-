@@ -11,6 +11,8 @@ const { initRuntime, dbHandle, runInContext, currentIsDev, currentEnvVersion } =
 const { normalizeCollectionName, prefix } = require('./_shared/collections')
 const { make: makeLogger } = require('./_shared/logger')
 const { ENDPOINTS, postJson } = require('./_shared/http')
+// 调整（2026-10-09）：users 集合写入口收口到 userRepo（源在 _shared/repos/userRepo.js，副本只读）。
+const userRepo = require('./_shared/repos/userRepo')
 
 const db = dbHandle()
 const ORGANIZATION_COLLECTION_BASE = 'organization'
@@ -370,17 +372,15 @@ async function getCurrentOrganizationDoc(userDoc = {}, organizationCollectionNam
 
 async function updateUserOrganizationProfile(usersCollectionName = '', userDoc = {}, organizationDoc = {}, memberRole = 'coach') {
   const organizationBasic = organizationDoc.organization_basic || {}
-  await db.collection(usersCollectionName).doc(userDoc._id).update({
-    data: {
-      biz_role: memberRole === 'admin' ? 'org_admin' : 'org_coach',
-      organization_profile: {
-        orgId: String(organizationBasic.organization_id || '').trim(),
-        orgName: String(organizationBasic.organization_name || '').trim(),
-        memberRole,
-        inviteCode: String(organizationBasic.invitation_code || '').trim(),
-        joinedAt: new Date(),
-        updatedAt: new Date()
-      }
+  await userRepo.updateUserDoc(usersCollectionName, userDoc._id, {
+    biz_role: memberRole === 'admin' ? 'org_admin' : 'org_coach',
+    organization_profile: {
+      orgId: String(organizationBasic.organization_id || '').trim(),
+      orgName: String(organizationBasic.organization_name || '').trim(),
+      memberRole,
+      inviteCode: String(organizationBasic.invitation_code || '').trim(),
+      joinedAt: new Date(),
+      updatedAt: new Date()
     }
   })
 }

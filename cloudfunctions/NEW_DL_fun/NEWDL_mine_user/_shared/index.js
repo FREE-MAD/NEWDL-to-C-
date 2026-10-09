@@ -16,6 +16,7 @@ const errors = require('./errors');
 const logger = require('./logger');
 const http = require('./http');
 const security = require('./security');
+const courseState = require('./courseState');
 
 module.exports = {
   // L0 底座
@@ -45,6 +46,15 @@ module.exports = {
   isOpenAPIPermissionError: security.isOpenAPIPermissionError,
   callMsgSecCheck: security.callMsgSecCheck,
 
+  // L2 领域层（2026-10-08 新增）
+  COURSE_STATE: courseState.COURSE_STATE,
+  readCourseState: courseState.readCourseState,
+  isTerminalState: courseState.isTerminalState,
+  isClosedState: courseState.isClosedState,
+  appendStateSuffix: courseState.appendStateSuffix,
+  resolveStateSuffix: courseState.resolveStateSuffix,
+  normalizeIncomingState: courseState.normalizeIncomingState,
+
   // 命名空间备用
   runtime,
   collections,
@@ -52,5 +62,6 @@ module.exports = {
   errors,
   logger,
   http,
-  security
+  security,
+  courseState
 };

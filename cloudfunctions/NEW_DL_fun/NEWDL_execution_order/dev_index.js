@@ -10,13 +10,18 @@ const { ENDPOINTS, getJson } = require('./_shared/http')
 const courseState = require('./_shared/courseState')
 const {
   COURSE_STATE,
+  INITIAL_COURSE_STATE,
   isTerminalState,
   isClosedState,
   readCourseState,
   pickState,
   terminalBlockedMessage,
   appendStateSuffix,
-  resolveStateSuffix
+  resolveStateSuffix,
+  ACTOR_ROLE,
+  // 新增（2026-10-09）：L2 状态机 owner —— fulfill_state 的唯一写入口。
+  // 22 处直写需逐处替换成本函数调用；enforce=false 期间只收口不拦截，行为与现状一致。
+  applyCourseStateTransition
 } = courseState
 
 const db = dbHandle()
@@ -40,6 +45,8 @@ const BRIDGE_STATUS_SYNCED = 'synced'
 const BRIDGE_STATUS_FAILED = 'failed'
 // 新增 A -> B 回抄地址：当前先按和 A 侧同一云环境的 HTTP 路由拼接。
 // 调整（2026-10-08）：地址已下沉到 _shared/http.js 的 ENDPOINTS.bTwowaybinding（域名与自环境二维码服务同源）。
+// 更正（2026-10-09）：上一行"同源"的说法有误 —— bTwowaybinding 实际指向 B 侧独立环境
+// cloud1-d7g77k8il914e5b12（twowaybinding_1_DLforP 只部署在 B 侧，写 B 库 dev_ForP），详见 _shared/http.js。
 // 如果 B 侧后续切换了独立路由，只改 ENDPOINTS 一处，不动业务函数。
 
 function getCollectionPrefix() {
@@ -1556,41 +1563,31 @@ async function assignCoachByPickupCode(rawPickupFullCode, coachOpenid, coachUser
   // 新增：教练成功接取后，课程生命周期状态推进到「进行中（in_progress）」。
   // 保证 progress 页面立刻把它从「待接取」挪到「进行中」Tab，和管理层生成接取码 → 教练接取 → 开始带课的业务顺序对齐。
   // 同时写顶层 fulfill_state 和 course_flow_info.fulfill_state，兼容两种读取位置。
-  const currentCourseFlow = getCourseFlowInfo(matchedOrder)
   // 【2026-09-16 新增·state_history 累积】读取订单当前 state_history，push 'ip' 后写回。
   // 同时同步顶层 state_history（前端老路径兼容读取）；仅在 state_history 非空时写，避免覆盖旧课程空字段。
   const currentHistory = getStateHistory(matchedOrder)
   // 调整（2026-10-08）：去重 push 的语义下沉到 _shared/courseState.js 的 appendStateSuffix，
   // 三处调用（接取 / 确认绑定 / 结课）原本各写一遍 includes 判断，漏一处就会在数组里堆重复后缀。
   const nextHistory = appendStateSuffix(currentHistory, STATE_SUFFIX_IN_PROGRESS)
-  const nextCourseFlow = {
-    ...currentCourseFlow,
-    fulfill_state: COURSE_STATE.IN_PROGRESS
-  }
-  if (isNewCodeSystem) {
-    nextCourseFlow[STATE_HISTORY_FIELD] = nextHistory
-  }
   try {
-    const updateData = {
-      assignedCoachToken: safeCoachUserId,
-      assignedCoachOpenid: safeCoachOpenid,
-      assignedCoachName: finalCoachName,
-      assignedCoachAt: now,
-      // 新增：执行教练接取成功后，把“12 位接取码 + 固定 DL 尾码”一起写回订单。
-      pickup_final_code: pickupFinalCode,
-      fulfill_state: COURSE_STATE.IN_PROGRESS,
-      course_flow_info: _.set(nextCourseFlow),
-      updatedAt: now
-    }
-    // 【2026-09-16 新增·新制码双写字段】新码制下同步：
-    //   - 顶层 pickup_full_code 替换为 10 位新码（课程码 + ip）
-    //   - 顶层 state_history 同步更新（前端可能从顶层直接读取）
-    if (isNewCodeSystem) {
-      updateData.pickup_full_code = newInProgressFullCode
-      updateData[STATE_HISTORY_FIELD] = nextHistory
-    }
-    await db.collection(targetCollection).doc(matchedOrder._id).update({
-      data: updateData
+    // 调整（2026-10-09）：fulfill_state / state_history 的写入收口到状态机 owner（_shared/courseState.js）。
+    // owner 在事务里只写内层 fulfill_state、去重追加 state_history（顶层 + 内层同步）、追加 state_transition_log；
+    // assignedCoach* / pickup_* 等状态无关副作用走 extra，与状态同一事务原子提交。
+    await applyCourseStateTransition(null, matchedOrder._id, {
+      to: COURSE_STATE.IN_PROGRESS,
+      actor: { role: ACTOR_ROLE.COACH, userId: safeCoachUserId, openid: safeCoachOpenid },
+      reason: 'assign_coach_by_pickup_code',
+      extra: {
+        assignedCoachToken: safeCoachUserId,
+        assignedCoachOpenid: safeCoachOpenid,
+        assignedCoachName: finalCoachName,
+        assignedCoachAt: now,
+        // 新增：执行教练接取成功后，把“12 位接取码 + 固定 DL 尾码”一起写回订单。
+        pickup_final_code: pickupFinalCode,
+        // 【2026-09-16 新增·新制码双写字段】新码制下把 10 位新码（课程码 + ip）同步写到顶层，
+        // 保留旧前端从顶层读 pickup_full_code 的路径。
+        ...(isNewCodeSystem ? { pickup_full_code: newInProgressFullCode } : {})
+      }
     })
   } catch (err) {
     console.error('[pickup] write assignedCoach failed:', err && err.message)
@@ -2022,32 +2019,27 @@ async function confirmCoachBinding(orderId, requestId, operatorOpenid, operatorU
     }
     return r
   })
-  const nextCourseFlow = {
-    ...courseFlow,
-    fulfill_state: COURSE_STATE.IN_PROGRESS,
-    [STATE_HISTORY_FIELD]: nextHistory,
-    [COACH_BINDING_REQUESTS_FIELD]: nextRequests
-  }
-  const updateData = {
-    assignedCoachToken: safeCoachUserId,
-    assignedCoachOpenid: safeCoachOpenid,
-    assignedCoachName: finalCoachName,
-    assignedCoachAt: now,
-    pickup_final_code: newInProgressFullCode,
-    fulfill_state: COURSE_STATE.IN_PROGRESS,
-    course_flow_info: _.set(nextCourseFlow),
-    // 顶层同步 coach_binding_requests[]（前端老路径兼容读取）
-    [COACH_BINDING_REQUESTS_FIELD]: nextRequests,
-    updatedAt: now
-  }
-  // 新码制双写 pickup_full_code + 顶层 state_history（与 assignCoachByPickupCode 1700-1706 一致）
-  if (newInProgressFullCode) {
-    updateData.pickup_full_code = newInProgressFullCode
-    updateData[STATE_HISTORY_FIELD] = nextHistory
-  }
-
+  // 调整（2026-10-09）：fulfill_state / state_history 写入收口到状态机 owner；
+  // assignedCoach* / pickup_* / coach_binding_requests[] 走 extra 与状态同事务原子提交。
   try {
-    await db.collection(targetCollection).doc(orderId).update({ data: updateData })
+    await applyCourseStateTransition(null, orderId, {
+      to: COURSE_STATE.IN_PROGRESS,
+      actor: { role: ACTOR_ROLE.PUBLISHER, userId: safeOperatorUserId, openid: safeOperatorOpenid },
+      reason: 'confirm_coach_binding',
+      extra: {
+        assignedCoachToken: safeCoachUserId,
+        assignedCoachOpenid: safeCoachOpenid,
+        assignedCoachName: finalCoachName,
+        assignedCoachAt: now,
+        pickup_final_code: newInProgressFullCode,
+        // 顶层同步 coach_binding_requests[]（前端老路径兼容读取）
+        [COACH_BINDING_REQUESTS_FIELD]: nextRequests,
+        // 内层同步 coach_binding_requests[]（course_flow_info 内）
+        [`course_flow_info.${COACH_BINDING_REQUESTS_FIELD}`]: nextRequests,
+        // 新码制双写 pickup_full_code（与 assignCoachByPickupCode 一致）
+        ...(newInProgressFullCode ? { pickup_full_code: newInProgressFullCode } : {})
+      }
+    })
   } catch (err) {
     console.error('[coach_binding_confirm] update order failed:', err && err.message)
     return { code: 500, msg: '确认失败，写入课程信息时出错，请稍后重试' }
@@ -2288,26 +2280,24 @@ async function confirmGeneratePickupCode(orderId, operatorOpenid, operatorUserId
   const now = new Date()
   // 单步合并 mark + generate：同时写 course_info_ready_at + pickup_full_code + state_history + fulfill_state。
   // 顶层与 course_flow_info 内层同步写 state_history / fulfill_state，兼容两套读取位置。
-  const nextCourseFlow = {
-    ...courseFlow,
-    fulfill_state: COURSE_STATE.AWAITING,
-    course_info_ready_at: now,
-    [STATE_HISTORY_FIELD]: [STATE_SUFFIX_PENDING_LESSON]
-  }
+  // 调整（2026-10-09）：fulfill_state 的写入收口到状态机 owner（事务内只写内层）；
+  // state_history 保持现状「整数组覆盖为 [pl]」语义，由 extra 显式写顶层 + 内层，覆盖 owner 的去重追加。
   try {
-    await db.collection(targetCollection).doc(orderId).update({
-      data: {
+    await applyCourseStateTransition(null, orderId, {
+      to: COURSE_STATE.AWAITING,
+      actor: { role: ACTOR_ROLE.PUBLISHER, userId: safeUserId, openid: safeOpenid },
+      reason: 'confirm_generate_pickup_code',
+      extra: {
         // 旧字段留空兼容（新码制下不再使用 4 位确认码 / 12 位 final 码）
         pickup_confirm_code: '',
         pickup_full_code: newFullCode,
         pickup_final_code: '',
         pickup_code_generated_at: now,
         course_info_ready_at: now,
-        fulfill_state: COURSE_STATE.AWAITING,
-        // 顶层同步 state_history，兼容只读顶层字段的前端路径
+        'course_flow_info.course_info_ready_at': now,
+        // 顶层 + 内层同步写 state_history = [pl]，兼容两套读取位置
         [STATE_HISTORY_FIELD]: [STATE_SUFFIX_PENDING_LESSON],
-        course_flow_info: _.set(nextCourseFlow),
-        updatedAt: now
+        [`course_flow_info.${STATE_HISTORY_FIELD}`]: [STATE_SUFFIX_PENDING_LESSON]
       }
     })
   } catch (err) {
@@ -2385,37 +2375,38 @@ async function resetPickupConfirmCode(orderId, operatorOpenid, operatorUserId, k
   // 新增：重置接取确认码时，根据 keepCoach 同步修正课程生命周期状态：
   // - keepCoach=false（清空执行教练）→ 回到 awaiting（待接取），等待新教练重新接取；
   // - keepCoach=true（保留原教练，只换确认码）→ 保持 in_progress，不影响正在进行的课程。
-  const currentCourseFlow = getCourseFlowInfo(matchedOrder)
   const resetFulfillState = keepCoach ? COURSE_STATE.IN_PROGRESS : COURSE_STATE.AWAITING
-  const nextCourseFlow = {
-    ...currentCourseFlow,
-    fulfill_state: resetFulfillState,
-    // 【2026-09-21 新流程】重置接取码时同步清空 coach_binding_requests[]：
-    // 旧 pending 申请相对新码已失效，否则管理用 confirm_coach_binding 还能把旧申请落成 assignedCoach*，
-    // 让重置码「想让新教练接」的意图被绕过。两种 keepCoach 情况都清（keepCoach=true 时本就无 pending，
-    // 清空只是兜底；keepCoach=false 时必须清，新码才能干净接取）。
-    [COACH_BINDING_REQUESTS_FIELD]: []
-  }
-  const updatePayload = {
+  // 【2026-09-21 新流程】重置接取码时同步清空 coach_binding_requests[]：
+  // 旧 pending 申请相对新码已失效，否则管理用 confirm_coach_binding 还能把旧申请落成 assignedCoach*，
+  // 让重置码「想让新教练接」的意图被绕过。两种 keepCoach 情况都清（keepCoach=true 时本就无 pending，
+  // 清空只是兜底；keepCoach=false 时必须清，新码才能干净接取）。
+  const resetExtra = {
     pickup_confirm_code: newConfirmCode,
     pickup_full_code: newFullCode,
     pickup_final_code: newFinalCode,
-    fulfill_state: resetFulfillState,
-    course_flow_info: _.set(nextCourseFlow),
-    // 顶层同步清空 coach_binding_requests[]（前端老路径兼容读取）
+    // 顶层 + 内层同步清空 coach_binding_requests[]（前端老路径兼容读取）
     [COACH_BINDING_REQUESTS_FIELD]: [],
-    updatedAt: now
+    [`course_flow_info.${COACH_BINDING_REQUESTS_FIELD}`]: []
   }
   if (!keepCoach) {
     // 不保留当前执行教练时，清空 assignedCoach*，让新码可以被其他教练认领。
-    updatePayload.assignedCoachToken = ''
-    updatePayload.assignedCoachOpenid = ''
-    updatePayload.assignedCoachName = ''
-    updatePayload.assignedCoachAt = null
+    resetExtra.assignedCoachToken = ''
+    resetExtra.assignedCoachOpenid = ''
+    resetExtra.assignedCoachName = ''
+    resetExtra.assignedCoachAt = null
   }
 
   try {
-    await db.collection(targetCollection).doc(orderId).update({ data: updatePayload })
+    // 调整（2026-10-09）：状态写入收口到状态机 owner。重置码不保留教练 = in_progress → awaiting 回退，
+    // 走 allowReset 显式通道（现状唯一的状态回退能力，enforce 打开后仍放行）；
+    // keepCoach=true 时目标态仍是 in_progress（同态分支只提交换码副作用）。
+    await applyCourseStateTransition(null, orderId, {
+      to: resetFulfillState,
+      actor: { role: ACTOR_ROLE.PUBLISHER, userId: safeUserId, openid: safeOpenid },
+      reason: 'reset_pickup_confirm_code',
+      allowReset: !keepCoach,
+      extra: resetExtra
+    })
   } catch (err) {
     console.error('[pickup_reset] update confirm code failed:', err && err.message)
     return { code: 500, msg: '重置失败，写入课程信息时出错，请稍后重试' }
@@ -2699,21 +2690,19 @@ async function startOrder(orderId, openid, userId) {
     return { code: 403, msg: '无权操作' }
   }
 
-  const orderBaseInfo = {
-    ...getOrderBaseInfo(data),
-    updatedAt: new Date()
-  }
-  const courseFlowInfo = {
-    ...getCourseFlowInfo(data),
-    fulfill_state: COURSE_STATE.IN_PROGRESS,
-    startedAt: new Date()
-  }
-
-  await ref.update({
-    data: {
-      order_base_info: orderBaseInfo,
-      course_flow_info: courseFlowInfo,
-      updatedAt: new Date()
+  const now = new Date()
+  // 调整（2026-10-09）：fulfill_state 写入收口到状态机 owner（事务内只写内层）；
+  // order_base_info / startedAt 走 extra 同事务提交。旧状态链函数保留，语义不变。
+  await applyCourseStateTransition(null, orderId, {
+    to: COURSE_STATE.IN_PROGRESS,
+    actor: { role: ACTOR_ROLE.PUBLISHER, userId, openid },
+    reason: 'start',
+    extra: {
+      order_base_info: {
+        ...getOrderBaseInfo(data),
+        updatedAt: now
+      },
+      'course_flow_info.startedAt': now
     }
   })
 
@@ -2952,25 +2941,28 @@ async function completeOrder(orderId, openid, userId) {
   }
 
   const now = new Date()
+  // 调整（2026-10-09）：fulfill_state 写入收口到状态机 owner —— completed 由 owner 同步
+  // progress_done 自增（§4.1.8 迁移步骤①，治「进度恒 0」）；order_base_info / completedAt 走 extra 同事务提交。
+  // nextOrder 保留给下方对 B 出站同步用，不再用于直写数据库。
   const nextOrder = {
     ...data,
-    order_base_info: {
-      ...getOrderBaseInfo(data),
-      updatedAt: now
-    },
     course_flow_info: {
       ...getCourseFlowInfo(data),
       fulfill_state: COURSE_STATE.COMPLETED,
       completedAt: now
-    },
-    updatedAt: now
+    }
   }
 
-  await ref.update({
-    data: {
-      order_base_info: nextOrder.order_base_info,
-      course_flow_info: nextOrder.course_flow_info,
-      updatedAt: now
+  await applyCourseStateTransition(null, orderId, {
+    to: COURSE_STATE.COMPLETED,
+    actor: { role: ACTOR_ROLE.PUBLISHER, userId, openid },
+    reason: 'complete',
+    extra: {
+      order_base_info: {
+        ...getOrderBaseInfo(data),
+        updatedAt: now
+      },
+      'course_flow_info.completedAt': now
     }
   })
 
@@ -2991,27 +2983,31 @@ async function cancelOrder(orderId, openid, userId, reason) {
    }
 
    const now = new Date()
+   // 调整（2026-10-09）：fulfill_state 写入收口到状态机 owner；publish_state / cancelledAt /
+   // cancelReason 走 extra 同事务提交。nextOrder 保留给下方对 B 出站同步用。
    const nextOrder = {
      ...data,
-     order_base_info: {
-       ...getOrderBaseInfo(data),
-       updatedAt: now
-     },
      course_flow_info: {
        ...getCourseFlowInfo(data),
        fulfill_state: COURSE_STATE.CANCELLED,
        publish_state: 'closed',
        cancelledAt: now,
        cancelReason: reason || '无'
-     },
-     updatedAt: now
+     }
    }
 
-   await ref.update({
-     data: {
-       order_base_info: nextOrder.order_base_info,
-       course_flow_info: nextOrder.course_flow_info,
-       updatedAt: now
+   await applyCourseStateTransition(null, orderId, {
+     to: COURSE_STATE.CANCELLED,
+     actor: { role: ACTOR_ROLE.PUBLISHER, userId, openid },
+     reason: 'cancel',
+     extra: {
+       order_base_info: {
+         ...getOrderBaseInfo(data),
+         updatedAt: now
+       },
+       'course_flow_info.publish_state': 'closed',
+       'course_flow_info.cancelledAt': now,
+       'course_flow_info.cancelReason': reason || '无'
      }
    })
 
@@ -3070,22 +3066,34 @@ async function closeOrder(orderId, openid, userId, closeSummary, closeCoachNote)
   nextOrder.course_flow_info[STATE_HISTORY_FIELD] = nextHistoryForClose
 
   // 新增：构造 update.data 对象，按新码制是否有值决定是否双写 pickup_full_code / pickup_final_code
-  const closeUpdateData = {
+  // 【2026-10-09 状态机收口】原「closeUpdateData + ref.update」直写改为经
+  //   applyCourseStateTransition 单口写入：
+  //   - fulfill_state=closed 由 owner 只写内层（原逻辑本就只写内层，行为不变）
+  //   - state_history 'dl' 由 owner 顶层/内层同步去重追加（与 appendStateSuffix 语义等价，
+  //     原「顶层 state_history 已包含在 closeUpdateData 中」的口径一并由 owner 承接）
+  //   - 结课放行身份为发布者或接取教练，actor 按实际身份登记（enforce=false 收口期不拦截）
+  const actorCloseRole = isPublisher(data, openid, userId) ? ACTOR_ROLE.PUBLISHER : ACTOR_ROLE.COACH
+  const courseCloseExtra = {
     order_base_info: nextOrder.order_base_info,
-    course_flow_info: nextOrder.course_flow_info,
-    updatedAt: now
+    'course_flow_info.publish_state': 'closed',
+    'course_flow_info.closedAt': now,
+    'course_flow_info.close_summary': closeSummary || '',
+    'course_flow_info.close_coach_note': closeCoachNote || ''
   }
   if (newDoneFullCode) {
     // 【2026-09-16 新增·结课双写】新码制课程结课时：
     //   - pickup_full_code 替换为 课程码 + 'dl'（10 位新制码）
     //   - pickup_final_code 双写为 课程码 + 'dl'（兼容旧前端读取 pickup_final_code 的代码路径）
     //   - 顶层 state_history 已包含在 closeUpdateData 中（nextOrder 透传）
-    closeUpdateData.pickup_full_code = newDoneFullCode
-    closeUpdateData.pickup_final_code = newDoneFullCode
+    courseCloseExtra.pickup_full_code = newDoneFullCode
+    courseCloseExtra.pickup_final_code = newDoneFullCode
   }
 
-  await ref.update({
-    data: closeUpdateData
+  await applyCourseStateTransition(null, orderId, {
+    to: COURSE_STATE.CLOSED,
+    actor: { role: actorCloseRole, userId, openid },
+    reason: 'close',
+    extra: courseCloseExtra
   })
 
   await syncCoachResultToBIfNeeded(nextOrder, 'order_closed')
@@ -3282,9 +3290,9 @@ async function syncLessonProgress(orderId, openid, userId, totalLessons, startLe
     progress_total: safeTotalLessons,
     progress_done: historyDoneCount,
     schedule: newSchedule,
-    history_sync: nextHistorySync,
-    // 新增状态收敛：当前课程流程只区分“未关闭 / 已关闭”，不再在这里推进旧进行中状态
-    fulfill_state: COURSE_STATE.PENDING
+    history_sync: nextHistorySync
+    // 状态机收口（2026-10-09）：半途接入不再写 fulfill_state —— 删除原先写非法态 pending 的一行，
+    // 保持 ...courseFlowInfoWithoutHistorySync 里的原值。状态推进只能经 applyCourseStateTransition。
   }
   const now = new Date()
   const nextOrder = {
@@ -3439,7 +3447,7 @@ async function syncParentBookingToA(event = {}) {
     // 新增：B 家长刚提交表单时，课程资料还不完整（机构/管理层还要在 publish 页面补学员、时间、地点等），
     // 因此初始 fulfill_state 固定为 editing（待编辑），后续只有管理层手动点「完成课程信息编辑，允许教练接单」
     // mark_course_info_ready → 再点「确认生成 12 位接取码」confirm_generate_pickup_code → 才会进到 awaiting。
-    fulfill_state: COURSE_STATE.EDITING,
+    fulfill_state: INITIAL_COURSE_STATE,
     progress_total: classCount,
     progress_done: 0,
     schedule
@@ -3502,7 +3510,7 @@ async function syncParentBookingToA(event = {}) {
     // 新增：B 端桥接课程默认是「待编辑」。后续必须先 mark_course_info_ready（手动确认课程资料补完），
     // 才能继续点 confirm_generate_pickup_code 生成接取码并进入「待接取」。
     // 顶层 fulfill_state 同步写 editing，保证 progress 前端两处读取位置都能识别。
-    fulfill_state: COURSE_STATE.EDITING,
+    fulfill_state: INITIAL_COURSE_STATE,
     // 新增：课程资料「管理层已确认允许教练接单」的显式标志。null / 不存在 = 还没确认；
     // 有时间戳 = 已确认，可以走 confirm_generate_pickup_code 生成 12 位接取码。
     course_info_ready_at: null,
@@ -3603,7 +3611,7 @@ async function publishOrder(submitForm, openid, userId) {
     // 课程停在 editing；管理层必须在 publish 页点「完成创建，允许接单」走 confirm_generate_pickup_code
     // 才生成 pl 码并推到 awaiting；教练输入码走 request_coach_binding 提交申请，
     // 等管理 confirm_coach_binding 才真正绑定 assignedCoach* + 推 in_progress。
-    fulfill_state: COURSE_STATE.EDITING,
+    fulfill_state: INITIAL_COURSE_STATE,
     progress_total: classCount,
     progress_done: 0,
     schedule
@@ -3671,7 +3679,7 @@ async function publishOrder(submitForm, openid, userId) {
     // 顶层与 course_flow_info.fulfill_state 同步写为 awaiting，保证 progress 页四档 Tab 直接落入「待接取」。
     // 【2026-09-21 新流程】fulfill_state 改回 'editing'，A 端直建课程发布后停在编辑态，
     // 等管理层手动点「完成创建，允许接单」由 confirm_generate_pickup_code 推到 'awaiting'。
-    fulfill_state: COURSE_STATE.EDITING,
+    fulfill_state: INITIAL_COURSE_STATE,
     // 【2026-09-16 旧码制·历史保留】course_info_ready_at 写入当前时间戳，等同于自动调用 mark_course_info_ready。
     // 原 mark_course_info_ready + confirm_generate_pickup_code 流程保留但不再必需。
     // 【2026-09-21 新流程】course_info_ready_at 不在 publish 阶段写入；confirm_generate_pickup_code 阶段才写。

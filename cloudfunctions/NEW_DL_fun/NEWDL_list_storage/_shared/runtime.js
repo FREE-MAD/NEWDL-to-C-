@@ -105,6 +105,86 @@ function makeTraceId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/* ==========================================================================
+ * 请求上下文存储（2026-10-08 新增）—— 消灭模块级 CURRENT_ENV_VERSION
+ * ==========================================================================
+ *
+ * 治的病：8 个业务函数把 envVersion 存成模块级 `let CURRENT_ENV_VERSION`，
+ * 云函数实例复用时上一次请求的环境会串到下一次请求 —— HTTP 访问服务下同一实例
+ * 可以并发处理多个请求，一个 develop 请求与一个 release 请求交错时，
+ * 后者的集合前缀会覆盖前者，正式流量就可能写进 NDLdev_ 集合。
+ *
+ * 实现：优先用 AsyncLocalStorage（Node 12.17+ / 13.10+），按异步链隔离，并发下互不干扰。
+ *
+ * 关于腾讯云 SCF 的 Node 12.16 档位：它没有 AsyncLocalStorage。此时自动退化为
+ * 模块级单点 —— 行为与改造前逐字等价（不比现状更差），并打一条 WARN 提示升级运行时。
+ * 一旦把云函数运行时切到 Node 16.13+，同一份代码无需再改即可自动获得并发隔离。
+ *
+ * 用法（业务函数 main 内）：
+ *   const ctx = initRuntime(event)
+ *   return await runInContext(ctx, async () => { ...原逻辑... })
+ * 之后任意深度的 getCollectionName(baseName) 读 currentIsDev() 即可拿到本次请求的环境。
+ */
+let _als = null;
+let _alsDecided = false;
+let _fallbackCtx = null;
+
+function ensureAls() {
+  if (_alsDecided) return _als;
+  _alsDecided = true;
+  try {
+    const mod = require('async_hooks');
+    if (mod && typeof mod.AsyncLocalStorage === 'function') {
+      _als = new mod.AsyncLocalStorage();
+      console.log('[shared/runtime] 请求上下文：AsyncLocalStorage 可用，并发环境已隔离');
+    }
+  } catch (e) {
+    _als = null;
+  }
+  if (!_als) {
+    console.warn(
+      '[shared/runtime][WARN] 当前 Node 运行时不支持 AsyncLocalStorage，请求上下文退化为'
+      + '「单实例串行」假设（并发仍可能串环境）。把云函数运行时升到 Node 16.13+ 即可根治，代码无需再改。'
+    );
+  }
+  return _als;
+}
+
+/** 取本次请求的 ctx；拿不到时返回 null */
+function currentContext() {
+  const als = ensureAls();
+  if (als) {
+    const ctx = als.getStore();
+    if (ctx) return ctx;
+  }
+  return _fallbackCtx;
+}
+
+/** 本次请求是否 develop。拿不到 ctx 时回退 true —— 与历史默认值 'develop' 一致 */
+function currentIsDev() {
+  const ctx = currentContext();
+  return ctx ? ctx.isDev : true;
+}
+
+/** 本次请求的 envVersion。拿不到 ctx 时回退 'develop' —— 与历史默认值一致 */
+function currentEnvVersion() {
+  const ctx = currentContext();
+  return ctx ? ctx.envVersion : ENV_DEV;
+}
+
+/**
+ * 把 fn 挂到本次请求的 ctx 上执行。fn 内部的整条 await 链都能读到同一个 ctx。
+ * @param {Object} ctx   initRuntime() 的返回值
+ * @param {Function} fn  同步或异步函数
+ */
+function runInContext(ctx, fn) {
+  const als = ensureAls();
+  // 无论走哪条路径都记一份：ALS 可用时它只是给「拿不到 store」的场景兜底，
+  // 不可用时它就是唯一来源 —— 这一行等价于改造前的 CURRENT_ENV_VERSION = ctx.envVersion。
+  _fallbackCtx = ctx;
+  return als ? als.run(ctx, fn) : fn();
+}
+
 function safeWxContext() {
   try {
     return cloud.getWXContext() || {};
@@ -158,5 +238,11 @@ module.exports = {
   normalizeEnvVersion,
   detectRuntimeSource,
   detectFunctionName,
-  makeTraceId
+  makeTraceId,
+  // 请求上下文（2026-10-08）：用于消灭模块级 CURRENT_ENV_VERSION
+  runInContext,
+  currentContext,
+  currentIsDev,
+  currentEnvVersion,
+  ensureAls
 };

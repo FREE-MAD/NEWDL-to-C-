@@ -15,6 +15,8 @@ const {
   callMsgSecCheck,
   callImgSecCheck
 } = require('./_shared/security')
+// 调整（2026-10-09）：users 集合写入口收口到 userRepo（源在 _shared/repos/userRepo.js，副本只读）。
+const userRepo = require('./_shared/repos/userRepo')
 const db = dbHandle()
 
 const FUNCTION_NAME = 'NEWDL_mine_user'
@@ -426,12 +428,10 @@ async function runProfileSecurityReview(usersCollection, openid = '', reviewProf
       failedImageIndex: typeof securityResult.failedImageIndex === 'number' ? securityResult.failedImageIndex : -1
     })
 
-  await db.collection(usersCollection).doc(latestUserDoc._id || openid).update({
-    data: {
-      openid,
-      updatedAt: new Date(),
-      profile_security_review: reviewData
-    }
+  await userRepo.updateUserDoc(usersCollection, latestUserDoc._id || openid, {
+    openid,
+    updatedAt: new Date(),
+    profile_security_review: reviewData
   })
 
   return {
@@ -563,12 +563,10 @@ exports.main = async (event, context) => {
         entry_logs: currentProfileShareVisibility.entry_logs.concat(profileShareEntryLog)
       }
 
-      await db.collection(usersCollection).doc(sharerUserDoc._id || sharerOpenid).update({
-        data: {
-          openid: sharerOpenid,
-          updatedAt: new Date(),
-          profile_share_visibility: nextProfileShareVisibility
-        }
+      await userRepo.updateUserDoc(usersCollection, sharerUserDoc._id || sharerOpenid, {
+        openid: sharerOpenid,
+        updatedAt: new Date(),
+        profile_share_visibility: nextProfileShareVisibility
       })
 
       return {
@@ -621,38 +619,34 @@ exports.main = async (event, context) => {
       }
 
       if (userDoc) {
-        await db.collection(usersCollection).doc(userDoc._id || OPENID).update({
-          data: updateData
-        })
+        await userRepo.updateUserDoc(usersCollection, userDoc._id || OPENID, updateData)
       } else {
         // 新增一人一档建档：新用户直接使用 openid 作为 _id，避免重复资料导致提交看起来没生效
-        await db.collection(usersCollection).doc(OPENID).set({
-          data: {
-            openid: OPENID,
-            nickname: normalizedProfile.nickname || '微信用户',
-            phone: normalizedProfile.phone || '',
-            gender: normalizedProfile.gender || '',
-            experienceLevel: normalizedProfile.experienceLevel || '',
-            studentCountLevel: normalizedProfile.studentCountLevel || '',
-            role: 'C',
-            city: normalizedProfile.city || '',
-            address: normalizedProfile.address || '',
-            avatarUrl: normalizedProfile.avatarUrl || '',
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            isFirstLogin: false,
-            profile_detail: {
-              basicPhotoProof: normalizedProfile.basicPhotoProof || '',
-              aboutMe: normalizedProfile.aboutMe || '',
-              workExperience: normalizedProfile.workExperience || '',
-              education: normalizedProfile.education || '',
-              educationPhotoProof: normalizedProfile.educationPhotoProof || '',
-              skills: normalizedProfile.skills || '',
-              languages: normalizedProfile.languages || '',
-              honors: normalizedProfile.honors || '',
-              relatedCertificates: normalizedProfile.relatedCertificates || '',
-              honorShowcase: normalizedProfile.honorShowcase || ''
-            }
+        await userRepo.setUserDoc(usersCollection, OPENID, {
+          openid: OPENID,
+          nickname: normalizedProfile.nickname || '微信用户',
+          phone: normalizedProfile.phone || '',
+          gender: normalizedProfile.gender || '',
+          experienceLevel: normalizedProfile.experienceLevel || '',
+          studentCountLevel: normalizedProfile.studentCountLevel || '',
+          role: 'C',
+          city: normalizedProfile.city || '',
+          address: normalizedProfile.address || '',
+          avatarUrl: normalizedProfile.avatarUrl || '',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          isFirstLogin: false,
+          profile_detail: {
+            basicPhotoProof: normalizedProfile.basicPhotoProof || '',
+            aboutMe: normalizedProfile.aboutMe || '',
+            workExperience: normalizedProfile.workExperience || '',
+            education: normalizedProfile.education || '',
+            educationPhotoProof: normalizedProfile.educationPhotoProof || '',
+            skills: normalizedProfile.skills || '',
+            languages: normalizedProfile.languages || '',
+            honors: normalizedProfile.honors || '',
+            relatedCertificates: normalizedProfile.relatedCertificates || '',
+            honorShowcase: normalizedProfile.honorShowcase || ''
           }
         })
       }
@@ -685,22 +679,18 @@ exports.main = async (event, context) => {
       }
 
       if (userDoc) {
-        await db.collection(usersCollection).doc(userDoc._id || OPENID).update({
-          data: updateData
-        })
+        await userRepo.updateUserDoc(usersCollection, userDoc._id || OPENID, updateData)
       } else {
-        await db.collection(usersCollection).doc(OPENID).set({
-          data: {
-            openid: OPENID,
-            nickname: '微信用户',
-            phone: '',
-            role: 'C',
-            avatarUrl: nextAvatarUrl,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            isFirstLogin: false,
-            profile_detail: {}
-          }
+        await userRepo.setUserDoc(usersCollection, OPENID, {
+          openid: OPENID,
+          nickname: '微信用户',
+          phone: '',
+          role: 'C',
+          avatarUrl: nextAvatarUrl,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          isFirstLogin: false,
+          profile_detail: {}
         })
       }
 

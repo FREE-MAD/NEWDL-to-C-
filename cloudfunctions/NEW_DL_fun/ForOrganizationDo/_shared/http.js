@@ -26,15 +26,25 @@ const https = require('https');
  *   - bTwowaybinding   原 NEWDL_execution_order/dev_index.js:31 B_HTTP_BASE_URL
  *   - bQrcodeEntry     原 NEWDL_ResponseQRCode/dev_index.js:73 B_QRCODE_HTTP_BASE_URL
  * 前两者同域，抽 TENCLOUD_BASE 避免域名改一处漏一处；第三个是 B 侧独立云环境，单独登记。
+ * 更正（2026-10-09）：上面"前两者同域"的假设不成立 —— twowaybinding_1_DLforP 只部署在 B 侧
+ * 独立环境（cloud1-d7g77k8il914e5b12）且写 B 库 dev_ForP，A 环境无此函数、A 库无此集合。
+ * bTwowaybinding 已单独登记 B 侧域名（对齐 bQrcodeEntry 的登记方式），TENCLOUD_BASE 仅剩 selfQrcode 使用。
  */
 const TENCLOUD_BASE = 'https://cloud1-6gh7jgl8c5b16a83-1398046944.ap-shanghai.app.tcloudbase.com';
+
+// B 侧独立云环境域名（2026-10-09 抽出：bTwowaybinding 修正后与 bQrcodeEntry 同域，避免域名改一处漏一处）
+const B_TENCLOUD_BASE = 'https://cloud1-d7g77k8il914e5b12-1476831641.ap-shanghai.app.tcloudbase.com';
 
 const ENDPOINTS = {
   // A 侧本环境（cloud1-6gh7jgl8c5b16a83）
   selfQrcode: `${TENCLOUD_BASE}/NEWDL_ResponseQRCode`,
-  bTwowaybinding: `${TENCLOUD_BASE}/twowaybinding_1_DLforP`,
+  // B 侧独立云环境（cloud1-d7g77k8il914e5b12）
+  // 调整（2026-10-09）：原 `${TENCLOUD_BASE}/twowaybinding_1_DLforP` 打到了 A 自己环境，
+  // 但该函数只部署在 B 仓库（写 B 库 dev_ForP），指向 A 环境必然 404 静默失败。
+  // 现改为 B 侧域名，函数路径不变；调用方（NEWDL_execution_order 的 requestBHttpApi）无需改动。
+  bTwowaybinding: `${B_TENCLOUD_BASE}/twowaybinding_1_DLforP`,
   // B 侧独立云环境（cloud1-d7g77k8il914e5b12）—— 原 NEWDL_ResponseQRCode/dev_index.js:73
-  bQrcodeEntry: 'https://cloud1-d7g77k8il914e5b12-1476831641.ap-shanghai.app.tcloudbase.com/DLforP_entry_qrcode'
+  bQrcodeEntry: `${B_TENCLOUD_BASE}/DLforP_entry_qrcode`
 };
 
 /** 默认超时（毫秒）：沿用 ForOrganizationDo 的 SYNC_SHOW_HTTP_TIMEOUT_MS = 20000 */

@@ -18,11 +18,7 @@
 const BASE = {
   orders: 'execution_orders',                 // 课程/订单主表
   users: 'users',                             // 用户身份表
-  organization: 'organization',               // 机构表
-  sysUser: 'sys_user',                        // 系统用户（execution_order:4147）
-  sysLogs: 'sys_logs',                        // 系统日志（execution_order:4146 / :2830）
-  profileShareVisitLogs: 'profile_share_visit_logs', // mine_user:589
-  hot: 'hot'                                  // 首页健康问卷（first_page_req:56）
+  organization: 'organization'                // 机构表
 };
 
 const DEV_PREFIX = 'NDLdev_';

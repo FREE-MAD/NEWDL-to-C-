@@ -9,6 +9,8 @@ const {
   permissionError,
   callMsgSecCheck
 } = require('./_shared/security');
+// 调整（2026-10-09）：users 集合写入口收口到 userRepo。
+const userRepo = require('./_shared/repos/userRepo');
 const db = dbHandle();
 const _ = db.command;
 const ORDER_COLLECTION_BASE = 'execution_orders';
@@ -308,7 +310,7 @@ exports.main = async (event, context) => {
         updateData.isFirstLogin = false;
       }
 
-      const updateRes = await db.collection(usersCollection).doc(oldUser._id).update({ data: updateData });
+      const updateRes = await userRepo.updateUserDoc(usersCollection, oldUser._id, updateData);
       console.log('更新用户成功', updateRes);
       
       const outLatitude = typeof updateData.latitude !== 'undefined' ? updateData.latitude : oldUser.latitude;
@@ -331,24 +333,22 @@ exports.main = async (event, context) => {
 
     const nextRole = isBootstrapLogin ? 'V' : await resolveBusinessRole(OPENID, null, role);
 
-    const addRes = await db.collection(usersCollection).add({
-      data: {
-        openid: OPENID,
-        nickname: nickname || '微信用户',
-        phone: finalPhone,
-        role: nextRole,
-        address: address || '',
-        latitude: latitude || null,
-        longitude: longitude || null,
-        avatarUrl: avatarUrl || '',
-        // 新增首次登录记录：新建档案时同步写入第一条打开时间
-        loginHistory: [currentLoginAt],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        isFirstLogin: true,
-        // 新增首次进入来源：仅新建用户时写入，记录用户第一次进入小程序的来源页面/场景/参数，老用户不覆盖
-        firstLoginFrom: firstLoginFrom && typeof firstLoginFrom === 'object' ? firstLoginFrom : null
-      }
+    const addRes = await userRepo.addUserDoc(usersCollection, {
+      openid: OPENID,
+      nickname: nickname || '微信用户',
+      phone: finalPhone,
+      role: nextRole,
+      address: address || '',
+      latitude: latitude || null,
+      longitude: longitude || null,
+      avatarUrl: avatarUrl || '',
+      // 新增首次登录记录：新建档案时同步写入第一条打开时间
+      loginHistory: [currentLoginAt],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      isFirstLogin: true,
+      // 新增首次进入来源：仅新建用户时写入，记录用户第一次进入小程序的来源页面/场景/参数，老用户不覆盖
+      firstLoginFrom: firstLoginFrom && typeof firstLoginFrom === 'object' ? firstLoginFrom : null
     });
     console.log('创建用户成功', addRes);
 
