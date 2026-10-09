@@ -205,7 +205,7 @@ App({
     }
 
     wx.cloud.callFunction({
-      name: 'NEWDL_login_fun',
+      name: this.getFnName('NEWDL_login_fun'),
       data: {
         nickname: this.globalData.nickname || '微信用户',
         role: this.globalData.userRole || 'V',
@@ -270,6 +270,13 @@ App({
   getDataPrefix: function (envVersion) {
     const runtimeEnvVersion = envVersion || this.globalData.miniEnvVersion || 'develop';
     return runtimeEnvVersion === 'develop' ? 'NDLdev_' : 'NDLreal_';
+  },
+
+  // 新增云函数名工具（2026-10-09 拆双函数）：develop 走 D_ 前缀，trial/release 走 T_ 前缀。
+  // 云函数拆成 D_xxx / T_xxx 两份后，环境不再靠 envVersion 在函数内分流，而靠「调哪个云函数」决定。
+  getFnName: function (baseName) {
+    const env = this.globalData.miniEnvVersion || 'develop';
+    return (env === 'develop' ? 'D_' : 'T_') + baseName;
   },
 
   // 新增当前唤起来源判断：课程分享用 from=share / shareEntry=1，资料分享用 fromShare=1，三者都算本次分享进入
@@ -419,14 +426,14 @@ App({
 
     this.roleResolvePromise = Promise.all([
       wx.cloud.callFunction({
-        name: 'NEWDL_mine_user',
+        name: this.getFnName('NEWDL_mine_user'),
         data: {
           action: 'getProfile',
           envVersion: this.globalData.miniEnvVersion || 'develop'
         }
       }).catch(() => null),
       wx.cloud.callFunction({
-        name: 'NEWDL_execution_order',
+        name: this.getFnName('NEWDL_execution_order'),
         data: {
           action: 'list_myself',
           page: 1,

@@ -345,7 +345,7 @@ Page({
     })
 
     wx.cloud.callFunction({
-      name: 'NEWDL_mine_user',
+      name: getApp().getFnName('NEWDL_mine_user'),
       data: {
         action: 'getProfile',
         targetOpenid: requestedProfileOpenid,
@@ -476,7 +476,7 @@ Page({
   // 新增分享访问日志：从分享页进入时记录 APPID 和时间到数据库
   logShareView() {
     wx.cloud.callFunction({
-      name: 'NEWDL_mine_user',
+      name: getApp().getFnName('NEWDL_mine_user'),
       data: {
         action: 'logSharedProfileView',
         envVersion: getApp().globalData.miniEnvVersion || 'develop',

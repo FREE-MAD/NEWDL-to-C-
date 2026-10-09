@@ -664,7 +664,7 @@ Component({
         title: '加载中...'
       })
       wx.cloud.callFunction({
-        name: 'NEWDL_mine_user',
+        name: getApp().getFnName('NEWDL_mine_user'),
         data: {
           action: 'getProfile',
           envVersion: getApp().globalData.miniEnvVersion || 'develop'
@@ -708,7 +708,7 @@ Component({
       try {
         const reviewProfile = await this.buildReviewProfile(profileForm)
         wx.cloud.callFunction({
-          name: 'NEWDL_mine_user',
+          name: getApp().getFnName('NEWDL_mine_user'),
           data: {
             action: 'submitProfileSecurityReview',
             reviewProfile,
@@ -790,7 +790,7 @@ Component({
       })
 
       wx.cloud.callFunction({
-        name: 'NEWDL_mine_user',
+        name: getApp().getFnName('NEWDL_mine_user'),
         data: {
           action: 'updateProfile',
           profile: profileForm,

@@ -663,7 +663,7 @@ Component({
           extraDataKeys: extraData ? Object.keys(extraData) : [],
         })
         wx.cloud.callHTTPFunction({
-          name: 'NEWDL_ResponseQRCode',
+          name: getApp().getFnName('NEWDL_ResponseQRCode'),
           // HTTP 语义调用：POST / + JSON body，云函数侧 HTTP 入口会把 body 合并成 event。
           path: '/',
           method: 'post',
@@ -1102,7 +1102,7 @@ Component({
       })
 
       wx.cloud.callFunction({
-        name: 'ForOrganizationDo',
+        name: getApp().getFnName('ForOrganizationDo'),
         data: {
           action,
           envVersion: app.globalData.miniEnvVersion || 'develop',

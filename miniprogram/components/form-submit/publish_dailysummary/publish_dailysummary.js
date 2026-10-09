@@ -508,7 +508,7 @@ Component({
         if (startedAt) lessonContent.startedAt = startedAt;
         if (completedAt) lessonContent.completedAt = completedAt;
         const result = await wx.cloud.callFunction({
-          name: 'NEWDL_execution_order',
+          name: getApp().getFnName('NEWDL_execution_order'),
           data: {
             action: 'update_lesson_content',
             orderId: this.data.orderId,

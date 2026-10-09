@@ -605,7 +605,7 @@ Page({
   fetchOrderDetails(orderId) {
     wx.showLoading({ title: '加载中' });
     return wx.cloud.callFunction({
-      name: 'NEWDL_execution_order',
+      name: getApp().getFnName('NEWDL_execution_order'),
       data: {
         action: 'get_oneorder',
         orderId,
@@ -864,7 +864,7 @@ Page({
     const callCloudOrderOnce = async (attemptTag) => {
       const callPromise = (async () => {
         const res = await wx.cloud.callFunction({
-          name: 'NEWDL_execution_order',
+          name: getApp().getFnName('NEWDL_execution_order'),
           data: { action: 'get_order_by_course_code', courseCode, envVersion: miniEnvVersion }
         });
         return res;
@@ -1020,7 +1020,7 @@ Page({
     try {
       const token = wx.getStorageSync('token');
       const result = await wx.cloud.callFunction({
-        name: 'NEWDL_execution_order',
+        name: getApp().getFnName('NEWDL_execution_order'),
         data: { action: 'sync_lesson_progress', orderId: this.data.orderId, userId: token, totalLessons, historyCount: 0, envVersion: app.globalData.miniEnvVersion || 'develop' }
       });
       wx.hideLoading();
@@ -1048,7 +1048,7 @@ Page({
     try {
       const token = wx.getStorageSync('token');
       const result = await wx.cloud.callFunction({
-        name: 'NEWDL_execution_order',
+        name: getApp().getFnName('NEWDL_execution_order'),
         data: { action: 'sync_lesson_progress', orderId: this.data.orderId, userId: token, totalLessons, historyCount, envVersion: app.globalData.miniEnvVersion || 'develop' }
       });
       wx.hideLoading();
@@ -1178,7 +1178,7 @@ Page({
     wx.showLoading({ title: '确认中' });
     try {
       const res = await wx.cloud.callFunction({
-        name: 'NEWDL_execution_order',
+        name: getApp().getFnName('NEWDL_execution_order'),
         data: {
           action: 'confirm_coach_binding',
           orderId,
@@ -1255,7 +1255,7 @@ Page({
     wx.showLoading({ title: '提交中' });
     try {
       const res = await wx.cloud.callFunction({
-        name: 'NEWDL_execution_order',
+        name: getApp().getFnName('NEWDL_execution_order'),
         data: {
           action: 'reject_coach_binding',
           orderId,

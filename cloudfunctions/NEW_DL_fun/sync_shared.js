@@ -35,13 +35,13 @@ const SKIP = new Set(['node_modules', MANIFEST, '.DS_Store']);
 // 未列入的三个：NEWDL_security_check / NEWDL_security_center（内容安全待并入 _shared/security.js 后下线）、
 // timer_check_orders（下线待确认）。需要给它们同步时用 --all。
 const TARGETS = [
-  'NEWDL_execution_order',
-  'ForOrganizationDo',
-  'NEWDL_ResponseQRCode',
-  'NEWDL_mine_user',
-  'NEWDL_login_fun',
-  'NEWDL_first_page_req',
-  'NEWDL_list_storage',
+  'D_NEWDL_execution_order',
+  'D_ForOrganizationDo',
+  'D_NEWDL_ResponseQRCode',
+  'D_NEWDL_mine_user',
+  'D_NEWDL_login_fun',
+  'D_NEWDL_first_page_req',
+  'D_NEWDL_list_storage',
   'twowaybinding_1_DLforC'
 ];
 

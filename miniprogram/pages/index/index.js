@@ -419,7 +419,7 @@ Page({
       const miniEnvVersion = (app && app.globalData) ? (app.globalData.miniEnvVersion || 'develop') : 'develop';
       const coachName = (app && app.globalData && app.globalData.nickname) || wx.getStorageSync('nickname') || '';
       wx.cloud.callFunction({
-        name: 'NEWDL_execution_order',
+        name: getApp().getFnName('NEWDL_execution_order'),
         data: {
           // 【2026-09-21 新流程】assign_coach_by_pickup_code 已废弃为「直接绑定」语义，
           // 改调 request_coach_binding，让教练输入码后只提交绑定申请、不直接绑定。

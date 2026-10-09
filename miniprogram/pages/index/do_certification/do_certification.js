@@ -68,7 +68,7 @@ Page({
   fetchAdvImages() {
     this.setData({ advLoading: true });
     wx.cloud.callFunction({
-      name: 'NEWDL_list_storage',
+      name: getApp().getFnName('NEWDL_list_storage'),
       data: {
         prefix: 'NEWDL/yemian_ui_show/do_certification_adv/轮播广告/'
       }

@@ -92,7 +92,7 @@ Page({
     })
 
     return wx.cloud.callFunction({
-      name: 'NEWDL_mine_user',
+      name: getApp().getFnName('NEWDL_mine_user'),
       data: {
         action: 'getProfile',
         envVersion: app.globalData.miniEnvVersion || 'develop'

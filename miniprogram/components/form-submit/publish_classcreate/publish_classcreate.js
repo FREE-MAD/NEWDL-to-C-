@@ -507,7 +507,7 @@ Component({
       this.triggerEvent('confirm-publish-loading', { loading: true });
       wx.showLoading({ title: '生成接取码中...' });
       wx.cloud.callFunction({
-        name: 'NEWDL_execution_order',
+        name: getApp().getFnName('NEWDL_execution_order'),
         data: {
           action: 'confirm_generate_pickup_code',
           orderId,
@@ -564,7 +564,7 @@ Component({
             try {
               const token = wx.getStorageSync('token');
               const result = await wx.cloud.callFunction({
-                name: 'NEWDL_execution_order',
+                name: getApp().getFnName('NEWDL_execution_order'),
                 data: {
                   action: 'cancel',
                   orderId: this.data.orderId,
@@ -672,7 +672,7 @@ Component({
       this.setData({ isSubmitting: true });
       wx.showLoading({ title: '发布中...' });
       wx.cloud.callFunction({
-        name: 'NEWDL_execution_order',
+        name: getApp().getFnName('NEWDL_execution_order'),
         data: {
           action: this.data.orderId ? 'update_order' : 'publish',
           submitForm,

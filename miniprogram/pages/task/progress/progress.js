@@ -472,7 +472,7 @@ Page({
     wx.showLoading({ title: '加载中...' })
 
     wx.cloud.callFunction({
-      name: 'NEWDL_execution_order',
+      name: getApp().getFnName('NEWDL_execution_order'),
       data: {
         action: 'list_myself',
         mode: 'self', // 必须指定 mode

@@ -84,7 +84,7 @@ Page({
     this.setData({ hasRecordedEnter: true });
 
     return wx.cloud.callFunction({
-      name: 'NEWDL_execution_order',
+      name: getApp().getFnName('NEWDL_execution_order'),
       data: {
         action: 'add_entry_log',
         orderId: this.data.orderId,
@@ -327,7 +327,7 @@ Page({
     const myOpenid = app.globalData.openid || wx.getStorageSync('openid') || '';
 
     return wx.cloud.callFunction({
-      name: 'NEWDL_execution_order',
+      name: getApp().getFnName('NEWDL_execution_order'),
       data: {
         action: 'get_oneorder',
         orderId: orderId,

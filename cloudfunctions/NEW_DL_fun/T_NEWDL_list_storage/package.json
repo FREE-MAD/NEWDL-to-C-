@@ -1,0 +1,15 @@
+{
+  "name": "NEWDL_list_storage",
+  "version": "1.0.0",
+  "description": "列举云存储指定目录下的所有图片文件，供办证页等页面做广告轮播动态取图",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@cloudbase/manager-node": "^5.8.4",
+    "wx-server-sdk": "^4.0.2"
+  }
+}

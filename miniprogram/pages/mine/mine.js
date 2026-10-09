@@ -131,7 +131,7 @@ Page({
   /* ========= 用户统计（云函数） ========= */
   loadUserStats() {
     wx.cloud.callFunction({
-      name: 'NEWDL_mine_user',
+      name: getApp().getFnName('NEWDL_mine_user'),
       data: {
         envVersion: getApp().globalData.miniEnvVersion || 'develop'
       }
@@ -171,7 +171,7 @@ Page({
   // 新增头像后台审核触发：头像写库后单独发起资料审核，不阻塞当前换头像操作
   triggerProfileSecurityReview() {
     wx.cloud.callFunction({
-      name: 'NEWDL_mine_user',
+      name: getApp().getFnName('NEWDL_mine_user'),
       data: {
         action: 'submitProfileSecurityReview',
         envVersion: getApp().globalData.miniEnvVersion || 'develop'
@@ -213,7 +213,7 @@ Page({
 
           // 2️⃣ 更新数据库（云函数）
           const saveRes = await wx.cloud.callFunction({
-            name: 'NEWDL_mine_user',
+            name: getApp().getFnName('NEWDL_mine_user'),
             data: {
               action: 'updateAvatar',
               profile: {

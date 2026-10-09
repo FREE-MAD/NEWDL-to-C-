@@ -221,7 +221,7 @@ Page({
       }); // 开始提交
       //2如果选择手动填写 手动输入向后端发请求=====================S
       wx.cloud.callFunction({
-        name: 'NEWDL_login_fun',
+        name: getApp().getFnName('NEWDL_login_fun'),
         data: {
           nickname: this.data.nickname,
           phone: this.data.phone,

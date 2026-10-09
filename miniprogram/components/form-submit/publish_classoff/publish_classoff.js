@@ -92,7 +92,7 @@ Component({
           try {
             const token = wx.getStorageSync('token');
             const result = await wx.cloud.callFunction({
-              name: 'NEWDL_execution_order',
+              name: getApp().getFnName('NEWDL_execution_order'),
               data: {
                 action: 'close',
                 orderId: this.data.orderId,

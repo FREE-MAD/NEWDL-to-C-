@@ -320,7 +320,7 @@ Page({
     })
 
     wx.cloud.callFunction({
-      name: 'ForOrganizationDo',
+      name: getApp().getFnName('ForOrganizationDo'),
       data: {
         action: 'reviewJoinRequest',
         envVersion: app.globalData.miniEnvVersion || 'develop',
