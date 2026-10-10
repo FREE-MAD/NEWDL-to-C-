@@ -7,11 +7,11 @@
 //       所以公共层只能「源码一份 + 各函数目录塞一份副本」。
 //
 // 与 sync-dev-to-true.js 完全无关：
-//   - 本脚本不涉及 dev/true 分流，不读不写 dev_index.js / true_index.js；
-//   - dev → true 的迁移仍然只由 sync-dev-to-true.js 完成，且只能人工执行。
+//   - 本脚本只做「公共层 → 各函数目录」的副本同步，不涉及 D_/T_ 环境隔离；
+//   - D_ 目录 → T_ 目录的镜像仍然只由 sync-dev-to-true.js 完成，且只能人工执行。
 //
 // 用法：
-//   node sync_shared.js                    # 同步到 8 个默认目标函数
+//   node sync_shared.js                    # 同步到 9 个默认目标函数
 //   node sync_shared.js exec mine          # 只同步目录名含 exec / mine 的函数
 //   node sync_shared.js --all              # 同步到所有含 package.json 的函数目录（含待下线的 3 个）
 //   node sync_shared.js --check            # 只校验不写入；副本与源不一致则 exit 1
@@ -30,8 +30,11 @@ const DEST_DIR_NAME = '_shared';
 const MANIFEST = '.sync-manifest.json';
 const SKIP = new Set(['node_modules', MANIFEST, '.DS_Store']);
 
-// 默认目标：8 个在役函数。
+// 默认目标：9 个在役函数。
 // NEWDL_first_page_req 保留：hot 读取已移除，但函数本身仍在役（首页聚合入口），继续参与 _shared 同步。
+// 2026-10-10 拆双函数：twowaybinding_1_DLforC 拆成 D_/T_，新增 D_twowaybinding_1_DLforC 进本列表；
+//   旧目录 twowaybinding_1_DLforC 在迁移期仍在线上承接 B 侧旧调用方流量，继续参与 _shared 同步作兜底，
+//   等 D_/T_ 部署验证通过、B 侧全部切流并在云端下线旧函数后，再从本列表移除。
 // 未列入的三个：NEWDL_security_check / NEWDL_security_center（内容安全待并入 _shared/security.js 后下线）、
 // timer_check_orders（下线待确认）。需要给它们同步时用 --all。
 const TARGETS = [
@@ -42,6 +45,7 @@ const TARGETS = [
   'D_NEWDL_login_fun',
   'D_NEWDL_first_page_req',
   'D_NEWDL_list_storage',
+  'D_twowaybinding_1_DLforC',
   'twowaybinding_1_DLforC'
 ];
 

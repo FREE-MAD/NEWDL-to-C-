@@ -1,5 +1,16 @@
 // 云函数入口文件
 // 调整（2026-10-08）：cloud.init / 集合名 / 运行日志 / 内容安全统一走公共层 _shared（源在 NEW_DL_fun/_shared/，副本只读）。
+// ===== deploy-meta:start
+// 关键字段登记（由 sync-dev-to-true.js 每次同步强制覆写：D_ 源里的值到不了这里，手改也会被下一次同步覆盖）。
+// 正式版部署单元：环境固定 release（代表 real，NDLreal_），业务代码不读请求判断环境，一律以本块为准。
+const DEPLOY_META = Object.freeze({
+  side: 'T',                 // 'D' = 开发版部署单元；'T' = 正式版部署单元
+  envVersion: 'release',     // 固定环境：'develop'（NDLdev_）| 'release'（代表 real，NDLreal_）
+  isDev: false,              // = envVersion === 'develop' 的预计算值，业务代码直接用
+  sourceDir: 'D_NEWDL_mine_user',  // 源目录：本 T_ 镜像自该 D_ 目录（仅排查用）
+  managedBy: 'sync-dev-to-true.js'
+});
+// ===== deploy-meta:end
 const { initRuntime, dbHandle, runInContext, currentIsDev } = require('./_shared/runtime')
 const { normalizeCollectionName, prefix } = require('./_shared/collections')
 const { make: makeLogger } = require('./_shared/logger')
@@ -476,8 +487,8 @@ async function getCurrentUserDoc(usersCollection, openid) {
 // 云函数入口函数
 exports.main = async (event, context) => {
   // 公共层：一次 initRuntime 拿到本次请求的 env / db / openid / appid / unionid / traceId
-  // 环境钉死（2026-10-09 拆双函数）：T_xxx 只服务 trial/release，忽略调用方透传的 envVersion，防止误写对侧环境集合
-  const ctx = initRuntime(Object.assign({}, event || {}, { envVersion: 'release' }))
+  // 环境来自部署侧登记（deploy-meta）：D_ 恒 develop、T_ 恒 release，不再读调用方透传的 envVersion
+  const ctx = initRuntime(Object.assign({}, event || {}, { envVersion: DEPLOY_META.envVersion }))
   const { OPENID, APPID, UNIONID } = { OPENID: ctx.openid, APPID: ctx.appid, UNIONID: ctx.unionid }
   const { action = 'getStats', profile = {}, reviewProfile = null, shareLog = {}, targetOpenid = '' } = event || {}
   // 请求上下文包裹（2026-10-08）：把后续整条 await 链绑定到本次请求的 env，

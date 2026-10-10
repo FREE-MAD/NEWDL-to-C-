@@ -20,8 +20,12 @@ NEW_DL_fun/
    路径统一是将来换 Layer / npm 包时唯一需要改的地方。
 3. **上传前先跑一次同步**：`node sync_shared.js && node sync_shared.js --check`（第二条应输出「一致」）。
 4. **`_shared` 里不许有 envVersion 分支 / dev-true 判断**。
-   拆双函数（2026-10-09）后，`sync_shared.js` 把同一份副本喂给 7 个 D_ 目录 + `twowaybinding_1_DLforC`，
+   拆双函数（2026-10-09）后，`sync_shared.js` 把同一份副本喂给 8 个 D_ 目录 + 旧函数名目录
+   `twowaybinding_1_DLforC`（迁移期兜底，仍在线上接 B 侧流量），
    `_shared` 内部不做环境判断，所以它**不会引入新的 D_/T_ 分裂**（D_/T_ 靠目录物理隔离）。
+   环境本身由各函数入口的 `deploy-meta` 登记块提供（2026-10-10）：
+   `DEPLOY_META = { side, envVersion, isDev, sourceDir }`，D_ 侧为 develop、T_ 侧由
+   `sync-dev-to-true.js` 强制覆写为 release（不可覆写），业务代码一律读它、不读请求里的 envVersion。
 
 ## 已落地模块
 
@@ -106,7 +110,7 @@ function getCollectionName(baseName) {
 | 调用方 | 判定 | 挡哪些状态 |
 |---|---|---|
 | `assignCoachByPickupCode`（接取） | `isClosedState()` | closed / cancelled（**不挡 completed**）|
-| `requestCoachBinding` / `confirmCoachBinding` / `confirmGeneratePickupCode` / `markCourseInfoReady` | `isTerminalState()` | closed / cancelled / completed |
+| `requestCoachBinding` / `confirmCoachBinding` / `confirmGeneratePickupCode` | `isTerminalState()` | closed / cancelled / completed |
 
 这两处口径本来就不一致（一个 2 个状态、一个 3 个状态），本轮**只收编不改判定**，
 要不要统一需单独一轮确认——统一后「已完成但没结课」的课程会突然不能接取。

@@ -1,6 +1,17 @@
 // 云函数：列举云存储指定目录下的所有图片文件
 // 用途：办证页套餐选择 tab 轮播广告，动态读取 do_certification_adv 目录下全部图片
 // 说明：微信云存储前端 SDK 没有列举文件夹的能力，因此通过云函数 + @cloudbase/manager-node 实现。
+// ===== deploy-meta:start
+// 关键字段登记（由 sync-dev-to-true.js 每次同步强制覆写：D_ 源里的值到不了这里，手改也会被下一次同步覆盖）。
+// 正式版部署单元：环境固定 release（代表 real，NDLreal_），业务代码不读请求判断环境，一律以本块为准。
+const DEPLOY_META = Object.freeze({
+  side: 'T',                 // 'D' = 开发版部署单元；'T' = 正式版部署单元
+  envVersion: 'release',     // 固定环境：'develop'（NDLdev_）| 'release'（代表 real，NDLreal_）
+  isDev: false,              // = envVersion === 'develop' 的预计算值，业务代码直接用
+  sourceDir: 'D_NEWDL_list_storage',  // 源目录：本 T_ 镜像自该 D_ 目录（仅排查用）
+  managedBy: 'sync-dev-to-true.js'
+});
+// ===== deploy-meta:end
 const CloudBase = require('@cloudbase/manager-node');
 // 调整（2026-10-08）：云环境 ID 统一取自公共层 _shared/runtime.js（源在 NEW_DL_fun/_shared/，副本只读）。
 const { CLOUD_ENV } = require('./_shared/runtime');

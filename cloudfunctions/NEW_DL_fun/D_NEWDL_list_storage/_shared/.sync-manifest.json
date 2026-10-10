@@ -2,13 +2,13 @@
   "collections.js": "1acb0b9e312f2aeeddf1c9d0e2404a1b",
   "courseState.js": "cb2236eefc1f80b80ec712d8512af8be",
   "errors.js": "bdf7c78a43ac7030871b4bc18d7aaece",
-  "http.js": "99f9de759bfc93c7f736e78d0bb910a1",
+  "http.js": "be62c769212f2fbab07ed9e17fc92d88",
   "index.js": "968232fee20a7fa7a17cb55e6cc1cc48",
   "logger.js": "1cb9533c3e4aae268ee01288e2f9b0f2",
-  "README.md": "3dd641906f2257427a048c6beddac40c",
-  "repos/organizationRepo.js": "b34f44cb2b468397e317f4eeae632b7c",
+  "README.md": "70be1a06daac0b754c4462d26c8c74a7",
+  "repos/organizationRepo.js": "37ba8e7ba1d9098304d726ff64b7f0ff",
   "repos/userRepo.js": "e80d1535648ea1370cc9908abc037b45",
   "request.js": "6f2f344a8c5730a1dc45a2a1818cc1ee",
-  "runtime.js": "bede34ecc9703dcf4df6113fed5d8dd5",
+  "runtime.js": "9bd3a7022eb7439a50eb1128b078e69b",
   "security.js": "e0534c322d09e4d6dd0137822eaf39a8"
 }

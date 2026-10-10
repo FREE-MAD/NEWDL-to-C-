@@ -201,6 +201,13 @@
           </view>
           <view wx:if="{{canOperatePickupCode && (displayPickupCode || pickupFullCode)}}" class="pickup-code-actions">
             <button class="pickup-btn pickup-btn-primary" catchtap="onCopyPickupFullCode">复制完整接取码</button>
+            <!-- 新增（2026-10-10 · 课程流转 Q6）：重置接取码 / 换教练。
+                 教练接了课但不上时，创建者用它把课程退回「待接取」并解绑教练，让别的教练能重新接。
+                 与 canOperatePickupCode 的区别：后者只覆盖 editing / awaiting，
+                 而这个按钮在 in_progress 阶段也必须可用 —— 那才是它真正被用到的场景。 -->
+            <button wx:if="{{canReassignCoach}}" class="pickup-btn" catchtap="onResetPickupCode" disabled="{{resetPickupLoading}}">
+              {{resetPickupLoading ? '重置中...' : '重置接取码'}}
+            </button>
           </view>
           <view wx:if="{{!canOperatePickupCode}}" class="pickup-readonly-tip">执行教练只读视角；接取码生成与换码由管理层处理。</view>
           <view wx:if="{{assignedCoachName}}" class="pickup-code-meta">

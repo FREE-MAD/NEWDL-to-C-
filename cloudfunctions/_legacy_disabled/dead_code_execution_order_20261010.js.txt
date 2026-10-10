@@ -1,0 +1,235 @@
+// ============================================================
+// 归档（2026-10-10 · 课程流转 T9）：以下代码已从源码删除，此处留档以备回溯。
+//
+// 删除原因：这四段是「旧课节 / 整单状态链」的残留实现，入口早已返回 403、前端全仓零调用，
+//           其语义已由 complete_lesson（课节完成）与 close（结课）取代。
+//
+// 时点说明：删除发生在 T1 硬门禁回归**之前**。原约束「必须等回归通过」的理由是
+//           「lessonHandshake 里那段 allDone→completed 是 T1-c 唯一可参考的语义实现」，
+//           而该实现已于 T1-b/c 写进 _lesson.completeLesson，参考价值已用尽。
+//
+// 恢复方式：把对应段落整段粘回原文件，再补回 module.exports 与 index.js 的 routeTable 条目。
+// ============================================================
+// ---------- 来源: D_NEWDL_execution_order/_lesson.js（lessonHandshake） ----------
+// 课节握手（旧状态链，入口已下线，保留函数体）。
+async function lessonHandshake(orderId, openid, userId, lessonIndex, subAction) {
+  const { data, ref } = await findOrder(orderId)
+  if (!data) return { code: 404, msg: '订单不存在' }
+  const courseFlowInfo = getCourseFlowInfo(data)
+  if (!Array.isArray(courseFlowInfo.schedule) && !Array.isArray(data.schedule)) return { code: 400, msg: '课表不存在' }
+
+  const schedule = Array.isArray(courseFlowInfo.schedule) ? courseFlowInfo.schedule : data.schedule
+  const lessonIdx = schedule.findIndex(l => l.lesson == lessonIndex)
+  if (lessonIdx === -1) {
+    console.warn(`[execution_order] [lessonHandshake] Lesson not found. OrderId: ${orderId}, Target: ${lessonIndex} (${typeof lessonIndex}), Schedule:`, schedule.map(l => l.lesson));
+    return { code: 404, msg: '课节不存在' }
+  }
+
+  const lesson = {
+    ...schedule[lessonIdx],
+    logs: Array.isArray(schedule[lessonIdx].logs) ? schedule[lessonIdx].logs : []
+  }
+  const now = new Date()
+  let updates = {}
+
+  switch (subAction) {
+    case 'coach_ready':
+      if (!isAcceptor(data, openid, userId)) {
+        return { code: 403, msg: '非当前教练' }
+      }
+      lesson.coach_status = 'ready'
+      lesson.status = 'PARENT_CONFIRMED'
+      lesson.parent_status = 'confirmed'
+      if (!lesson.startedAt) lesson.startedAt = now
+
+      lesson.logs.push({ action: 'coach_start', time: now, userId })
+      break
+
+    case 'parent_confirm':
+      return { code: 403, msg: 'P侧操作已下线，请使用教练端开始课程' }
+
+    case 'coach_complete':
+      if (!isAcceptor(data, openid, userId)) {
+        return { code: 403, msg: '非当前教练' }
+      }
+      lesson.coach_status = 'completed'
+      if (!lesson.completedAt) lesson.completedAt = now
+      lesson.parent_status = 'completed'
+      lesson.status = 'DONE'
+      updates.progress_done = _.inc(1)
+      lesson.logs.push({ action: 'coach_complete', time: now, userId })
+      break
+
+    case 'parent_complete':
+      return { code: 403, msg: 'P侧操作已下线，请使用教练端完成课程' }
+
+    default:
+      return { code: 400, msg: '未知握手动作' }
+  }
+
+  schedule[lessonIdx] = lesson
+  const nextCourseFlowInfo = {
+    ...courseFlowInfo,
+    schedule
+  }
+
+  if (lesson.status === 'DONE') {
+    const currentDoneCount = (courseFlowInfo.progress_done || data.progress_done || 0) + 1
+    const totalCount = courseFlowInfo.progress_total || data.progress_total || 10
+
+    if (currentDoneCount < totalCount) {
+      const nextLessonNum = currentDoneCount + 1
+      const exists = schedule.some(l => l.lesson === nextLessonNum)
+      if (!exists) {
+        schedule.push({
+          lesson: nextLessonNum,
+          status: 'PENDING',
+          coach_status: 'none',
+          parent_status: 'none',
+          logs: []
+        })
+        nextCourseFlowInfo.schedule = schedule
+      }
+    }
+
+    const allDone = schedule.every(l => l.status === 'DONE')
+    if (allDone) {
+      nextCourseFlowInfo.fulfill_state = COURSE_STATE.COMPLETED
+      nextCourseFlowInfo.completedAt = new Date()
+    } else {
+      if (readCourseState(data, '') !== COURSE_STATE.IN_PROGRESS) {
+        nextCourseFlowInfo.fulfill_state = COURSE_STATE.IN_PROGRESS
+      }
+    }
+  }
+
+  if (updates.progress_done) {
+    nextCourseFlowInfo.progress_done = currentSafeNumber(courseFlowInfo.progress_done || data.progress_done) + 1
+  }
+
+  await ref.update({
+    data: {
+      order_base_info: {
+        ...getOrderBaseInfo(data),
+        updatedAt: new Date()
+      },
+      course_flow_info: nextCourseFlowInfo,
+      updatedAt: new Date()
+    }
+  })
+  return { code: 0, msg: '操作成功', status: lesson.status }
+}
+
+
+// ---------- 来源: D_NEWDL_execution_order/_lesson.js（addLesson） ----------
+// 手动添加课节 (教练)。
+async function addLesson(orderId, openid) {
+  const { data, collection, ref } = await findOrder(orderId)
+  if (!data) return { code: 404, msg: '订单不存在' }
+
+  if (getAcceptorOpenid(data) !== openid) {
+    return { code: 403, msg: '无权操作' }
+  }
+
+  const courseFlowInfo = getCourseFlowInfo(data)
+  const currentSchedule = courseFlowInfo.schedule || data.schedule || [];
+  const lastLesson = currentSchedule.length > 0 ? (currentSchedule[currentSchedule.length - 1].lesson || currentSchedule.length) : 0;
+  const nextLessonIndex = lastLesson + 1;
+  const currentTotal = courseFlowInfo.progress_total || data.progress_total || 0;
+
+  const newLesson = {
+    lesson: nextLessonIndex,
+    status: 'PENDING',
+    coach_status: 'none',
+    parent_status: 'none',
+    logs: [{ action: 'manual_add', time: new Date() }]
+  };
+
+  const nextSchedule = currentSchedule.concat(newLesson)
+  const nextCourseFlowInfo = {
+    ...courseFlowInfo,
+    schedule: nextSchedule
+  }
+
+  if (currentSchedule.length >= currentTotal) {
+    nextCourseFlowInfo.progress_total = currentTotal + 1
+  }
+
+  await ref.update({
+    data: {
+      order_base_info: {
+        ...getOrderBaseInfo(data),
+        updatedAt: new Date()
+      },
+      course_flow_info: nextCourseFlowInfo,
+      updatedAt: new Date()
+    }
+  });
+
+  return { code: 0, msg: '添加成功', data: newLesson };
+}
+
+
+// ---------- 来源: D_NEWDL_execution_order/_state.js（startOrder + completeOrder） ----------
+// 开始课程（旧状态链，入口已下线，保留函数体）。
+async function startOrder(orderId, openid, userId) {
+  const { data, ref } = await findOrder(orderId)
+  if (!data) return { code: 404, msg: '订单不存在' }
+
+  if (!isParticipant(data, openid, userId)) {
+    return { code: 403, msg: '无权操作' }
+  }
+
+  const now = new Date()
+  await applyCourseStateTransition(null, orderId, {
+    to: COURSE_STATE.IN_PROGRESS,
+    actor: { role: ACTOR_ROLE.PUBLISHER, userId, openid },
+    reason: 'start',
+    extra: {
+      order_base_info: {
+        ...getOrderBaseInfo(data),
+        updatedAt: now
+      },
+      'course_flow_info.startedAt': now
+    }
+  })
+
+  return { code: 0, msg: '课程已开始' }
+}
+
+// 手动完成订单（旧整单完成，入口已下线，改由 close 负责）。
+async function completeOrder(orderId, openid, userId) {
+  const { data, ref } = await findOrder(orderId)
+  if (!data) return { code: 404, msg: '订单不存在' }
+
+  if (!isPublisher(data, openid, userId)) {
+    return { code: 403, msg: '无权操作' }
+  }
+
+  const now = new Date()
+  const nextOrder = {
+    ...data,
+    course_flow_info: {
+      ...getCourseFlowInfo(data),
+      fulfill_state: COURSE_STATE.COMPLETED,
+      completedAt: now
+    }
+  }
+
+  await applyCourseStateTransition(null, orderId, {
+    to: COURSE_STATE.COMPLETED,
+    actor: { role: ACTOR_ROLE.PUBLISHER, userId, openid },
+    reason: 'complete',
+    extra: {
+      order_base_info: {
+        ...getOrderBaseInfo(data),
+        updatedAt: now
+      },
+      'course_flow_info.completedAt': now
+    }
+  })
+
+  await syncCoachResultToBIfNeeded(nextOrder, 'order_completed')
+  return { code: 0, msg: '订单已完成' }
+}
+

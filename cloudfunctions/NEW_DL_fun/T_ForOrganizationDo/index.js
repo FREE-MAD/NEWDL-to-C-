@@ -2,6 +2,18 @@
 
 
 
+// ===== deploy-meta:start
+// 关键字段登记（由 sync-dev-to-true.js 每次同步强制覆写：D_ 源里的值到不了这里，手改也会被下一次同步覆盖）。
+// 正式版部署单元：环境固定 release（代表 real，NDLreal_），业务代码不读请求判断环境，一律以本块为准。
+const DEPLOY_META = Object.freeze({
+  side: 'T',                 // 'D' = 开发版部署单元；'T' = 正式版部署单元
+  envVersion: 'release',     // 固定环境：'develop'（NDLdev_）| 'release'（代表 real，NDLreal_）
+  isDev: false,              // = envVersion === 'develop' 的预计算值，业务代码直接用
+  sourceDir: 'D_ForOrganizationDo',  // 源目录：本 T_ 镜像自该 D_ 目录（仅排查用）
+  managedBy: 'sync-dev-to-true.js'
+});
+// ===== deploy-meta:end
+
 const cloud = require('wx-server-sdk')
 const crypto = require('crypto')
 const path = require('path')
@@ -276,7 +288,8 @@ function findPendingApplyIndex(pendingList = [], openid = '') {
 // 网络错误 / 超时直接 reject，由调用方静默 catch（同步失败不阻断机构操作主流程）。
 // 调整（2026-10-08）：https 请求体与超时的具体实现下沉到 _shared/http.js 的 postJson，判定口径与超时（20s）不变。
 function postToSelfHttp(action = '', payload = {}) {
-  return postJson(ENDPOINTS.selfQrcode, { ...payload, action }, {
+  // 调整（2026-10-09 拆双函数）：按当前请求环境选 D_/T_ 二维码服务。
+  return postJson(currentIsDev() ? ENDPOINTS.selfQrcodeD : ENDPOINTS.selfQrcodeT, { ...payload, action }, {
     timeoutMessage: '调用 A 侧二维码服务超时'
   })
 }
@@ -1126,8 +1139,8 @@ async function reviewJoinRequest(event = {}, openid = '', usersCollectionName = 
 // 云函数入口函数
 exports.main = async (event = {}, context) => {
   // 公共层：一次 initRuntime 拿到本次请求的 env / db / openid / traceId
-  // 环境钉死（2026-10-09 拆双函数）：T_xxx 只服务 trial/release，忽略调用方透传的 envVersion，防止误写对侧环境集合
-  const ctx = initRuntime(Object.assign({}, event, { envVersion: 'release' }))
+  // 环境来自部署侧登记（deploy-meta）：D_ 恒 develop、T_ 恒 release，不再读调用方透传的 envVersion
+  const ctx = initRuntime(Object.assign({}, event, { envVersion: DEPLOY_META.envVersion }))
   // 请求上下文包裹（2026-10-08）：把后续整条 await 链绑定到本次请求的 env，
   // 深层 helper 里的 getCollectionName 通过 currentIsDev() 读到的就是本次请求的环境。
   // 注：包裹块内的缩进沿用了包裹前的层次，未整体重排 —— 为的是把 diff 压到最小、便于逐行核对。

@@ -22,6 +22,18 @@
 // - callFunction：平台 require 本文件后调用 exports.main，能拿到微信 openid，按机构管理员鉴权；
 // - HTTP 云函数：scf_bootstrap 执行 `node index.js`，由 index.js 在 require.main === module 时
 //   调 startHttpServer() 监听 9000 端口；HTTP 请求没有微信身份，必须显式传 organizationId。
+// ===== deploy-meta:start =====
+// 关键字段登记（2026-10-10）：本部署单元「是哪一侧 / 环境固定为什么 / 源目录是谁」全部登记在这一块。
+// 环境已由「部署哪个函数」物理固定（D_ = develop，T_ = real），业务代码不再读请求判断环境，一律以本块为准。
+// 不可覆写：sync-dev-to-true.js 每次同步都会强制覆写 T_ 侧本块 —— D_ 源里的值到不了 T_，手改 T_ 也会在下一次同步被覆盖。
+const DEPLOY_META = Object.freeze({
+  side: 'D',                 // 'D' = 开发版部署单元；'T' = 正式版部署单元
+  envVersion: 'develop',     // 固定环境：'develop'（NDLdev_）| 'release'（代表 real，NDLreal_）
+  isDev: true,               // = envVersion === 'develop' 的预计算值，业务代码直接用，不再做 === 'develop' 判断
+  sourceDir: 'D_NEWDL_ResponseQRCode',   // 源目录（T_ 侧登记它镜像的 D_ 目录名；仅排查用）
+  managedBy: 'sync-dev-to-true.js'
+});
+// ===== deploy-meta:end =====
 const http = require('http')
 const https = require('https')
 const { URL } = require('url')
@@ -37,7 +49,7 @@ const JPEG = require('jpeg-js')
 const { initRuntime, dbHandle, runInContext, currentIsDev, currentEnvVersion } = require('./_shared/runtime')
 const { normalizeCollectionName, prefix } = require('./_shared/collections')
 const { make: makeLogger } = require('./_shared/logger')
-const { ENDPOINTS, postJson } = require('./_shared/http')
+const { ENDPOINTS, postJson, isRouteMiss } = require('./_shared/http')
 
 const db = dbHandle()
 
@@ -66,11 +78,12 @@ if (CURRENT_RUNTIME_SOURCE === 'dev_index.js') {
 }
 
 // ===== B 侧联动地址（HTTP 云接入）=====
-// B 环境 cloud1-d7g77k8il914e5b12 的 HTTP 访问服务路由：
+// B 环境 cloud1-d7g77k8il914e5b12 的 HTTP 访问服务路由（2026-10-10 拆双后）：
 //   域名 cloud1-d7g77k8il914e5b12-1476831641.ap-shanghai.app.tcloudbase.com，
-//   访问路径 /DLforP_entry_qrcode，网关转发时会【去掉触发路径】，
+//   访问路径 /dev/D_DLforP_entry_qrcode、/true/T_DLforP_entry_qrcode（网关转发时会【去掉触发路径】），
 //   所以 B 函数收到的 path 是 "/"，query/body 照常透传。
-// 调整（2026-10-08）：地址已下沉到 _shared/http.js 的 ENDPOINTS.bQrcodeEntry。
+// 调整（2026-10-08）：地址已下沉到 _shared/http.js 的 ENDPOINTS.bQrcodeEntry
+// （2026-10-10 拆双后为 bQrcodeEntryD / bQrcodeEntryT + Legacy 兜底三份，由 postToBHttp 按当前环境选）。
 // 如后续 B 侧更换路由，只改 ENDPOINTS 一处即可，不动业务逻辑。
 // B 侧动作名（与 DLforP_entry_qrcode 的 ACTION_HANDLERS 严格对应，不要擅自改名）。
 const B_ACTION_GENERATE = 'generate_entry_qrcode'
@@ -121,6 +134,8 @@ function getCollectionName(baseName) {
 }
 
 // A 侧 develop 联调时二维码指向 B 的 develop 版本；trial/release 对应 B 的 release 版本。
+// 调整（2026-10-10）：本函数环境已由部署侧登记固定（deploy-meta：D_ 恒 develop / T_ 恒 release），
+// currentIsDev() 读到的就是该固定值，不再随请求变化。
 function resolveBEnvVersion() {
   return currentIsDev() ? 'develop' : 'release'
 }
@@ -138,13 +153,13 @@ function normalizeStr(value = '', maxLen = 0) {
 // 统一以 POST JSON 调 B 侧 HTTP 云函数。
 // 注意：snapshot 是对象，若走 GET query 会被 JSON 字符串化，B 侧拿到的是字符串而非对象，
 // 快照会被 normalizeSnapshot 判空，所以这里一律用 POST JSON body 透传。
-function postToBHttp(action = '', payload = {}) {
+function postToBHttpAt(baseUrl, action = '', payload = {}) {
   const body = JSON.stringify({ ...payload, action })
 
   // 请求前日志：记录调 B 侧的 action、URL、body 大小与预览（snapshot 整体不打，避免日志膨胀）。
   console.log('[NEWDL_ResponseQRCode][INFO] postToBHttp.request.start', {
     action,
-    url: ENDPOINTS.bQrcodeEntry,
+    url: baseUrl,
     bodyLen: Buffer.byteLength(body),
     targetId: payload.targetId || '',
     targetType: payload.targetType || '',
@@ -156,7 +171,7 @@ function postToBHttp(action = '', payload = {}) {
   // 调整（2026-10-08）：https 请求体下沉到 _shared/http.js 的 postJson。
   // 口径全部保留：成功判定 success !== false、超时 15s、请求 / 响应 / 错误三处日志。
   // 注意成功判定与自环境二维码服务（status === 'success'）不同，这里必须显式传 isSuccess。
-  return postJson(ENDPOINTS.bQrcodeEntry, { ...payload, action }, {
+  return postJson(baseUrl, { ...payload, action }, {
     timeoutMs: B_HTTP_TIMEOUT_MS,
     timeoutMessage: '调用 B 侧二维码服务超时',
     isSuccess: (statusCode, parsed) => (statusCode || 0) < 400 && !!parsed && parsed.success !== false,
@@ -183,6 +198,39 @@ function postToBHttp(action = '', payload = {}) {
     })
     throw err
   })
+}
+
+// 调整（2026-10-10 拆双函数）：B 侧 DLforP_entry_qrcode 已拆成 D_/T_ 两个部署单元，
+// 按本次请求环境选地址（develop → D_，其余 → T_）；旧函数名地址（Legacy）留作迁移期兜底。
+async function postToBHttp(action = '', payload = {}) {
+  const primaryUrl = currentIsDev() ? ENDPOINTS.bQrcodeEntryD : ENDPOINTS.bQrcodeEntryT
+  let result
+
+  try {
+    result = await postToBHttpAt(primaryUrl, action, payload)
+  } catch (error) {
+    // 连不上 / DNS 层失败也按「路由不到」处理：给旧地址最后一次机会，旧地址也失败则抛出。
+    console.warn('[NEWDL_ResponseQRCode][WARN] postToBHttp 新地址请求失败，回退旧函数名地址', {
+      action,
+      from: primaryUrl,
+      to: ENDPOINTS.bQrcodeEntryLegacy,
+      message: error && (error.message || error.errMsg) || String(error)
+    })
+    return postToBHttpAt(ENDPOINTS.bQrcodeEntryLegacy, action, payload)
+  }
+
+  if (!isRouteMiss(result)) {
+    return result
+  }
+
+  // 兜底（拆双迁移期）：B 侧 D_/T_ 还没部署时，回退旧函数名地址，保证二维码链路不断。
+  console.warn('[NEWDL_ResponseQRCode][WARN] postToBHttp 新地址未命中，回退旧函数名地址', {
+    action,
+    from: primaryUrl,
+    to: ENDPOINTS.bQrcodeEntryLegacy,
+    statusCode: (result && result.statusCode) || 0
+  })
+  return postToBHttpAt(ENDPOINTS.bQrcodeEntryLegacy, action, payload)
 }
 
 // 通过 B 侧返回的临时 HTTPS 链接下载二维码图片 buffer。
@@ -1117,6 +1165,9 @@ async function generateOrganizationQrcode(event = {}, openid = '', isHttpCall = 
   )
   const organizationId = String((organizationDoc.organization_basic || {}).organization_id || '').trim()
   const snapshot = buildOrganizationSnapshot(organizationDoc)
+  // 调整（2026-10-10）：本函数自身环境已由部署侧固定（deploy-meta）；
+  // 这里透传的 envVersion 只作为「B 侧 wxacode 的业务参数」（决定生成体验版 / 正式版小程序码），
+  // 不是本函数的环境判断 —— 没传时按本部署单元的固定环境兜底（D_ → develop，T_ → release）。
   const bEnvVersion = normalizeStr(event.envVersion, 16) || resolveBEnvVersion()
   // 调 B 侧前日志：确认目标机构、目标类型、envVersion 都对齐。
   console.log('[NEWDL_ResponseQRCode][INFO] generateOrganizationQrcode.call_b.start', {
@@ -1750,8 +1801,8 @@ const ACTION_HANDLERS = {
 
 async function handleMain(event = {}, context = {}) {
   // 公共层：一次 initRuntime 拿到本次请求的 env / db / openid / traceId（HTTP 模式拿不到 openid 时返回空串，与历史行为一致）
-  // 环境钉死（2026-10-09 拆双函数）：D_xxx 只服务 develop，忽略调用方透传的 envVersion，防止误写对侧环境集合
-  const ctx = initRuntime(Object.assign({}, event, { envVersion: 'develop' }))
+  // 环境来自部署侧登记（deploy-meta）：D_ 恒 develop、T_ 恒 release，不再读调用方透传的 envVersion
+  const ctx = initRuntime(Object.assign({}, event, { envVersion: DEPLOY_META.envVersion }))
   // 请求上下文包裹（2026-10-08）：把后续整条 await 链绑定到本次请求的 env，
   // 深层 helper 里的 getCollectionName / resolveBEnvVersion 读到的就是本次请求的环境。
   // 注：包裹块内的缩进沿用了包裹前的层次，未整体重排 —— 为的是把 diff 压到最小、便于逐行核对。

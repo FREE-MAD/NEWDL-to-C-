@@ -641,15 +641,16 @@ Component({
       })
     },
 
-    // 新增 HTTP 云函数统一调用封装（修复 -501001 FunctionType parameter is invalid）：
-    // NEWDL_ResponseQRCode 部署为 HTTP 云函数（scf_bootstrap + 监听 9000 端口），
-    // HTTP 云函数只能通过 wx.cloud.callHTTPFunction / HTTP 网关触发，
-    // 用 wx.cloud.callFunction 调它会直接报 -501001 FunctionType parameter is invalid。
-    // 注意：callHTTPFunction 要求基础库 ≥ 3.15.1；返回体从 res.result 变为 res.data（HTTP 语义）。
+    // 云函数统一调用封装（2026-10-10 由 callHTTPFunction 改回 callFunction）：
+    // NEWDL_ResponseQRCode 现在是普通云函数（原先的 HTTP 云函数类型被一次「上传并部署」覆盖后降级，
+    // 再走 callHTTPFunction 会得到 cloud.callHttpFunction:fail … code: 400 / INVALID_PATH，且云函数日志为空）。
+    // 函数本身一直是双入口（index.js 的 exports.main = handleMain），callFunction 通道现成可用：
+    // 带微信身份上下文 → 云函数按 openid 解析所属机构并校验管理层（organizationId 非必需，继续传也无害）。
+    // 返回体从 HTTP 语义的 res.data 回到 callFunction 语义的 res.result。
     callResponseQrcodeCloud(action, extraData = {}) {
       return new Promise((resolve, reject) => {
-        // 基础库过低时没有 callHTTPFunction，返回可读错误，避免 undefined 调用直接崩。
-        if (!wx.cloud || typeof wx.cloud.callHTTPFunction !== 'function') {
+        // 云能力缺失时返回可读错误，避免 undefined 调用直接崩。
+        if (!wx.cloud || typeof wx.cloud.callFunction !== 'function') {
           reject({ status: 'error', message: '当前微信版本过低，请升级微信后重试' })
           return
         }
@@ -662,15 +663,14 @@ Component({
           organizationId: logOrgId ? logOrgId.slice(0, 28) : '',
           extraDataKeys: extraData ? Object.keys(extraData) : [],
         })
-        wx.cloud.callHTTPFunction({
+        wx.cloud.callFunction({
           name: getApp().getFnName('NEWDL_ResponseQRCode'),
-          // HTTP 语义调用：POST / + JSON body，云函数侧 HTTP 入口会把 body 合并成 event。
-          path: '/',
-          method: 'post',
+          // callFunction 语义：data 整体作为 event 传给 exports.main（action 与业务字段平铺）。
           data: { action, ...extraData },
           success: (res) => {
             const cost = Date.now() - requestAt
-            const payload = (res && res.data) ? res.data : {}
+            // callFunction 语义：业务体在 res.result（HTTP 语义下曾是 res.data）。
+            const payload = (res && res.result) ? res.result : {}
             // 新增：云函数返回的 diyLogoStatus 是 DIY Logo 的三档状态，前端必须据此提示用户，
             // 否则只会看到「生成成功」但不知道 Logo 为什么没合成。
             const diyLogoStatus = String(payload.diyLogoStatus || '').trim()
@@ -708,8 +708,9 @@ Component({
       }
 
       const app = getApp()
-      // HTTP 云函数模式下必须显式传 organizationId（没有微信身份上下文），
-      // 这里从 currentOrganizationId 取；机构刚创建成功时，stayForQrcode 分支已先回填过。
+      // 虽然 callFunction 通道能按 openid 解析机构，这里仍显式传 organizationId：
+      // 云函数收到 organizationId 时直接按 ID 直查机构文档，少一次用户/机构解析，日志也好对账。
+      // 取值从 currentOrganizationId 取；机构刚创建成功时，stayForQrcode 分支已先回填过。
       const organizationId = String(this.data.currentOrganizationId || '').trim()
       if (!organizationId) {
         this.setData({
@@ -737,7 +738,7 @@ Component({
         organizationId,
         envVersion: app.globalData.miniEnvVersion || 'develop'
       }).then((res) => {
-        const result = res && res.data ? res.data : {}
+        const result = res && res.result ? res.result : {}
         if (result.status !== 'success') {
           this.setData({
             qrcodeCard: {
@@ -809,18 +810,18 @@ Component({
     // 未生成过时（NOT_GENERATED）留出空态卡片，管理层可手动点「生成机构入口二维码」补一次入库
     fetchOrganizationQrcodeForEdit() {
       const app = getApp()
-      // HTTP 云函数模式下必须显式传 organizationId（没有微信身份上下文），
-      // 编辑态进页时 currentOrganizationId 已由 refreshCurrentOrganizationCard 从机构文档回填。
+      // 编辑态进页时 currentOrganizationId 已由 refreshCurrentOrganizationCard 从机构文档回填；
+      // 显式传 organizationId 让云函数按 ID 直查（理由见 callResponseQrcodeCloud 注释）。
       const organizationId = String(this.data.currentOrganizationId || '').trim()
       if (!organizationId) {
         return Promise.resolve()
       }
-      // 改用 callResponseQrcodeCloud（wx.cloud.callHTTPFunction）调用 HTTP 云函数，理由见其注释。
+      // 走 callResponseQrcodeCloud（wx.cloud.callFunction）调普通云函数，理由见其注释。
       return this.callResponseQrcodeCloud('getOrganizationQrcode', {
         organizationId,
         envVersion: app.globalData.miniEnvVersion || 'develop'
       }).then((res) => {
-        const result = res && res.data ? res.data : {}
+        const result = res && res.result ? res.result : {}
         if (result.status !== 'success') {
           if (result.code === 'NOT_GENERATED') {
             this.setData({

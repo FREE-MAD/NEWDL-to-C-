@@ -1,7 +1,9 @@
 // pages/task/progress/progress_specialOperation/progress_specialOperation.js
 const app = getApp();
 // 调整（2026-10-09 · 课程流转 T8）：课程状态 / 课节完成口径收敛到统一模块
-const courseState = require('../../../utils/courseState');
+// 修正（2026-10-10）：本文件在 pages/task/progress/progress_specialOperation/，回小程序根要退 4 层；
+// 原来写成 '../../../utils/courseState' 会解析成 pages/utils/courseState.js（不存在），页面直接白屏报 module not defined。
+const courseState = require('../../../../utils/courseState');
 
 // 旧课节状态文案映射保留注释，不删除；当前展示页不再依赖“待上课/上课中/已完成”驱动显示
 // const LESSON_STATUS_TEXT_MAP = {

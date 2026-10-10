@@ -9,7 +9,8 @@
  *      核心风险点。这里改成「每次请求返回一个 ctx」，模块级不存任何环境状态。
  *
  * 硬约束：本文件内不允许出现 dev/true 判断（拆双函数后即不允许出现 D_/T_ 判断）。
- *   环境在 2026-10-09 拆双函数后靠「调哪个云函数」物理隔离：D_xxx = develop，T_xxx = trial/release，
+ *   环境在 2026-10-09 拆双函数后靠「调哪个云函数」物理隔离；2026-10-10 起进一步固定为
+ *   各函数入口的 deploy-meta 登记块（D_xxx = develop，T_xxx = release 代表 real），
  *   不再有 index.js 按 event.envVersion 选 dev_index.js / true_index.js 的代码分流。
  *   _shared 只负责「解析本次请求的 envVersion」（用于 NDLdev_/NDLreal_ 集合前缀），不负责「选哪份代码」。
  *

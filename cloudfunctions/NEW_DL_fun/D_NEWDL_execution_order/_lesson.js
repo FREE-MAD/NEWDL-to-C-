@@ -1,9 +1,12 @@
 /**
  * _lesson.js —— 订单域课节与教学内容
  *
- * 从 dev_index.js 抽出的课节函数：lessonHandshake / updateLessonContent / addLesson /
+ * 从 dev_index.js 抽出的课节函数：updateLessonContent / completeLesson /
  * syncLessonProgress / addEntryLog。
  * 依赖 _common / _db / _sync / courseState。
+ *
+ * 归档（2026-10-10 · 课程流转 T9）：lessonHandshake / addLesson 已移除，
+ * 备份见 cloudfunctions/_legacy_disabled/dead_code_execution_order_20261010.js.txt
  */
 
 const courseState = require('./_shared/courseState')
@@ -19,6 +22,7 @@ const {
   getCourseFlowInfo,
   getOrderBaseInfo,
   isAcceptor,
+  isAssignedCoach,
   isParticipant,
   isPublisher,
   hasLessonPlanConfigured,
@@ -26,120 +30,12 @@ const {
   normalizeLessonRatingTags,
   normalizeLessonDimensionRatings,
   getShareVisibility,
-  currentSafeNumber,
-  getAcceptorOpenid
+  currentSafeNumber
 } = require('./_common')
 const { _, findOrder } = require('./_db')
 const { syncCoachResultToBIfNeeded } = require('./_sync')
 
-// 课节握手（旧状态链，入口已下线，保留函数体）。
-async function lessonHandshake(orderId, openid, userId, lessonIndex, subAction) {
-  const { data, ref } = await findOrder(orderId)
-  if (!data) return { code: 404, msg: '订单不存在' }
-  const courseFlowInfo = getCourseFlowInfo(data)
-  if (!Array.isArray(courseFlowInfo.schedule) && !Array.isArray(data.schedule)) return { code: 400, msg: '课表不存在' }
-
-  const schedule = Array.isArray(courseFlowInfo.schedule) ? courseFlowInfo.schedule : data.schedule
-  const lessonIdx = schedule.findIndex(l => l.lesson == lessonIndex)
-  if (lessonIdx === -1) {
-    console.warn(`[execution_order] [lessonHandshake] Lesson not found. OrderId: ${orderId}, Target: ${lessonIndex} (${typeof lessonIndex}), Schedule:`, schedule.map(l => l.lesson));
-    return { code: 404, msg: '课节不存在' }
-  }
-
-  const lesson = {
-    ...schedule[lessonIdx],
-    logs: Array.isArray(schedule[lessonIdx].logs) ? schedule[lessonIdx].logs : []
-  }
-  const now = new Date()
-  let updates = {}
-
-  switch (subAction) {
-    case 'coach_ready':
-      if (!isAcceptor(data, openid, userId)) {
-        return { code: 403, msg: '非当前教练' }
-      }
-      lesson.coach_status = 'ready'
-      lesson.status = 'PARENT_CONFIRMED'
-      lesson.parent_status = 'confirmed'
-      if (!lesson.startedAt) lesson.startedAt = now
-
-      lesson.logs.push({ action: 'coach_start', time: now, userId })
-      break
-
-    case 'parent_confirm':
-      return { code: 403, msg: 'P侧操作已下线，请使用教练端开始课程' }
-
-    case 'coach_complete':
-      if (!isAcceptor(data, openid, userId)) {
-        return { code: 403, msg: '非当前教练' }
-      }
-      lesson.coach_status = 'completed'
-      if (!lesson.completedAt) lesson.completedAt = now
-      lesson.parent_status = 'completed'
-      lesson.status = 'DONE'
-      updates.progress_done = _.inc(1)
-      lesson.logs.push({ action: 'coach_complete', time: now, userId })
-      break
-
-    case 'parent_complete':
-      return { code: 403, msg: 'P侧操作已下线，请使用教练端完成课程' }
-
-    default:
-      return { code: 400, msg: '未知握手动作' }
-  }
-
-  schedule[lessonIdx] = lesson
-  const nextCourseFlowInfo = {
-    ...courseFlowInfo,
-    schedule
-  }
-
-  if (lesson.status === 'DONE') {
-    const currentDoneCount = (courseFlowInfo.progress_done || data.progress_done || 0) + 1
-    const totalCount = courseFlowInfo.progress_total || data.progress_total || 10
-
-    if (currentDoneCount < totalCount) {
-      const nextLessonNum = currentDoneCount + 1
-      const exists = schedule.some(l => l.lesson === nextLessonNum)
-      if (!exists) {
-        schedule.push({
-          lesson: nextLessonNum,
-          status: 'PENDING',
-          coach_status: 'none',
-          parent_status: 'none',
-          logs: []
-        })
-        nextCourseFlowInfo.schedule = schedule
-      }
-    }
-
-    const allDone = schedule.every(l => l.status === 'DONE')
-    if (allDone) {
-      nextCourseFlowInfo.fulfill_state = COURSE_STATE.COMPLETED
-      nextCourseFlowInfo.completedAt = new Date()
-    } else {
-      if (readCourseState(data, '') !== COURSE_STATE.IN_PROGRESS) {
-        nextCourseFlowInfo.fulfill_state = COURSE_STATE.IN_PROGRESS
-      }
-    }
-  }
-
-  if (updates.progress_done) {
-    nextCourseFlowInfo.progress_done = currentSafeNumber(courseFlowInfo.progress_done || data.progress_done) + 1
-  }
-
-  await ref.update({
-    data: {
-      order_base_info: {
-        ...getOrderBaseInfo(data),
-        updatedAt: new Date()
-      },
-      course_flow_info: nextCourseFlowInfo,
-      updatedAt: new Date()
-    }
-  })
-  return { code: 0, msg: '操作成功', status: lesson.status }
-}
+// 归档（2026-10-10 · 课程流转 T9）：lessonHandshake 已移除。备份见 cloudfunctions/_legacy_disabled/dead_code_execution_order_20261010.js.txt
 
 // 更新课程内容 (总结、图片/视频)。
 async function updateLessonContent(orderId, openid, userId, lessonIndex, content) {
@@ -228,7 +124,7 @@ async function updateLessonContent(orderId, openid, userId, lessonIndex, content
 //
 // 设计要点：
 //   1. 课节状态写 `schedule[i].status = 'DONE'`（这是全工程唯一写 DONE 的地方，
-//      旧的 lessonHandshake 函数体入口已下线，见 index.js 的 403 路由）。
+//      旧的 lessonHandshake 实现已于 2026-10-10 归档删除，见 _legacy_disabled）。
 //   2. progress_done 的自增**在这里**发生（通过 owner 的 extra 原子提交），
 //      而不是在 owner 里按 to===completed 自增 —— 否则最后一节课会「完成 +1、推 completed 再 +1」。
 //   3. 全部课节 DONE 时顺带把整单推到 completed；否则状态保持不变（owner 走同态幂等分支）。
@@ -237,7 +133,9 @@ async function completeLesson(orderId, openid, userId, lessonIndex) {
   const { data } = await findOrder(orderId)
   if (!data) return { code: 404, msg: '订单不存在' }
 
-  const actorIsCoach = isAcceptor(data, openid, userId)
+  // 调整（2026-10-10）：actorRole 改用 isAssignedCoach（只看 assignedCoach*），比 isAcceptor 精确 ——
+  // isAcceptor 还包含 acceptor*（建单时被写成发布者），会把发布者自己错记成 coach 角色。
+  const actorIsCoach = isAssignedCoach(data, openid, userId)
   const actorIsPublisher = isPublisher(data, openid, userId)
   if (!actorIsCoach && !actorIsPublisher) {
     return { code: 403, msg: '只有本课程的教练或发布者可以标记课节完成' }
@@ -258,7 +156,7 @@ async function completeLesson(orderId, openid, userId, lessonIndex) {
     : (Array.isArray(data.schedule) ? data.schedule : [])
   if (!schedule.length) return { code: 400, msg: '课表不存在' }
 
-  // 与 updateLessonContent / lessonHandshake 保持一致：用宽松比较兼容 lesson 号是字符串的历史数据。
+  // 与 updateLessonContent 保持一致：用宽松比较兼容 lesson 号是字符串的历史数据。
   const targetIndex = schedule.findIndex((item) => item && item.lesson == lessonIndex)
   if (targetIndex === -1) {
     console.warn(`[execution_order] [completeLesson] Lesson not found. OrderId: ${orderId}, Target: ${lessonIndex}, Schedule:`, schedule.map((item) => item && item.lesson))
@@ -352,52 +250,7 @@ async function completeLesson(orderId, openid, userId, lessonIndex) {
   }
 }
 
-// 手动添加课节 (教练)。
-async function addLesson(orderId, openid) {
-  const { data, collection, ref } = await findOrder(orderId)
-  if (!data) return { code: 404, msg: '订单不存在' }
-
-  if (getAcceptorOpenid(data) !== openid) {
-    return { code: 403, msg: '无权操作' }
-  }
-
-  const courseFlowInfo = getCourseFlowInfo(data)
-  const currentSchedule = courseFlowInfo.schedule || data.schedule || [];
-  const lastLesson = currentSchedule.length > 0 ? (currentSchedule[currentSchedule.length - 1].lesson || currentSchedule.length) : 0;
-  const nextLessonIndex = lastLesson + 1;
-  const currentTotal = courseFlowInfo.progress_total || data.progress_total || 0;
-
-  const newLesson = {
-    lesson: nextLessonIndex,
-    status: 'PENDING',
-    coach_status: 'none',
-    parent_status: 'none',
-    logs: [{ action: 'manual_add', time: new Date() }]
-  };
-
-  const nextSchedule = currentSchedule.concat(newLesson)
-  const nextCourseFlowInfo = {
-    ...courseFlowInfo,
-    schedule: nextSchedule
-  }
-
-  if (currentSchedule.length >= currentTotal) {
-    nextCourseFlowInfo.progress_total = currentTotal + 1
-  }
-
-  await ref.update({
-    data: {
-      order_base_info: {
-        ...getOrderBaseInfo(data),
-        updatedAt: new Date()
-      },
-      course_flow_info: nextCourseFlowInfo,
-      updatedAt: new Date()
-    }
-  });
-
-  return { code: 0, msg: '添加成功', data: newLesson };
-}
+// 归档（2026-10-10 · 课程流转 T9）：addLesson 已移除。备份见 cloudfunctions/_legacy_disabled/dead_code_execution_order_20261010.js.txt
 
 // 半途接入课程。
 async function syncLessonProgress(orderId, openid, userId, totalLessons, startLesson, historyCount) {
@@ -545,11 +398,11 @@ async function addEntryLog(orderId, openid, userId, event = {}) {
   return { code: 0, msg: '记录成功' }
 }
 
+// 归档（2026-10-10 · 课程流转 T9）：lessonHandshake / addLesson 已移除，
+// 备份见 cloudfunctions/_legacy_disabled/dead_code_execution_order_20261010.js.txt
 module.exports = {
-  lessonHandshake,
   updateLessonContent,
   completeLesson,
-  addLesson,
   syncLessonProgress,
   addEntryLog
 }

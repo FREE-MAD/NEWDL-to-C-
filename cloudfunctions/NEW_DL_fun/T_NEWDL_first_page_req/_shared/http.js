@@ -9,12 +9,13 @@
  *   3. GET 那条（requestBHttpApi）**没有设置超时**，对端不响应会让云函数一直挂到平台超时。
  *
  * 硬约束（见 _shared/README.md 第 3 条）：本文件内不允许出现 dev/true 判断。
- *   出向地址不区分 develop / release —— 同一个云环境同一个函数，
- *   请求体里的 envVersion 决定对端函数内部怎么分流。
+ *   出向地址按 D_/T_ 拆成多条，但「选哪条」由调用方用 currentIsDev() 决定，本文件只登记常量、不判断环境。
+ *   （2026-10-10 拆双函数改版：原先「同一函数靠请求体 envVersion 内部分流」已被 D_/T_ 两个部署单元取代。）
  *
  * 用法：
- *   const { ENDPOINTS, postJson, getJson } = require('./_shared/http')
- *   const r = await postJson(ENDPOINTS.selfQrcode, { action: 'syncOrgShow', ... })
+ *   const { ENDPOINTS, postJson, getJson, isRouteMiss } = require('./_shared/http')
+ *   // 按当前请求环境选 D_ / T_ 地址（示例见 ForOrganizationDo 的 postToSelfHttp）
+ *   const r = await postJson(currentIsDev() ? ENDPOINTS.selfQrcodeD : ENDPOINTS.selfQrcodeT, { action: 'syncOrgShow', ... })
  */
 
 const https = require('https');
@@ -26,25 +27,34 @@ const https = require('https');
  *   - bTwowaybinding   原 NEWDL_execution_order/dev_index.js:31 B_HTTP_BASE_URL
  *   - bQrcodeEntry     原 NEWDL_ResponseQRCode/dev_index.js:73 B_QRCODE_HTTP_BASE_URL
  * 前两者同域，抽 TENCLOUD_BASE 避免域名改一处漏一处；第三个是 B 侧独立云环境，单独登记。
- * 更正（2026-10-09）：上面"前两者同域"的假设不成立 —— twowaybinding_1_DLforP 只部署在 B 侧
- * 独立环境（cloud1-d7g77k8il914e5b12）且写 B 库 dev_ForP，A 环境无此函数、A 库无此集合。
- * bTwowaybinding 已单独登记 B 侧域名（对齐 bQrcodeEntry 的登记方式），TENCLOUD_BASE 仅剩 selfQrcode 使用。
+ * 2026-10-10 拆双函数：A 侧 / B 侧函数各自拆成 D_/T_ 两个部署单元，每个来源登记 D_ / T_ 两条地址，
+ * 外加一条 Legacy（旧函数名地址，迁移期「新名路由不到」时回退兜底），由调用方用 currentIsDev() 选 D_/T_。
  */
 const TENCLOUD_BASE = 'https://cloud1-6gh7jgl8c5b16a83-1398046944.ap-shanghai.app.tcloudbase.com';
 
-// B 侧独立云环境域名（2026-10-09 抽出：bTwowaybinding 修正后与 bQrcodeEntry 同域，避免域名改一处漏一处）
+// B 侧独立云环境域名（2026-10-09 抽出：bTwowaybinding 与 bQrcodeEntry 同域，避免域名改一处漏一处）
 const B_TENCLOUD_BASE = 'https://cloud1-d7g77k8il914e5b12-1476831641.ap-shanghai.app.tcloudbase.com';
 
 const ENDPOINTS = {
-  // A 侧本环境（cloud1-6gh7jgl8c5b16a83）
-  selfQrcode: `${TENCLOUD_BASE}/NEWDL_ResponseQRCode`,
+  // A 侧本环境（cloud1-6gh7jgl8c5b16a83）—— 拆双函数后按 D_/T_ 前缀区分，
+  // 调用方（ForOrganizationDo）用 currentIsDev() 选择，本文件不判断环境（遵守硬约束）。
+  selfQrcodeD: `${TENCLOUD_BASE}/D_NEWDL_ResponseQRCode`,
+  selfQrcodeT: `${TENCLOUD_BASE}/T_NEWDL_ResponseQRCode`,
   // B 侧独立云环境（cloud1-d7g77k8il914e5b12）
   // 调整（2026-10-09）：原 `${TENCLOUD_BASE}/twowaybinding_1_DLforP` 打到了 A 自己环境，
   // 但该函数只部署在 B 仓库（写 B 库 dev_ForP），指向 A 环境必然 404 静默失败。
-  // 现改为 B 侧域名，函数路径不变；调用方（NEWDL_execution_order 的 requestBHttpApi）无需改动。
-  bTwowaybinding: `${B_TENCLOUD_BASE}/twowaybinding_1_DLforP`,
+  // 现改为 B 侧域名，函数路径不变。
+  // 调整（2026-10-10 拆双函数）：B 侧 twowaybinding_1_DLforP 也拆成 D_/T_，调用方
+  // （NEWDL_execution_order 的 requestBHttpApi）用 currentIsDev() 选 D_/T_；
+  // Legacy 是旧函数名地址（B 侧拆双前的部署），迁移期在新名路由不到时回退使用。
+  bTwowaybindingD: `${B_TENCLOUD_BASE}/D_twowaybinding_1_DLforP`,
+  bTwowaybindingT: `${B_TENCLOUD_BASE}/T_twowaybinding_1_DLforP`,
+  bTwowaybindingLegacy: `${B_TENCLOUD_BASE}/twowaybinding_1_DLforP`,
   // B 侧独立云环境（cloud1-d7g77k8il914e5b12）—— 原 NEWDL_ResponseQRCode/dev_index.js:73
-  bQrcodeEntry: `${B_TENCLOUD_BASE}/DLforP_entry_qrcode`
+  // 调整（2026-10-10 拆双函数）：同上，D_/T_ + Legacy 兜底；调用方 NEWDL_ResponseQRCode 的 postToBHttp。
+  bQrcodeEntryD: `${B_TENCLOUD_BASE}/D_DLforP_entry_qrcode`,
+  bQrcodeEntryT: `${B_TENCLOUD_BASE}/T_DLforP_entry_qrcode`,
+  bQrcodeEntryLegacy: `${B_TENCLOUD_BASE}/DLforP_entry_qrcode`
 };
 
 /** 默认超时（毫秒）：沿用 ForOrganizationDo 的 SYNC_SHOW_HTTP_TIMEOUT_MS = 20000 */
@@ -229,6 +239,25 @@ function getJson(url, query = {}, options = {}) {
   });
 }
 
+/**
+ * 判定一次出向 HTTP 结果是否「路由没到业务函数」（而非对端业务失败）。
+ * 2026-10-10 拆双函数新增：D_/T_ 新地址还没部署时，网关会给 4xx 或返回非业务 JSON，
+ * 调用方用它决定是否回退 Legacy（旧函数名）地址。判据：
+ *   - HTTP 4xx：网关无路由 / 函数未部署（典型「函数名不存在」）；
+ *   - 响应体不是 JSON（网关错误页）或缺少业务信封字段（success / code 都没有）。
+ * 业务失败（success:false 且带 code/message）一律不算 —— 避免同一笔请求被重复执行。
+ */
+function isRouteMiss(result) {
+  if (!result) return true;
+  if (Number(result.statusCode || 0) >= 400) return true;
+  const data = result.data;
+  if (!data || typeof data !== 'object') return true;
+  // 非 JSON 响应体（invalidPayload 兜底体会带 rawText，比如网关错误页）：按路由未命中处理。
+  // 对端 B 函数正常应答一定是 JSON 业务信封，所以「非 JSON」等价于「没到业务函数」。
+  if (data.rawText) return true;
+  return typeof data.success === 'undefined' && typeof data.code === 'undefined';
+}
+
 module.exports = {
   TENCLOUD_BASE,
   ENDPOINTS,
@@ -236,5 +265,6 @@ module.exports = {
   buildQueryString,
   request,
   postJson,
-  getJson
+  getJson,
+  isRouteMiss
 };

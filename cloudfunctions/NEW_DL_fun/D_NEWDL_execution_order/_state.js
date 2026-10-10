@@ -33,9 +33,7 @@ const {
   splitStatePickupCode,
   splitPickupFullCode,
   normalizePickupFullCode,
-  buildPickupFullCode,
   buildPickupFinalCode,
-  buildPickupConfirmCode,
   buildCourseCodeVariants,
   getCoachBindingRequests,
   getCourseFlowInfo,
@@ -846,20 +844,36 @@ async function resetPickupConfirmCode(orderId, operatorOpenid, operatorUserId, k
     return { code: 403, msg: '只有课程的创建者可以重置接取确认码' }
   }
 
-  const newConfirmCode = buildPickupConfirmCode()
   const baseCourseCode = String(matchedOrder.joinCode || matchedOrder.courseCode || '').trim()
-  const newFullCode = buildPickupFullCode(baseCourseCode, newConfirmCode)
-  const newFinalCode = keepCoach ? buildPickupFinalCode(newFullCode) : ''
+  // 修复一（2026-10-10 · 课程流转 Q6）：重置接取码原来还在用旧 12 位码制
+  // （8 位课程码 + 4 位确认码），与 confirm_generate_pickup_code / 教练接取链路的新 10 位码制
+  // （8 位课程码 + 2 位状态后缀 pl/ip/dl）不一致 —— 重置一次就把课程打回旧码制。
+  // 现统一：重置后产出 pl 码；保留教练时同步给出 ip 码（口径同 confirmCoachBinding）。
+  const newFullCode = buildStatePickupCode(baseCourseCode, STATE_SUFFIX_PENDING_LESSON)
+  const newFinalCode = keepCoach
+    ? buildStatePickupCode(baseCourseCode, STATE_SUFFIX_IN_PROGRESS)
+    : ''
+  // 新码制不再有 4 位确认码，显式清空（字段保留，避免老值残留让旧确认码继续可用）
+  const newConfirmCode = ''
   if (!newFullCode) {
-    return { code: 500, msg: '拼接新的完整接取码失败，请确认课程已存在班级码' }
+    return { code: 500, msg: '生成新的接取码失败，请确认课程已存在 8 位课程码' }
   }
 
   const now = new Date()
   const resetFulfillState = keepCoach ? COURSE_STATE.IN_PROGRESS : COURSE_STATE.AWAITING
+  // 修复二（2026-10-10 · 课程流转 Q6）：重置是**状态回退**，而 owner 的 appendStateSuffix 语义是
+  // 「已存在则不追加」—— 回退到 awaiting 时 pl 早就在数组里，后缀不会被重写，
+  // state_history 末尾会残留 ip（保留教练时则残留 dl），前端 resolveStateSuffix 会读出
+  // 「进行中 / 已完成」，与实际状态不符。所以回退必须**重建**后缀数组，不能靠追加。
+  const resetHistory = keepCoach
+    ? [STATE_SUFFIX_PENDING_LESSON, STATE_SUFFIX_IN_PROGRESS]
+    : [STATE_SUFFIX_PENDING_LESSON]
   const resetExtra = {
     pickup_confirm_code: newConfirmCode,
     pickup_full_code: newFullCode,
     pickup_final_code: newFinalCode,
+    [STATE_HISTORY_FIELD]: resetHistory,
+    [`course_flow_info.${STATE_HISTORY_FIELD}`]: resetHistory,
     [COACH_BINDING_REQUESTS_FIELD]: [],
     [`course_flow_info.${COACH_BINDING_REQUESTS_FIELD}`]: []
   }
@@ -896,183 +910,7 @@ async function resetPickupConfirmCode(orderId, operatorOpenid, operatorUserId, k
   }
 }
 
-// 新增：管理层点「完成课程信息编辑，允许教练接单」时写 course_info_ready_at。
-async function markCourseInfoReady(orderId, operatorOpenid, operatorUserId) {
-  if (!operatorOpenid) {
-    return { code: 401, msg: '未获取到身份，请重新登录后再试' }
-  }
-  const targetCollection = getCollectionName(ORDER_COLLECTION_BASE)
-  let matchedOrder = null
-  try {
-    const orderRes = await db.collection(targetCollection).doc(orderId).get()
-    matchedOrder = orderRes && orderRes.data ? orderRes.data : null
-  } catch (err) {
-    console.error('[mark_ready] query order failed:', err && err.message)
-    return { code: 500, msg: '查询课程失败，请稍后重试' }
-  }
-  if (!matchedOrder) {
-    return { code: 404, msg: '课程不存在' }
-  }
-
-  const publisherOpenid = String(getPublisherOpenid(matchedOrder) || '').trim()
-  const publisherUserId = String(getPublisherId(matchedOrder) || '').trim()
-  const safeOpenid = String(operatorOpenid || '').trim()
-  const safeUserId = String(operatorUserId || '').trim()
-  const isPub =
-    (publisherOpenid && safeOpenid && publisherOpenid === safeOpenid) ||
-    (publisherUserId && safeUserId && publisherUserId === safeUserId)
-  if (!isPub) {
-    return { code: 403, msg: '只有课程的创建者可以确认课程资料并允许教练接单' }
-  }
-
-  const courseFlow = getCourseFlowInfo(matchedOrder)
-  const fulfillState = readCourseState(matchedOrder)
-  if (isTerminalState(fulfillState)) {
-    return { code: 403, msg: terminalBlockedMessage('无需再确认课程资料') }
-  }
-
-  const existingReadyAt = matchedOrder.course_info_ready_at || null
-  if (existingReadyAt) {
-    return {
-      code: 0,
-      msg: '课程资料已确认，可以继续生成 12 位接取码',
-      orderId,
-      courseInfoReady: true,
-      alreadyReady: true,
-      courseInfoReadyAt: existingReadyAt,
-      fulfill_state: fulfillState
-    }
-  }
-
-  const courseTarget = matchedOrder.course_target || {}
-  const courseBasic = matchedOrder.course_basic || {}
-  const teachingRecord = matchedOrder.teaching_record || {}
-  const courseBasicInfo = matchedOrder.course_basic_info || {}
-  const normalizedTitle = String(
-    courseTarget.title
-    || matchedOrder.title
-    || teachingRecord.title
-    || ''
-  ).trim()
-  const normalizedContact = normalizePhone(
-    courseBasic.contact
-    || matchedOrder.contact
-    || courseBasicInfo.contact
-    || ((matchedOrder.order_base_info || {}).contact || '')
-  )
-  const normalizedLocation = String(
-    courseBasic.location
-    || matchedOrder.location
-    || courseBasicInfo.location
-    || ''
-  ).trim()
-  const scheduleCount = Array.isArray(courseFlow.schedule) ? courseFlow.schedule.length : 0
-  const historyCount = Number((((courseFlow || {}).history_sync || {}).syncedCount) || 0)
-  const totalLessons = Number(courseFlow.progress_total || matchedOrder.progress_total || (scheduleCount + historyCount)) || 0
-
-  if (!normalizedTitle) {
-    return { code: 1, msg: '请先补充课程标题后再确认' }
-  }
-  if (!isValidPhone(normalizedContact)) {
-    return { code: 1, msg: '请先填写正确的 11 位联系手机号后再确认' }
-  }
-  if (!normalizedLocation) {
-    return { code: 1, msg: '请先填写上课地点后再确认' }
-  }
-  if (totalLessons <= 0) {
-    return { code: 1, msg: '请先排好至少 1 节课时后再确认' }
-  }
-
-  const now = new Date()
-  const nextCourseFlow = {
-    ...courseFlow,
-    course_info_ready_at: now
-  }
-  try {
-    await db.collection(targetCollection).doc(orderId).update({
-      data: {
-        course_info_ready_at: now,
-        course_flow_info: _.set(nextCourseFlow),
-        updatedAt: now
-      }
-    })
-  } catch (err) {
-    console.error('[mark_ready] update order failed:', err && err.message)
-    return { code: 500, msg: '确认失败，写入课程信息时出错，请稍后重试' }
-  }
-
-  return {
-    code: 0,
-    msg: '已确认课程资料完整，现在可以点击生成 12 位接取码并对外发布',
-    orderId,
-    courseInfoReady: true,
-    alreadyReady: false,
-    courseInfoReadyAt: now,
-    fulfill_state: fulfillState
-  }
-}
-
-// 开始课程（旧状态链，入口已下线，保留函数体）。
-async function startOrder(orderId, openid, userId) {
-  const { data, ref } = await findOrder(orderId)
-  if (!data) return { code: 404, msg: '订单不存在' }
-
-  if (!isParticipant(data, openid, userId)) {
-    return { code: 403, msg: '无权操作' }
-  }
-
-  const now = new Date()
-  await applyCourseStateTransition(null, orderId, {
-    to: COURSE_STATE.IN_PROGRESS,
-    actor: { role: ACTOR_ROLE.PUBLISHER, userId, openid },
-    reason: 'start',
-    extra: {
-      order_base_info: {
-        ...getOrderBaseInfo(data),
-        updatedAt: now
-      },
-      'course_flow_info.startedAt': now
-    }
-  })
-
-  return { code: 0, msg: '课程已开始' }
-}
-
-// 手动完成订单（旧整单完成，入口已下线，改由 close 负责）。
-async function completeOrder(orderId, openid, userId) {
-  const { data, ref } = await findOrder(orderId)
-  if (!data) return { code: 404, msg: '订单不存在' }
-
-  if (!isPublisher(data, openid, userId)) {
-    return { code: 403, msg: '无权操作' }
-  }
-
-  const now = new Date()
-  const nextOrder = {
-    ...data,
-    course_flow_info: {
-      ...getCourseFlowInfo(data),
-      fulfill_state: COURSE_STATE.COMPLETED,
-      completedAt: now
-    }
-  }
-
-  await applyCourseStateTransition(null, orderId, {
-    to: COURSE_STATE.COMPLETED,
-    actor: { role: ACTOR_ROLE.PUBLISHER, userId, openid },
-    reason: 'complete',
-    extra: {
-      order_base_info: {
-        ...getOrderBaseInfo(data),
-        updatedAt: now
-      },
-      'course_flow_info.completedAt': now
-    }
-  })
-
-  await syncCoachResultToBIfNeeded(nextOrder, 'order_completed')
-  return { code: 0, msg: '订单已完成' }
-}
+// 归档（2026-10-10 · 课程流转 T9）：startOrder / completeOrder 已移除。备份见 cloudfunctions/_legacy_disabled/dead_code_execution_order_20261010.js.txt
 
 // 取消订单。
 async function cancelOrder(orderId, openid, userId, reason) {
@@ -1182,6 +1020,8 @@ async function closeOrder(orderId, openid, userId, closeSummary, closeCoachNote)
   }
 }
 
+// 归档（2026-10-10 · 课程流转 T9）：startOrder / completeOrder 已移除，
+// 备份见 cloudfunctions/_legacy_disabled/dead_code_execution_order_20261010.js.txt
 module.exports = {
   assignCoachByPickupCode,
   requestCoachBinding,
@@ -1189,9 +1029,6 @@ module.exports = {
   rejectCoachBinding,
   confirmGeneratePickupCode,
   resetPickupConfirmCode,
-  markCourseInfoReady,
-  startOrder,
-  completeOrder,
   cancelOrder,
   closeOrder
 }

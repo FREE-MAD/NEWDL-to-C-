@@ -72,7 +72,11 @@ async function createOrganizationWithIdentity(organizationCollection, usersColle
   const orgId = organizationDoc && organizationDoc._id;
   if (!orgId) throw new Error('organizationRepo.createOrganizationWithIdentity: organizationDoc._id 缺失（需预生成）');
   return db().runTransaction(async (tx) => {
-    await tx.collection(organizationCollection).doc(orgId).set({ data: organizationDoc });
+    // 修复（2026-10-10）：set 的 data 内不允许携带 _id 系统字段（携带时 SDK 报 -501007「不能更新_id的值」）。
+    // _id 已由 doc(orgId) 定位文档；写入用剔除 _id 的新对象，原 organizationDoc 保持不变（后续 buildIdentityPatch 仍需读取其 organization_basic）。
+    const orgDataForSet = { ...organizationDoc };
+    delete orgDataForSet._id;
+    await tx.collection(organizationCollection).doc(orgId).set({ data: orgDataForSet });
     await tx.collection(usersCollection).doc(userId).update({ data: buildIdentityPatch(organizationDoc, memberRole) });
     return { organizationId: orgId };
   });

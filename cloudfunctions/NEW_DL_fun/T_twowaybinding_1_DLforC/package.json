@@ -1,0 +1,14 @@
+{
+  "name": "twowaybinding_1_DLforC",
+  "version": "1.0.0",
+  "description": "A侧AB关联云函数：承接B侧HTTP/API直连并直接入库",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"no test\""
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "wx-server-sdk": "^4.0.2"
+  }
+}

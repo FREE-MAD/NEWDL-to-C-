@@ -796,9 +796,10 @@ Page({
   },
 
   // 新增（2026-09-06）：手动补推机构展示信息（A→B dev_forPshowC）。
-  // 链路：HTTP 调 A 侧 NEWDL_ResponseQRCode syncOrganizationShow → B 侧 DLforP_entry_qrcode sync_org_show，
-  // 按 organizationId 幂等覆盖推送。注意：HTTP 云函数必须显式带 organizationId（HTTP 通道没有微信身份上下文），
-  // 与 organization_create 的 callResponseQrcodeCloud 同一调用模式。
+  // 链路：A 侧 NEWDL_ResponseQRCode syncOrganizationShow → B 侧 DLforP_entry_qrcode sync_org_show，
+  // 按 organizationId 幂等覆盖推送，与 organization_create 的 callResponseQrcodeCloud 同一调用模式。
+  // 2026-10-10 调整：该函数已降级为普通云函数，调用方式从 wx.cloud.callHTTPFunction 改回 wx.cloud.callFunction
+  //（HTTP 通道会直接得到 cloud.callHttpFunction:fail … code: 400 / INVALID_PATH，且云函数不会被调用、日志为空）。
   onSyncOrgShowTap() {
     const app = getApp()
     const identityProfile = (app.getBusinessIdentity ? app.getBusinessIdentity() : {}).organizationProfile || {}
@@ -810,35 +811,23 @@ Page({
       })
       return
     }
-    // 基础库过低时没有 callHTTPFunction（要求 ≥ 3.15.1），返回可读提示避免 undefined 调用直接崩。
-    if (!wx.cloud || typeof wx.cloud.callHTTPFunction !== 'function') {
-      wx.showToast({
-        title: '当前微信版本过低，请升级微信后重试',
-        icon: 'none'
-      })
-      return
-    }
-
     wx.showLoading({
       title: '同步中…',
       mask: true
     })
-    // 新增（2026-09-07 修复）：HTTP 云函数没有微信身份上下文，envVersion 必须由前端显式透传，
-    // 否则云函数内默认走 develop 分支（NDLdev_ 前缀），正式环境会因查不到机构而报「未找到对应机构」。
+    // envVersion 继续显式透传：云函数用它决定集合前缀（NDLdev_/NDLreal_），并随快照透传给 B 侧。
     // 取值对齐全仓约定：getApp().globalData.miniEnvVersion || 'develop'（app 已在函数顶部声明）。
     const envVersion = (app && app.globalData && app.globalData.miniEnvVersion) || 'develop'
-    wx.cloud.callHTTPFunction({
+    wx.cloud.callFunction({
       name: getApp().getFnName('NEWDL_ResponseQRCode'),
-      // HTTP 语义调用：POST / + JSON body，云函数侧 HTTP 入口会把 body 合并成 event
-      path: '/',
-      method: 'post',
+      // callFunction 语义：data 整体作为 event 传给 exports.main（无 HTTP 网关，无需 path/method）
       data: {
         action: 'syncOrganizationShow',
         organizationId,
         envVersion
       },
       success: (res) => {
-        const payload = (res && res.data) || {}
+        const payload = (res && res.result) || {}
         if (payload.status === 'success') {
           // failedImageCount：图片转存失败数量（文字信息已落库，失败图片等下次推送自愈重试）
           const failedImageCount = Number(payload.failedImageCount || 0)

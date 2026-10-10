@@ -76,9 +76,12 @@ Page({
     courseInfoReady: false,
     hasGeneratedPickupCode: false,
     confirmPublishLoading: false,
-    canMarkCourseInfoReady: false,
     canGeneratePickupCode: false,
     canResetPickupCode: false,
+    // 新增（2026-10-10 · 课程流转 Q6）：课程创建者在非终态阶段可重置接取码 / 换教练
+    canReassignCoach: false,
+    // 重置接取码的并发锁，避免连点反复作废/重发码
+    resetPickupLoading: false,
     // 【2026-09-21 新流程·接取需管理确认】绑定申请相关初始字段
     // coachBindingRequests：从 order 顶层/ course_flow_info.coach_binding_requests 读取的申请列表；
     // hasPendingCoachRequest / pendingCoachRequestCount：派生展示字段，控制流转 tab 卡片是否渲染；
@@ -339,10 +342,16 @@ Page({
     const canEditCourseInfo = (stageIsEditing || stageIsAwaiting) && isManagerialUser;
     const canDeleteCourse = stageIsEditing && isOwner && !hasAssignedCoach;
     const canAdjustLessonPlan = (stageIsEditing || stageIsAwaiting) && isManagerialUser;
-    const canMarkCourseInfoReady = stageIsEditing && isManagerialUser && !courseInfoReady;
     const canGeneratePickupCode = stageIsEditing && isManagerialUser;
     const canResetPickupCode = stageIsManagerialEditable;
-    const canOperatePickupCode = (canMarkCourseInfoReady || canGeneratePickupCode || canResetPickupCode);
+    // 调整（2026-10-10 · 课程流转 Q6）：mark_course_info_ready 已从云函数删除（前端零调用），
+    // 原来的 canMarkCourseInfoReady 失去对应动作，从 canOperatePickupCode 里摘掉（并集结果不变）。
+    const canOperatePickupCode = (canGeneratePickupCode || canResetPickupCode);
+    // 新增：重置接取码 / 换教练的权限。与 canResetPickupCode 的区别 —— 后者只覆盖
+    // editing / awaiting；而「教练接了课但不上、要换人」恰恰发生在 in_progress，
+    // 必须允许**课程创建者本人**在进行中也重置并解绑
+    // （后端 resetPickupConfirmCode 只认课程创建者、不含机构 admin，这里保持同一口径）。
+    const canReassignCoach = isOwner && (stageIsEditing || stageIsAwaiting || stageIsInProgress);
     // 【2026-09-21 权限口径调整】以「教练是否已接取」为分界线：
     // 1) editing / awaiting（还没人接取）：课程尚未开课，「每日总结」与「结课」对所有角色都不开放；
     // 2) 教练接取后（已写 assignedCoach* 或已进入 in_progress）：两个 tab 对所有可访问该课程的角色开放「可读」；
@@ -417,7 +426,7 @@ Page({
       canViewSummaryTab: !!coachTaken,
       canViewCloseTab: !!coachTaken,
       canEditCourseInfo, canDeleteCourse, canOperatePickupCode,
-      canMarkCourseInfoReady, canGeneratePickupCode, canResetPickupCode,
+      canGeneratePickupCode, canResetPickupCode, canReassignCoach,
       canAdjustLessonPlan, canWriteSummary, canCloseCourse,
       // 【2026-09-21 新流程】coach_binding_requests 相关派生字段
       coachBindingRequests, pendingCoachBindingRequests,
@@ -715,9 +724,9 @@ Page({
         canEditCourseInfo: accessState.canEditCourseInfo,
         canDeleteCourse: accessState.canDeleteCourse,
         canOperatePickupCode: accessState.canOperatePickupCode,
-        canMarkCourseInfoReady: accessState.canMarkCourseInfoReady,
         canGeneratePickupCode: accessState.canGeneratePickupCode,
         canResetPickupCode: accessState.canResetPickupCode,
+        canReassignCoach: accessState.canReassignCoach,
         canAdjustLessonPlan: accessState.canAdjustLessonPlan,
         canWriteSummary: accessState.canWriteSummary,
         canCloseCourse: accessState.canCloseCourse,
@@ -1159,6 +1168,82 @@ Page({
       wx.showToast({ title: '全部课节已完成，课程已结课', icon: 'none' });
     }
     this.fetchOrderDetails(orderId);
+  },
+
+  // ============================================================
+  // 新增（2026-10-10 · 课程流转 Q6）：重置接取码 / 换教练 —— 前端唯一入口。
+  // 场景：教练接了课但不上（课程卡在 in_progress），创建者重置后课程退回 awaiting 并解绑教练，
+  //       别的教练就能重新接；或者只想作废旧接取码、保留当前教练。
+  // 后端 reset_pickup_confirm_code 只认课程创建者本人（不含机构 admin），
+  // 这里的 canReassignCoach 由 accessState 按同一口径下发。
+  // ============================================================
+  async onResetPickupCode() {
+    if (this.data.resetPickupLoading) return;
+    if (!this.data.canReassignCoach) {
+      wx.showToast({ title: '仅课程创建者可重置接取码', icon: 'none' });
+      return;
+    }
+    const orderId = this.data.orderId;
+    if (!orderId) {
+      wx.showToast({ title: '缺少课程ID', icon: 'none' });
+      return;
+    }
+    // 两种语义让创建者显式选，避免「只想换码」被误伤成「换教练」
+    const keepCoach = await new Promise((resolve) => {
+      wx.showActionSheet({
+        itemList: [
+          '换教练：重置接取码并解绑当前教练（课程退回待接取）',
+          '仅换码：保留当前教练，只作废旧接取码'
+        ],
+        success: (res) => resolve(res.tapIndex === 1),
+        fail: () => resolve(null)
+      });
+    });
+    if (keepCoach === null) return;
+
+    const confirmed = await new Promise((resolve) => {
+      wx.showModal({
+        title: '重置接取码',
+        content: keepCoach
+          ? '将生成新的接取码，当前执行教练保持不变。确认继续？'
+          : '将生成新的接取码，并解绑当前执行教练、课程退回「待接取」。确认继续？',
+        confirmText: '确认重置',
+        cancelText: '取消',
+        success: (res) => resolve(!!res.confirm),
+        fail: () => resolve(false)
+      });
+    });
+    if (!confirmed) return;
+
+    this.setData({ resetPickupLoading: true });
+    wx.showLoading({ title: '重置中' });
+    try {
+      const result = await wx.cloud.callFunction({
+        name: getApp().getFnName('NEWDL_execution_order'),
+        data: {
+          action: 'reset_pickup_confirm_code',
+          orderId,
+          keepCoach,
+          envVersion: app.globalData.miniEnvVersion || 'develop'
+        }
+      });
+      wx.hideLoading();
+      const payload = (result && result.result) || {};
+      if (payload.code === 0) {
+        wx.showToast({ title: '重置成功，旧接取码已失效', icon: 'success' });
+        // 状态可能从 in_progress 回退到 awaiting，接取码 / state_history / assignedCoach* 都会变
+        this.fetchOrderDetails(orderId);
+        return;
+      }
+      console.warn('[publish] [onResetPickupCode] 后端拒绝:', payload);
+      wx.showToast({ title: payload.msg || '重置失败', icon: 'none' });
+    } catch (error) {
+      wx.hideLoading();
+      console.error('[publish] [onResetPickupCode] 失败:', error);
+      wx.showToast({ title: '网络错误，请稍后重试', icon: 'none' });
+    } finally {
+      this.setData({ resetPickupLoading: false });
+    }
   },
 
   // classoff: 结课成功 → 刷新订单详情

@@ -9,6 +9,18 @@
 //      本文件只保留 exports.main（入口）+ routeTable（路由表）+ 订单 CRUD（getOneOrder/getOrderByCourseCode/listMyself/
 //      publishOrder/updateOrder）。所有状态推进走 _state（内部经 _shared/courseState 的 applyCourseStateTransition）。
 //   2. 拆双函数后本目录为 D_ 版（开发环境），T_ 版由 sync-dev-to-true.js 复制生成、只读。
+// ===== deploy-meta:start =====
+// 关键字段登记（2026-10-10）：本部署单元「是哪一侧 / 环境固定为什么 / 源目录是谁」全部登记在这一块。
+// 环境已由「部署哪个函数」物理固定（D_ = develop，T_ = real），业务代码不再读请求判断环境，一律以本块为准。
+// 不可覆写：sync-dev-to-true.js 每次同步都会强制覆写 T_ 侧本块 —— D_ 源里的值到不了 T_，手改 T_ 也会在下一次同步被覆盖。
+const DEPLOY_META = Object.freeze({
+  side: 'D',                 // 'D' = 开发版部署单元；'T' = 正式版部署单元
+  envVersion: 'develop',     // 固定环境：'develop'（NDLdev_）| 'release'（代表 real，NDLreal_）
+  isDev: true,               // = envVersion === 'develop' 的预计算值，业务代码直接用，不再做 === 'develop' 判断
+  sourceDir: 'D_NEWDL_execution_order',  // 源目录（T_ 侧登记它镜像的 D_ 目录名；仅排查用）
+  managedBy: 'sync-dev-to-true.js'
+});
+// ===== deploy-meta:end =====
 const { initRuntime, runInContext } = require('./_shared/runtime')
 const { normalizeRequestEvent } = require('./_shared/request')
 const { make: makeLogger } = require('./_shared/logger')
@@ -48,7 +60,9 @@ const {
   generateUniqueMCode,
   ensureOrganizationPublishPermission,
   appendOrderIdToOrganizationClass,
-  findOrder
+  findOrder,
+  // 新增（2026-10-10）：list_myself 的机构管理层口径需要按 openid 读调用者的 users 文档
+  getCurrentUserDocByOpenid
 } = require('./_db')
 const { syncParentBookingToA } = require('./_sync')
 const state = require('./_state')
@@ -72,8 +86,8 @@ exports.main = async (event, context) => {
   }
 
   const $event = parsed.event;
-  // 环境钉死（2026-10-09 拆双函数）：D_xxx 只服务 develop，忽略调用方透传的 envVersion，防止误写对侧环境集合
-  const ctx = initRuntime(Object.assign({}, $event, { envVersion: 'develop' }))
+  // 环境来自部署侧登记（deploy-meta）：D_ 恒 develop、T_ 恒 release，不再读调用方透传的 envVersion
+  const ctx = initRuntime(Object.assign({}, $event, { envVersion: DEPLOY_META.envVersion }))
 
   return await runInContext(ctx, async () => {
   const openid = ctx.openid
@@ -104,9 +118,9 @@ exports.main = async (event, context) => {
   const supportedActionList = [
     'get_oneorder',
     'get_order_by_course_code',
-    'start',
-    'lesson_handshake',
-    'complete',
+    // 归档（2026-10-10 · 课程流转 T9）：start / lesson_handshake / complete / add_lesson
+    // 四条旧状态链路由已整体移除（前端全仓零调用），不再是「返回 403 的空壳」。
+    // 旧的单函数直写/握手语义已由 complete_lesson 与 close 取代。
     'cancel',
     'close',
     'list_myself',
@@ -115,13 +129,11 @@ exports.main = async (event, context) => {
     'update_order',
     'update_lesson_content',
     'complete_lesson',
-    'add_lesson',
     'sync_lesson_progress',
     'add_entry_log',
     'assign_coach_by_pickup_code',
     'confirm_generate_pickup_code',
     'reset_pickup_confirm_code',
-    'mark_course_info_ready',
     'request_coach_binding',
     'confirm_coach_binding',
     'reject_coach_binding'
@@ -192,18 +204,6 @@ const routeTable = {
   get_order_by_course_code: async ({ event }) => {
     return await getOrderByCourseCode(event.courseCode);
   },
-  start: async ({ orderId }) => {
-    if (!orderId) return { code: 1, msg: '缺少订单ID' };
-    return { code: 403, msg: '旧课程状态链路已下线' };
-  },
-  lesson_handshake: async ({ orderId }) => {
-    if (!orderId) return { code: 1, msg: '缺少订单ID' };
-    return { code: 403, msg: '旧课节状态链路已下线' };
-  },
-  complete: async ({ orderId }) => {
-    if (!orderId) return { code: 1, msg: '缺少订单ID' };
-    return { code: 403, msg: '旧完成状态链路已下线，请使用结课入口' };
-  },
   cancel: async ({ orderId, openid, userId, event }) => {
     if (!orderId) return { code: 1, msg: '缺少订单ID' };
     return await state.cancelOrder(orderId, openid, userId, event.reason);
@@ -234,10 +234,6 @@ const routeTable = {
     if (!orderId) return { code: 1, msg: '缺少订单ID' };
     return await lesson.completeLesson(orderId, openid, userId, event.lessonIndex);
   },
-  add_lesson: async ({ orderId }) => {
-    if (!orderId) return { code: 1, msg: '缺少订单ID' };
-    return { code: 403, msg: '旧课节追加入口已下线' };
-  },
   sync_lesson_progress: async ({ orderId, openid, userId, event }) => {
     if (!orderId) return { code: 1, msg: '缺少订单ID' };
     return await lesson.syncLessonProgress(orderId, openid, userId, event.totalLessons, event.startLesson, event.historyCount);
@@ -256,10 +252,6 @@ const routeTable = {
   reset_pickup_confirm_code: async ({ orderId, openid, userId, event }) => {
     if (!orderId) return { code: 1, msg: '缺少订单ID' };
     return await state.resetPickupConfirmCode(orderId, openid, userId, !!(event && event.keepCoach));
-  },
-  mark_course_info_ready: async ({ orderId, openid, userId }) => {
-    if (!orderId) return { code: 1, msg: '缺少订单ID' };
-    return await state.markCourseInfoReady(orderId, openid, userId);
   },
   request_coach_binding: async ({ openid, userId, event }) => {
     return await state.requestCoachBinding(event.pickupFullCode, openid, userId, event.coachName || '');
@@ -357,14 +349,56 @@ async function getOrderByCourseCode(courseCode) {
 // 我的课程列表
 async function listMyself(openid, userId, page, limit) {
   const collections = [getCollectionName(ORDER_COLLECTION_BASE)]
-  const query = _.or([
-    { 'order_base_info.publisher_openid': openid },
-    { publisher_openid: openid },
-    { 'order_base_info.acceptorId': userId },
-    { acceptorId: userId },
-    { 'order_base_info.acceptorOpenid': openid },
-    { acceptorOpenid: openid }
-  ])
+  // 新增（2026-10-10 修复「执行教练接取后 progress 拉不到课」）：
+  // 原查询只认「发布者」与「order_base_info.acceptor*」两类身份，但两条接取链路
+  // （_state.js 的 assign_coach_by_pickup_code / confirm_coach_binding）都只写顶层
+  // assignedCoachToken / assignedCoachOpenid / Name / At，从不修改 acceptor* ——
+  // 接取教练因此既不匹配发布者、也不匹配 acceptor，列表里永远查不到自己接的课。
+  // 这里补上执行教练口径；空值不入查询，避免空串命中「未接取」课程（assignedCoachToken: ''）。
+  // 变量名带 caller 前缀：下方「待确认申请」查询块已有同名 safeOpenid / safeUserId，避免重复声明。
+  const callerOpenid = String(openid || '').trim()
+  const callerUserId = String(userId || '').trim()
+  const queryClauses = [
+    { 'order_base_info.publisher_openid': callerOpenid },
+    { publisher_openid: callerOpenid },
+    { 'order_base_info.acceptorId': callerUserId },
+    { acceptorId: callerUserId },
+    { 'order_base_info.acceptorOpenid': callerOpenid },
+    { acceptorOpenid: callerOpenid }
+  ]
+  if (callerUserId) {
+    queryClauses.push({ assignedCoachToken: callerUserId })
+    queryClauses.push({ assigned_coach_token: callerUserId })
+  }
+  if (callerOpenid) {
+    queryClauses.push({ assignedCoachOpenid: callerOpenid })
+    queryClauses.push({ assigned_coach_openid: callerOpenid })
+  }
+
+  // 新增（2026-10-10）：机构管理层（admin）口径 —— 本机构全部课程。
+  // 规则（用户确认）：执行教练只能看自己接取的课，只有机构管理层能看本机构全部；
+  // 所以机构条件只在这里、按「调用者 users 文档里的机构身份」判定后追加，绝不下放到执行教练。
+  // 读不到 users 文档 / 非 admin / 无机构归属时什么都不加：保持原有可见范围，宁窄不宽。
+  try {
+    const callerUserDoc = callerOpenid ? await getCurrentUserDocByOpenid(callerOpenid) : null
+    const callerOrgProfile = normalizeOrderOrganizationInfo((callerUserDoc || {}).organization_profile || {})
+    const callerBizRole = String((callerUserDoc || {}).biz_role || '').trim()
+    // 双保险：organization_profile.memberRole === 'admin'（ForOrganizationDo 写入）或 biz_role === 'org_admin'
+    const isCallerOrgAdmin = callerOrgProfile.memberRole === 'admin' || callerBizRole === 'org_admin'
+    if (isCallerOrgAdmin && callerOrgProfile.orgId) {
+      queryClauses.push({ 'order_org_info.orgId': callerOrgProfile.orgId })
+      queryClauses.push({ orgId: callerOrgProfile.orgId })
+      console.log('[list_myself] 机构管理层口径生效:', {
+        orgId: callerOrgProfile.orgId,
+        clauseCount: queryClauses.length
+      })
+    }
+  } catch (err) {
+    // 身份查询失败不能拖垮列表：退化为原可见范围（发布者 + 被指派的课）
+    console.warn('[list_myself] 解析调用者机构身份失败，按原口径返回:', err && err.message)
+  }
+
+  const query = _.or(queryClauses)
 
   const tasks = collections.map(c =>
     db.collection(c).where(query).orderBy('createdAt', 'desc').limit(50).get().catch(() => ({ data: [] }))

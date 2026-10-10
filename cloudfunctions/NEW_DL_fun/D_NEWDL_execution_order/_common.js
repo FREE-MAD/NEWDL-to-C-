@@ -293,6 +293,38 @@ function getRecordedLessonSummary(order = {}) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// AB 全量推（2026-10-10）：A→B 不再逐字段挑拣，订单字段整包推给 B，展示/过滤由 B 侧自行筛选
+// ---------------------------------------------------------------------------
+// 背景：此前 a_result_snapshot 是白名单挑拣（latest_lesson + 统计），B 端课程模块需要的
+// 课表全量 / 课程资料 / 机构归属等字段都拿不到。决策：A 侧全量推过去，B 侧按需慢慢筛。
+// B 侧接收端（twowaybinding_1_DLforP 的 syncCoachResultToB）已按「整包存入家长文档」实现。
+// 唯一剔除：接取码三件套 —— 它们是「把课程绑到自己名下」的授权凭证，不是业务数据，
+// 不允许落入 B 侧库（B 端页面也用不到）。
+const BRIDGE_SNAPSHOT_EXCLUDED_FIELDS = [
+  '_id',
+  '_openid',
+  'pickup_confirm_code',
+  'pickupConfirmCode',
+  'pickup_full_code',
+  'pickupFullCode',
+  'pickup_final_code',
+  'pickupFinalCode'
+]
+
+function buildBridgeOrderSnapshot(order = {}) {
+  const snapshot = {}
+
+  Object.keys(order || {}).forEach((key) => {
+    if (BRIDGE_SNAPSHOT_EXCLUDED_FIELDS.indexOf(key) !== -1) {
+      return
+    }
+    snapshot[key] = order[key]
+  })
+
+  return snapshot
+}
+
 function buildCoachResultSyncPayload(order = {}, extra = {}) {
   const courseFlowInfo = getCourseFlowInfo(order)
   const schedule = Array.isArray(courseFlowInfo.schedule)
@@ -308,6 +340,7 @@ function buildCoachResultSyncPayload(order = {}, extra = {}) {
     from_b_openid: String(order.from_b_openid || '').trim(),
     sync_reason: String(extra.syncReason || '').trim(),
     a_result_snapshot: {
+      // ===== 兼容区（B 侧 buildCourseStatusFromSnapshot / coachSchedule 依赖，勿删勿改名）=====
       source: getOrderSource(order),
       publish_state: courseFlowInfo.publish_state || order.publish_state || '',
       fulfill_state: readCourseState(order, ''),
@@ -324,7 +357,13 @@ function buildCoachResultSyncPayload(order = {}, extra = {}) {
         total_schedule_count: schedule.length,
         recorded_lesson_count: schedule.filter(item => isLessonRecorded(item)).length
       },
-      updatedAt: order.updatedAt || courseFlowInfo.updatedAt || new Date()
+      updatedAt: order.updatedAt || courseFlowInfo.updatedAt || new Date(),
+      // ===== 全量区（2026-10-10 · AB 全量推）=====
+      // B 侧接收端会把本对象整包存入家长文档（表单 / 课程两项的 a_result_snapshot），
+      // 后续 B 端页面从 order_snapshot 里自行筛选字段，A 侧不再逐字段挑拣。
+      schema_version: 2,
+      snapshot_at: new Date(),
+      order_snapshot: buildBridgeOrderSnapshot(order)
     }
   }
 }
@@ -798,6 +837,30 @@ function isAcceptor(order, openid, userId) {
   const safeUserId = String(userId || '').trim()
   if (accOpenid && safeOpenid && accOpenid === safeOpenid) return true
   if (accUserId && safeUserId && accUserId === safeUserId) return true
+  // 修复（2026-10-10 · 课程流转）：补「执行教练」口径。
+  // 两条接取链路（_state.js 的 assign_coach_by_pickup_code / confirm_coach_binding）都只写顶层的
+  // assignedCoachToken / assignedCoachOpenid / Name / At，**从不修改 order_base_info.acceptor\***；
+  // 而 acceptor\* 在建单时被写成了发布者自己（index.js 的 publishOrder / _sync.js 的桥接建单）。
+  // 于是「接取教练」这个身份在 isAcceptor 里永远判不出来 —— 表现为执行教练填每日总结、
+  // 标记课节完成、结课一律返回「无权操作」，而前端依据 assignedCoach* 算出的 canWriteSummary
+  // 是 true，两边口径直接打架。
+  // 同根问题之前在 listMyself 修过一次（index.js 的「补上执行教练口径」注释），这里补上同一口径。
+  // 注意：只**新增放行**、不减少任何原有放行，因此不会让任何原本能操作的调用变失败。
+  const coachOpenid = String(order.assignedCoachOpenid || order.assigned_coach_openid || '').trim()
+  const coachToken = String(order.assignedCoachToken || order.assigned_coach_token || '').trim()
+  if (coachOpenid && safeOpenid && coachOpenid === safeOpenid) return true
+  if (coachToken && safeUserId && coachToken === safeUserId) return true
+  return false
+}
+
+/** 是否本课程的执行教练（只看 assignedCoach*，不含发布者 / acceptor* 口径） */
+function isAssignedCoach(order, openid, userId) {
+  const safeOpenid = String(openid || '').trim()
+  const safeUserId = String(userId || '').trim()
+  const coachOpenid = String(order && (order.assignedCoachOpenid || order.assigned_coach_openid) || '').trim()
+  const coachToken = String(order && (order.assignedCoachToken || order.assigned_coach_token) || '').trim()
+  if (coachOpenid && safeOpenid && coachOpenid === safeOpenid) return true
+  if (coachToken && safeUserId && coachToken === safeUserId) return true
   return false
 }
 
@@ -853,5 +916,6 @@ module.exports = {
   findMyPendingBindingRequest,
   isParticipant,
   isPublisher,
-  isAcceptor
+  isAcceptor,
+  isAssignedCoach
 }

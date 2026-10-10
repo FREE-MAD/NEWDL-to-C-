@@ -32,7 +32,9 @@ Page({
     orgName: '',
     flowGuideRows: [],
     viewActionText: '班级展示',
-    manageActionText: '班级管理'
+    manageActionText: '班级管理',
+    // 新增（2026-10-10）：接取教练的第二个按钮文案（进入 publish 操作台写每日总结）
+    executeActionText: '去执行'
   },
 
   // 新增列表进度计算：与课节详情页、publish 页统一走 utils/courseState 的完成口径
@@ -563,6 +565,11 @@ Page({
               courseOwnerText = isThisItemAssignedToMe ? '我负责的课程' : '个人班级';
             }
             const courseTagText = item.joinCode || item.courseCode || ''
+            // 新增（2026-10-10）：接取教练在进行中需要一条能干活的路（写每日总结 / 完成课节 / 结课），
+            // 这些功能都在 publish 操作台的「每日总结」tab（publish 侧 canWriteSummary = 已接取 && 本人）。
+            // 这里只开「操作台入口」，不改 canManageClass 的管理编辑语义 ——
+            // 管理层在进行中依旧只读，只有本课接取教练能看到这个按钮。
+            const canEnterCoachConsole = isThisItemAssignedToMe && lifecycleMeta.tabStatus === 'in_progress'
 
             return {
               ...item,
@@ -576,6 +583,7 @@ Page({
               statusText: lifecycleMeta.badgeText,
               deadline: item.ing_day_time || item.deadline, // 兼容字段
               canManageClass,
+              canEnterCoachConsole,
               courseOwnerText,
               courseTagText
             };
@@ -635,6 +643,29 @@ Page({
 
     wx.navigateTo({
       url: `/pages/task/progress/progress_specialOperation/progress_specialOperation?id=${orderId}&role=${currentUserRole}`
+    })
+  },
+
+  // ================== 接取教练·去执行（进入 publish 操作台）==================
+  // 新增（2026-10-10）：解决「教练接取后在进行中卡片上无路可走」——
+  // 每日总结 / 完成课节 / 结课都在 publish 页的「每日总结」tab，
+  // 而 publish 侧的准入本就是对接取教练开放的（canViewSummaryTab: 已接取；
+  // canWriteSummary: 已接取 && 本人），缺的只是列表到那里的入口。
+  // 与 onManageClass 的区别：后者是「管理编辑」入口，进行中一律拦截；
+  // 这里只跳转、只给本课接取教练，不涉及任何课程资料编辑权限。
+  onEnterCoachConsole(e) {
+    const orderId = e.currentTarget.dataset.id
+    console.log('[progress] onEnterCoachConsole:', orderId)
+
+    if (!orderId) {
+      wx.showToast({ title: '课程ID缺失', icon: 'none' })
+      return
+    }
+
+    const entryMode = this.data.bizRole || BIZ_ROLE_VISITOR
+    wx.navigateTo({
+      // tab=summary 直达「每日总结」；publish 侧 resolveAccessibleTab 会再按权限兜底
+      url: `/pages/task/publish/publish?id=${orderId}&tab=summary&entryMode=${entryMode}`
     })
   },
 

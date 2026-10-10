@@ -87,12 +87,14 @@
 
     <!-- Action -->
     <!-- 新增：按权限隔离按钮显示
-         - canManageClass=true（只有「待编辑」Tab + 课程创建者本人） → 显示“查看详情 + 进入管理”双按钮
+         - canManageClass=true（只有「待编辑」Tab + 课程创建者本人 / 本机构管理层） → 显示“查看详情 + 进入管理”双按钮
          - 其他所有阶段/身份（待接取、进行中、已完成、非本人）→ 只能查看，隐藏进入管理按钮；查看按钮文案也改为“查看详情”，明确这是只读浏览。
+         - 新增（2026-10-10）canEnterCoachConsole=true（「进行中」Tab + 本课接取教练）→ 额外显示「去执行」，
+           进入 publish 操作台的「每日总结」tab（写总结 / 完成课节 / 结课）；管理层在进行中依旧只有「查看详情」。
     -->
     <view class="action-row">
       <button
-        class="{{item.canManageClass ? 'secondary' : 'primary'}}"
+        class="{{item.canManageClass || item.canEnterCoachConsole ? 'secondary' : 'primary'}}"
         bindtap="onViewDetail"
         data-id="{{item.id}}"
       >
@@ -105,6 +107,14 @@
         data-id="{{item.id}}"
       >
               {{manageActionText}}
+      </button>
+      <button
+        wx:if="{{item.canEnterCoachConsole}}"
+        class="primary"
+        bindtap="onEnterCoachConsole"
+        data-id="{{item.id}}"
+      >
+              {{executeActionText}}
       </button>
     </view>
 
